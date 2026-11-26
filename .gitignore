@@ -1,0 +1,35 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# 환경 변수 (API 키 등 비밀 값). 변수명 예시는 .env.example에만 둔다.
+.env
+.env.*
+!.env.example
+
+# Vercel CLI 로컬 설정
+.vercel
+
+# 저장소에 올리지 않는 로컬 보관 파일 (앱과 무관한 실습 등)
+_local_archive/
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
