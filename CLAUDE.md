@@ -16,6 +16,8 @@
 
 - 개발 서버: `npm run dev`
 - 빌드: `npm run build` (출력 폴더: `dist`)
+- 저장소: https://github.com/dskim-git/checkyourprove · 배포 주소: https://goprove.vercel.app/
+- `main` 브랜치에 푸시하면 Vercel이 자동 배포합니다.
 - Vercel 설정
   - Framework Preset: `Vite`
   - Build Command: `npm run build`
