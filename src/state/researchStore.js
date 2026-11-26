@@ -92,6 +92,9 @@ export function noteMethodChange(item, field, from, to) {
   if (from && from !== to) item.track.methodChanges.push({ at: now(), field, from, to });
 }
 
+/** 2단계: AI의 답을 한 번 이상 받았는가 (받아야 기록하기로 넘어갈 수 있다) */
+export const hasAiReply = (item) => Boolean(item.chat?.messages.some((m) => m.role === 'ai'));
+
 /**
  * 채워야 할 항목: [{ field, message }] — 화면에 나오는 순서대로.
  * 모든 항목이 필수다. 의견을 쓰는 칸은 쓸 내용이 없으면 "없음"이라고 쓰게 한다.
@@ -112,6 +115,7 @@ export function missingFields(n, item) {
     text('stuck', `어려웠던 점이나 막힌 점을 쓰세요. ${NONE}`);
   }
   if (n === 2) {
+    need(hasAiReply(item), 'chat', '먼저 "AI와 대화"에서 AI에게 질문해 AI의 증명을 얻으세요.');
     text('aiProof', 'AI의 증명을 옮겨 적으세요.');
     need(filled(item.aiMethod), 'aiMethod', 'AI가 사용한 증명 방법을 고르세요.');
     if (item.aiMethod === 'other') text('aiMethodOther', 'AI가 사용한 증명 방법을 쓰세요.');

@@ -843,6 +843,9 @@ a.prop-tabs__item:active { translate: 0 2px; }
 .seg__item:hover { background: var(--color-paper-3); }
 .seg__item:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
 .seg__item.is-on { background: var(--grain), var(--color-card); color: var(--color-ink); box-shadow: 0 3px 0 0 var(--color-edge); }
+.seg__item.is-locked { color: var(--color-muted); }
+.seg__item.is-locked:hover { background: transparent; }
+.button.is-waiting { color: var(--color-muted); }
 .seg__count { min-width: 22px; padding: 0 var(--space-xs); border-radius: var(--radius-pill); background: var(--color-paper-3); font-size: var(--text-xs); }
 .chat-pane, .record-pane { display: grid; gap: var(--space-md); }
 .chat-pane .chat__log { max-height: 55vh; min-height: 120px; padding: var(--space-sm); border-radius: var(--radius-card); background: var(--color-paper-2); }

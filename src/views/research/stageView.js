@@ -8,7 +8,7 @@ import { buildResearchRequest } from '../../services/aiRequests.js';
 import { requestResearchChat } from '../../services/mockAiService.js';
 import { getClassroom } from '../../state/classroomStore.js';
 import {
-  canEnterStage, ensureStage, findStage, isItemComplete, missingFields, noteInput, noteMethodChange,
+  canEnterStage, ensureStage, findStage, hasAiReply, isItemComplete, missingFields, noteInput, noteMethodChange,
   propositionIdsFor, saveResearch, snapshot, stageStatus, submitStage,
 } from '../../state/researchStore.js';
 import { escapeHtml, formatDateTime, nowIso } from '../../ui/dom.js';
@@ -65,7 +65,9 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
   }
 
   let fields = null;
-  let chatTab = item.chat?.messages.length ? 'record' : 'chat';
+  // 2단계: AI의 답을 받기 전에는 대화 화면에만 머문다.
+  let chatTab = n === 2 && hasAiReply(item) ? 'record' : 'chat';
+  const CHAT_FIRST = '먼저 AI와 대화해 AI의 증명을 얻으세요. AI의 답을 받은 뒤에 기록할 수 있습니다.';
   let pending = false;
   const save = () => saveResearch();
   const hrefFor = (i) => `#/research/${n}/${i}`;
@@ -141,10 +143,11 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
             <p class="field__help" id="chat-input-help">자유롭게 물어보세요. 예: "이 명제를 증명해 줘", "2번째 줄은 왜 그렇게 되나요?" Ctrl + Enter로 보낼 수 있습니다.</p>
             <textarea id="chat-input" class="field__input" rows="2" aria-describedby="chat-input-help"></textarea>
             <div class="chat__form-actions">
-              <button type="button" class="button button--secondary" data-action="to-record">기록하기로</button>
+              <button type="button" class="button button--secondary${hasAiReply(item) ? '' : ' is-waiting'}" data-action="to-record"${hasAiReply(item) ? '' : ' aria-disabled="true"'}>${hasAiReply(item) ? '' : icons.lock}기록하기로</button>
               <button type="submit" class="button button--primary" data-chat-send${pending ? ' disabled' : ''}>${pending ? 'AI가 답하는 중…' : '보내기'}</button>
             </div>
           </form>
+          <p class="field__error" id="f-chat-error" data-error-for="chat" role="alert" hidden></p>
         </section>`;
       const chatRef = item.chat.messages.length
         ? `<section class="chat-ref" aria-labelledby="chat-ref-title">
@@ -162,7 +165,7 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
         </section>`;
       return `<div class="seg" role="tablist" aria-label="2단계 화면">
           <button type="button" role="tab" class="seg__item${chatTab === 'chat' ? ' is-on' : ''}" aria-selected="${chatTab === 'chat'}" data-tab-to="chat">${icons.chat}<span>AI와 대화</span><span class="seg__count num">${item.chat.messages.length}</span></button>
-          <button type="button" role="tab" class="seg__item${chatTab === 'record' ? ' is-on' : ''}" aria-selected="${chatTab === 'record'}" data-tab-to="record">${icons.pencil}<span>기록하기</span></button>
+          <button type="button" role="tab" class="seg__item${chatTab === 'record' ? ' is-on' : ''}${hasAiReply(item) ? '' : ' is-locked'}" aria-selected="${chatTab === 'record'}" data-tab-to="record"${hasAiReply(item) ? '' : ' aria-disabled="true"'}>${hasAiReply(item) ? icons.pencil : icons.lock}<span>기록하기</span></button>
         </div>
         ${chatTab === 'chat' ? chatPane : recordPane}`;
     }
@@ -380,6 +383,21 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
     if (root.isConnected && chatTab === 'chat') draw({ focus: '#chat-input' });
   }
 
+  /** 빠진 항목을 화면에 표시한다. 2단계는 빠진 항목이 있는 탭으로 옮겨서 보여 준다. */
+  function revealErrors(missing, html = '') {
+    if (n === 2) {
+      const want = missing[0]?.field === 'chat' ? 'chat' : 'record';
+      if (want !== chatTab) {
+        chatTab = want;
+        draw();
+      }
+    }
+    const box = root.querySelector('[data-submit-errors]');
+    box.innerHTML = html;
+    showErrors(root, missing);
+    if (missing[0]?.field === 'chat') root.querySelector('#chat-input')?.focus();
+  }
+
   function trySubmit() {
     fields?.flush();
     PROOF_FIELDS[n].forEach((field) => snapshot(item, field));
@@ -392,8 +410,7 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
         box.querySelector('a')?.focus();
         return;
       }
-      box.innerHTML = '';
-      showErrors(root, missingFields(n, item));
+      revealErrors(missingFields(n, item));
       return;
     }
     if (!window.confirm(`${n}단계를 제출할까요? 제출하면 이 단계의 내용은 다시 고칠 수 없습니다.`)) return;
@@ -409,9 +426,19 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
     const missing = missingFields(n, item);
     if (!missing.length) return;
     event.preventDefault();
-    const box = root.querySelector('[data-submit-errors]');
-    box.innerHTML = notice('warn', `아직 채우지 않은 항목이 ${missing.length}개 있습니다`, '이 명제의 모든 항목을 채워야 다음 명제로 넘어갈 수 있어요. 의견을 쓰는 칸은 쓸 내용이 없으면 "없음"이라고 쓰세요.');
-    showErrors(root, missing);
+    revealErrors(missing, notice('warn', `아직 채우지 않은 항목이 ${missing.length}개 있습니다`, missing[0].field === 'chat'
+      ? CHAT_FIRST
+      : '이 명제의 모든 항목을 채워야 다음 명제로 넘어갈 수 있어요. 의견을 쓰는 칸은 쓸 내용이 없으면 "없음"이라고 쓰세요.'));
+  }
+
+  /** 2단계: AI의 답이 없으면 기록하기로 가지 못하게 하고 안내한다. */
+  function blockRecord() {
+    const slot = root.querySelector('[data-error-for="chat"]');
+    if (slot) {
+      slot.hidden = false;
+      slot.textContent = CHAT_FIRST;
+    }
+    root.querySelector('#chat-input')?.focus();
   }
 
   const onClick = (event) => {
@@ -422,6 +449,10 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
       return;
     }
     const tab = event.target.closest('[data-tab-to]');
+    if (tab?.dataset.tabTo === 'record' && !hasAiReply(item)) {
+      blockRecord();
+      return;
+    }
     if (tab && tab.dataset.tabTo !== chatTab) {
       fields?.flush();
       chatTab = tab.dataset.tabTo;
@@ -431,6 +462,10 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
       return;
     }
     if (event.target.closest('[data-action="to-record"]')) {
+      if (!hasAiReply(item)) {
+        blockRecord();
+        return;
+      }
       chatTab = 'record';
       item.tabSwitches += 1;
       save();
