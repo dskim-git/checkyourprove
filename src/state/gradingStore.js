@@ -12,9 +12,17 @@
 //   score.aiSeen: AI 제안을 본 상태에서 점수를 저장했는가, score.criteriaBeforeAi: AI를 보기 전에 저장했던 기준별 점수
 //     (AI가 채점자의 판단을 바꾸었는지 분석할 때 쓴다)
 //   채점 대상 key = '학생 id~단계~명제 id' (state/researchRoster.js)
+//
+// AI 대화 태그 (구현 3-2)
+//   chatTags: 교사가 고친 태그 목록(없으면 data/chatTags.js의 기본 목록)
+//   chatTagging: { [채점자 id]: { [대화 key]: { messages: { [메시지 번호]: [태그 id] }, conversation: [태그 id], note, taggedAt,
+//                  aiSeen, beforeAi } } } — 대화 key = '학생 id~명제 id', 메시지 번호는 대화 기록의 순서(0부터)
+//   chatTagAi: { [채점자 id]: { [대화 key]: AI 태그 제안 } } = { messages: { [번호]: [{ tag, reason }] }, conversation: [{ tag, reason }],
+//              requestId, model, promptVersion, at }
 // 채점자는 서로의 점수를 채점 화면에서 보지 않는다. 두 채점자가 모두 채점한 증명으로 일치도를 계산한다(services/agreement.js).
 // TODO: 로그인 연결 뒤 채점자를 교사 계정으로 바꾸고, 채점 기록은 교사만 읽고 쓰도록 서버 규칙으로 막는다.
 
+import { DEFAULT_CHAT_TAGS } from '../data/chatTags.js';
 import { DEFAULT_RUBRIC } from '../data/rubric.js';
 import { readJson, removeKey, writeJson } from './storage.js';
 
@@ -31,6 +39,9 @@ const DEFAULTS = () => ({
   seeds: {},
   scores: { r1: {}, r2: {} },
   aiGrades: {},
+  chatTags: null,
+  chatTagging: {},
+  chatTagAi: {},
 });
 
 let cache = null;
@@ -148,4 +159,73 @@ export function blindOrder(raterId, keys) {
     return seeded(h)();
   };
   return [...keys].sort((a, b) => rank(a) - rank(b));
+}
+
+// ── AI 대화 태그 ──
+
+/** 지금 쓰는 태그 목록 */
+export const activeChatTags = () => getGrading().chatTags ?? DEFAULT_CHAT_TAGS.map((t) => ({ ...t }));
+
+export function saveChatTags(tags) {
+  getGrading().chatTags = tags;
+  return saveGrading();
+}
+
+export function resetChatTags() {
+  getGrading().chatTags = null;
+  return saveGrading();
+}
+
+export const chatTagRecord = (raterId, key) => getGrading().chatTagging?.[raterId]?.[key] ?? null;
+
+/** 대화 태그 기록을 만들거나 가져온다 */
+export function ensureChatTagRecord(raterId, key) {
+  const g = getGrading();
+  g.chatTagging ??= {};
+  g.chatTagging[raterId] ??= {};
+  g.chatTagging[raterId][key] ??= { messages: {}, conversation: [], note: '', taggedAt: null, aiSeen: false };
+  return g.chatTagging[raterId][key];
+}
+
+/** 태그 하나를 붙이거나 뗀다. index가 null이면 대화 전체 태그. AI 제안을 본 상태면 aiSeen을 남긴다. */
+export function toggleChatTag(raterId, key, index, tagId, on) {
+  const record = ensureChatTagRecord(raterId, key);
+  const list = index == null ? record.conversation : (record.messages[index] ??= []);
+  const has = list.includes(tagId);
+  if (on && !has) list.push(tagId);
+  if (!on && has) list.splice(list.indexOf(tagId), 1);
+  if (index != null && !list.length) delete record.messages[index];
+  record.taggedAt = new Date().toISOString();
+  if (chatTagAiOf(raterId, key)) record.aiSeen = true;
+  return saveGrading();
+}
+
+export function saveChatTagNote(raterId, key, note) {
+  const record = ensureChatTagRecord(raterId, key);
+  record.note = note;
+  record.taggedAt = new Date().toISOString();
+  return saveGrading();
+}
+
+/** 태그를 다 붙였다고 표시한다(태그가 하나도 없어도 "확인함"으로 남길 수 있게) */
+export function markChatTagged(raterId, key) {
+  const record = ensureChatTagRecord(raterId, key);
+  record.doneAt = new Date().toISOString();
+  record.taggedAt ??= record.doneAt;
+  return saveGrading();
+}
+
+export const chatTagAiOf = (raterId, key) => getGrading().chatTagAi?.[raterId]?.[key] ?? null;
+
+/** AI 태그 제안을 저장한다. 이미 붙인 태그가 있고 AI를 처음 보는 것이면 그때의 태그를 beforeAi로 남긴다. */
+export function saveChatTagAi(raterId, key, result) {
+  const g = getGrading();
+  g.chatTagAi ??= {};
+  g.chatTagAi[raterId] ??= {};
+  const record = chatTagRecord(raterId, key);
+  if (record && !record.aiSeen && !record.beforeAi) {
+    record.beforeAi = { messages: JSON.parse(JSON.stringify(record.messages)), conversation: [...record.conversation] };
+  }
+  g.chatTagAi[raterId][key] = result;
+  return saveGrading();
 }

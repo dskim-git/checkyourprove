@@ -1012,6 +1012,21 @@ a.prop-tabs__item:active { translate: 0 2px; }
 .check.is-unavailable input { cursor: not-allowed; opacity: 0.5; }
 .grade-extras--read { padding-top: 0; border-top: 0; }
 .grade-sub { display: grid; gap: var(--space-xs); }
+
+/* 교사: AI 대화 태그 */
+.tag-log { gap: var(--space-md); padding: 0; }
+.tag-msg { max-width: 100%; gap: var(--space-xs); }
+.tag-msg.chat__msg--student { justify-self: stretch; }
+.tag-msg .chat__who { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2xs); }
+.tag-chips { display: flex; flex-wrap: wrap; gap: var(--space-2xs); }
+.pick--tag span { min-height: 36px; padding: var(--space-2xs) var(--space-sm); font-size: var(--text-xs); gap: var(--space-2xs); box-shadow: inset 0 0 0 1px var(--color-rule), 0 3px 0 0 var(--color-edge); }
+.pick--tag.is-ai span { box-shadow: inset 0 0 0 2px var(--color-accent-2), 0 3px 0 0 var(--color-edge); }
+.pick--tag input:checked + span { box-shadow: 0 3px 0 0 var(--color-accent-deep); }
+.pick span.tag { min-height: 0; margin: 0; padding: 0 var(--space-2xs); border-radius: var(--radius-pill); box-shadow: none; background: var(--color-card); font-size: var(--text-xs); translate: none; }
+.tag-side { display: grid; gap: var(--space-md); align-content: start; }
+@media (min-width: 56rem) {
+  body[data-view='wide'] .tag-side { position: sticky; top: calc(var(--appbar-h) + var(--space-sm)); max-height: calc(100dvh - var(--appbar-h) - 7.5rem); overflow-y: auto; overscroll-behavior: contain; padding-inline-end: var(--space-xs); }
+}
 .ai-assist { display: grid; gap: var(--space-xs); padding: var(--space-md); border-radius: var(--radius-card); background: var(--grain), var(--color-sugar-soft); }
 .ai-assist .section-head { align-items: center; }
 .ai-assist__total { font-size: var(--text-lg); }

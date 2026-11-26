@@ -10,6 +10,7 @@ export const PROMPT_VERSIONS = {
   grade: 'grade-proto-0',
   research: 'research-proto-1',
   gradeAssist: 'grade-assist-proto-0',
+  chatTagAssist: 'chat-tag-assist-proto-0',
 };
 
 // TODO: 사용할 모델이 정해지면 서버에서 실제 모델 식별자를 기록한다.
@@ -113,5 +114,37 @@ export function gradeAssistSystemPrompt(rubric) {
     '루브릭:',
     ...lines,
     '출력은 JSON 하나: {"criteria": {"<기준 id>": {"score": 정수, "reason": "근거"}}, "completeness": "complete|partial|none", "actualMethod": "direct|contrapositive|contradiction|cases|other|unclear", "summary": "한 문장"}',
+  ].join('\n');
+}
+
+// ── 교사 화면: AI 대화 태그 제안 ───────────────────────
+
+/**
+ * 교사가 2단계 대화에 태그를 붙일 때 참고하는 AI 요청. 입력: 명제, 대화(역할·글·가드레일 분류), 태그 정의.
+ * 학생 이름은 넣지 않는다. TODO(서버 연결 시): 교사 권한을 확인한 뒤에만 받는다.
+ */
+export function buildChatTagAssistRequest({ problem, messages, tags }) {
+  return {
+    ...baseRequest('cta', 'chat-tag-assist', PROMPT_VERSIONS.chatTagAssist),
+    mode: 'teacher',
+    input: {
+      propositionId: problem.id,
+      statement: problem.statement,
+      messages: messages.map(({ role, text, topic, curriculumFlags }) => ({ role, text, topic: topic ?? null, curriculumFlags: curriculumFlags ?? [] })),
+      tags: tags.map(({ id, scope, label, desc }) => ({ id, scope, label, desc })),
+    },
+  };
+}
+
+/** 실제 AI용 시스템 지침 (서버에서 조립한다. 지금은 더미 규칙이 대신 판단한다) */
+export function chatTagAssistSystemPrompt(tags) {
+  const lines = tags.map((t) => `- ${t.id} [${t.scope === 'student' ? '학생 메시지' : t.scope === 'ai' ? 'AI 메시지' : '대화 전체'}] "${t.label}": ${t.desc}`);
+  return [
+    '너는 고등학교 수학 증명 수업의 연구자를 돕는 질적 코딩 보조자다. 학생과 AI의 대화를 읽고 태그를 제안한다. 최종 판단은 교사가 한다.',
+    '각 태그는 표시된 대상(학생 메시지, AI 메시지, 대화 전체)에만 붙인다. 해당하는 태그가 없으면 붙이지 않는다.',
+    '근거는 해당 메시지의 표현을 짧게 인용해 한 문장으로 쓴다. 대화에 없는 내용을 지어내지 않는다.',
+    '태그 목록:',
+    ...lines,
+    '출력은 JSON 하나: {"messages": {"<메시지 번호>": [{"tag": "<태그 id>", "reason": "근거"}]}, "conversation": [{"tag": "<태그 id>", "reason": "근거"}], "summary": "한 문장"}',
   ].join('\n');
 }

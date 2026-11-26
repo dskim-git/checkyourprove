@@ -10,6 +10,8 @@
 //   #/teacher                            교사 화면 미리보기
 //   #/teacher/grading(/:key)             증명 채점 목록 / 증명 하나 채점 (key = 학생 id~단계~명제 id)
 //   #/teacher/rubric                     채점 루브릭 보기·고치기
+//   #/teacher/chats(/:key)               AI 대화 태그 목록 / 대화 하나에 태그 붙이기 (key = 학생 id~명제 id)
+//   #/teacher/chat-tags                  대화 태그 목록 보기·고치기
 // 해시 방식은 배포 환경(Vercel)에서 별도 rewrite 설정 없이 동작한다.
 // TODO: 라우팅 방식(해시 / History API)은 AGENTS.md의 결정 필요 항목이다.
 
@@ -25,6 +27,9 @@ import { renderTeacher } from './views/teacherView.js';
 import { renderGradingHome } from './views/teacher/gradingHomeView.js';
 import { renderGrade } from './views/teacher/gradeView.js';
 import { renderRubric } from './views/teacher/rubricView.js';
+import { renderChatTagHome } from './views/teacher/chatTagHomeView.js';
+import { renderChatTag } from './views/teacher/chatTagView.js';
+import { renderChatTagList } from './views/teacher/chatTagListView.js';
 import { renderNotFound } from './ui/components.js';
 
 const ID = '([\\w-]+)';
@@ -42,6 +47,9 @@ const ROUTES = [
   { section: 'teacher', tab: null, view: 'wide', title: '증명 채점', pattern: /^\/teacher\/grading$/, render: renderGradingHome },
   { section: 'teacher', tab: null, view: 'wide', title: '증명 채점', pattern: /^\/teacher\/grading\/([\w~-]+)$/, render: renderGrade },
   { section: 'teacher', tab: null, view: 'wide', title: '채점 루브릭', pattern: /^\/teacher\/rubric$/, render: renderRubric },
+  { section: 'teacher', tab: null, view: 'wide', title: 'AI 대화 태그', pattern: /^\/teacher\/chats$/, render: renderChatTagHome },
+  { section: 'teacher', tab: null, view: 'wide', title: 'AI 대화 태그', pattern: /^\/teacher\/chats\/([\w~-]+)$/, render: renderChatTag },
+  { section: 'teacher', tab: null, view: 'wide', title: '대화 태그 목록', pattern: /^\/teacher\/chat-tags$/, render: renderChatTagList },
 ];
 
 const APP_TITLE = '증명 연습실';

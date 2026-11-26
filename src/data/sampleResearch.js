@@ -68,6 +68,46 @@ const stage = (day, startHour, minutes, items) => ({
   items,
 });
 
+/**
+ * 학생별 2단계 대화 대본 (AI 대화 태그를 시험할 수 있게 쓰는 방식을 다르게 했다)
+ * 항목: ['s', 학생 메시지, 가드레일 분류] | ['proof'] AI 증명 | ['why', 단계 번호] 단계 설명 | ['short'] 짧은 증명 | ['guard', 안내] | ['ok', 답]
+ */
+const CHAT_SCRIPTS = [
+  // 01: 시작 방법과 단계마다 이유를 나누어 물은 뒤 전체 증명을 확인 (잘 쓴 예)
+  [['s', '이 명제는 어떻게 시작해야 해?', 'proof'], ['why', 0], ['s', '2번째 줄에서 왜 그렇게 묶는 거야?', 'proof'], ['why', 1], ['s', '이제 전체 증명을 보여 줘', 'proof'], ['proof']],
+  // 02: 증명을 받고 짧게 해 달라고 함
+  [['s', '이 명제를 증명해 줘', 'proof'], ['proof'], ['s', '너무 길어. 더 짧게 써 줘', 'proof'], ['short']],
+  // 03: 증명을 받은 뒤 계산이 맞는지 따져 물음 (AI 오류 지적)
+  [['s', '증명 좀 써 줘', 'proof'], ['proof'], ['s', '둘째 줄 계산 틀린 거 아니야?', 'proof'], ['ok', '다시 확인해 보았어요. 전개한 식을 3으로 묶으면 그대로 맞아요. 어느 부분이 이상해 보였는지 알려 주면 그 단계만 다시 설명할게요.']],
+  // 04: 증명과 무관한 질문을 하다가 증명을 요구함 (목적과 다르게 씀)
+  [['s', '오늘 급식 뭐야?', 'offtopic'], ['guard', '그 질문은 이 명제의 증명과 관련이 없어서 답할 수 없어요. 예를 들어 "이 명제는 어떻게 시작해야 해?"처럼 물어보세요.'], ['s', '그냥 증명해 줘', 'proof'], ['proof']],
+  // 05: 증명을 받은 뒤 증명법을 고른 이유를 물음
+  [['s', '증명해 줘', 'proof'], ['proof'], ['s', '이 증명법을 쓰는 이유가 뭐야?', 'proof'], ['why', 0]],
+  // 06: 증명을 받고 고맙다고 끝냄 (따져 보지 않음)
+  [['s', '이 명제 증명 알려 줘', 'proof'], ['proof'], ['s', '응 고마워', 'greeting'], ['ok', '도움이 되었다니 다행이에요. 궁금한 단계가 있으면 언제든 물어보세요.']],
+];
+
+/** 대본으로 대화 메시지를 만든다 */
+function buildChat(script, problem, day) {
+  const strip = (t) => t.replace(/\{\{([^|}]+)[^}]*\}\}/g, '$1');
+  const steps = problem.steps ?? [];
+  let minute = 1;
+  return script.map(([kind, a, b]) => {
+    minute += 2;
+    const atTime = at(day + 1, 10, minute);
+    if (kind === 's') return { role: 'student', text: a, at: atTime, topic: b };
+    const ai = (text, coverage, guard = null) => ({ role: 'ai', text, at: atTime, coverage, guard, guardVersion: 'research-guard-1', curriculumFlags: [] });
+    if (kind === 'proof') return ai(aiReply(problem), 1);
+    if (kind === 'short') return ai(`짧게 쓰면 이렇게 돼요.\n\n[증명]\n${steps.map((s) => strip(s.text)).join(' ')}\n\n짧게 쓰면 근거가 빠지기 쉬우니 각 줄이 왜 성립하는지 확인해 보세요.`, 1);
+    if (kind === 'why') {
+      const step = steps[Math.min(a, steps.length - 1)];
+      return ai(`좋은 질문이에요. ${step.hint} 이 단계는 "${strip(step.text)}"로 나타낼 수 있어요. 다음 단계도 스스로 이어서 생각해 보세요.`, 0);
+    }
+    if (kind === 'guard') return ai(a, 0, 'offtopic');
+    return ai(a, 0);
+  });
+}
+
 function aiReply(problem) {
   const name = { direct: '연역적 증명(직접증명)', contrapositive: '대우를 이용한 증명', contradiction: '귀류법' }[problem.intendedMethod];
   return `${name}을 이용해 증명해 볼게요.\n\n[증명]\n${fullProofText(problem)}\n\n궁금한 단계가 있으면 물어보세요.`;
@@ -104,7 +144,6 @@ function buildRecord(profile, index) {
     stage1[id] = { method: mine.method, methodOther: '', proof: mine.text, confidence: profile.confidence[0], stuck: STUCK_FOR[v1], ink: {}, inputMode: {}, track: track(6) };
     const pen = profile.pen ?? [];
     if (pen.includes(1)) asHandwriting(stage1[id], 'proof', mine.text, index * 100 + i + 1, at(day, 9, 2), i === 0);
-    const reply = aiReply(problem);
     stage2[id] = {
       aiMethod: problem.intendedMethod,
       aiMethodOther: '',
@@ -113,13 +152,7 @@ function buildRecord(profile, index) {
       notable: index % 2 ? '계산 과정을 자세히 보여 준다' : '없음',
       pasteAttempts: index === 3 ? 1 : 0,
       tabSwitches: 3,
-      chat: {
-        messages: [
-          { role: 'student', text: '이 명제를 증명해 줘', at: at(day + 1, 10, 2), topic: 'proof' },
-          { role: 'ai', text: reply, at: at(day + 1, 10, 3), coverage: 1, guard: null, guardVersion: 'research-guard-1', curriculumFlags: [] },
-        ],
-        requestLog: [],
-      },
+      chat: { messages: buildChat(CHAT_SCRIPTS[index], problem, day), requestLog: [] },
       proofHelpAt: at(day + 1, 10, 3),
       transcriptMatch: 1,
       transcriptCheck: 'text',

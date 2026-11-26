@@ -59,5 +59,23 @@ export function findTarget(students, key) {
 /** 대상이 쓴 증명이 있는가(글 또는 필기) */
 export const targetWritten = (t) => String(t.text).trim().length > 0 || hasInk(t.ink);
 
+/** 대화 key = '학생 id~명제 id' */
+export const conversationKey = (studentId, problemId) => `${studentId}~${problemId}`;
+
+/** 2단계 AI 대화 목록 (메시지가 있는 것만, 제출 전 대화도 포함) */
+export function conversations(students) {
+  const list = [];
+  students.forEach((student) => {
+    const stage = student.record.stages?.['2'];
+    (student.record.propositionIds ?? []).forEach((problemId, propIndex) => {
+      const item = stage?.items?.[problemId];
+      const messages = item?.chat?.messages ?? [];
+      if (!messages.length) return;
+      list.push({ key: conversationKey(student.id, problemId), student, problemId, problem: getProblem(problemId), propIndex, item, messages, submitted: Boolean(stage.submittedAt) });
+    });
+  });
+  return list;
+}
+
 /** 같은 학생·명제의 다른 단계 기록 */
 export const itemAt = (student, stage, problemId) => student.record.stages?.[String(stage)]?.items?.[problemId] ?? null;

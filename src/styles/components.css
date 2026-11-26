@@ -79,6 +79,7 @@
 .tag--difficulty { background: var(--color-sugar-soft); color: var(--color-ink-2); }
 .tag--proto { background: var(--color-accent-soft); color: var(--color-ink-2); }
 .tag--warn { background: var(--color-coral-soft); color: var(--color-coral-deep); }
+.tag--mint { background: var(--color-mint-soft); color: var(--color-mint-deep); }
 
 .status { display: inline-flex; align-items: center; gap: var(--space-2xs); font-size: var(--text-sm); color: var(--color-muted); }
 .status .icon { width: 1.1em; height: 1.1em; }
