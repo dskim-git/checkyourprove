@@ -184,3 +184,60 @@ export function handleChatShortcut(event) {
     event.target.form?.requestSubmit();
   }
 }
+
+// ── 글 입력 칸은 키보드로만 (펜 손글씨 막기) ─────────────
+// iPad의 Scribble(애플펜슬 손글씨 → 글자)이나 Android의 스타일러스 손글씨 입력은 펜으로 글 칸에 바로 쓰게 한다.
+// 연구 모드에서는 글 칸을 키보드로만 쓰게 하려고, 펜 터치의 기본 동작을 막고 펜으로 톡 누르면 칸에 초점만 준다(키보드가 뜸).
+// 펜 필기는 증명 칸의 "펜" 모드(ui/inkPad.js)에서만 쓴다. 화면의 막기는 기록용 안내이며 보안 경계가 아니다.
+
+const TEXT_SELECTOR = 'textarea, input[type="text"]';
+const TAP_PX = 10;
+
+const stylusTouches = (event) => [...(event.changedTouches ?? [])].filter((t) => t.touchType === 'stylus');
+
+/**
+ * root 안의 글 입력 칸에서 펜 손글씨를 막는다.
+ * onBlocked(el): 펜으로 쓰려다 막힌 순간(한 번 긋기마다 한 번) — 안내 표시·기록용
+ * @returns {() => void} 해제 함수
+ */
+export function keyboardOnlyText(root, { onBlocked, exclude = '[data-ink-pad]' } = {}) {
+  let start = null; // { el, x, y, moved }
+
+  const target = (event) => {
+    const el = event.target.closest?.(TEXT_SELECTOR);
+    return el && root.contains(el) && !el.closest(exclude) ? el : null;
+  };
+
+  const onTouchStart = (event) => {
+    const el = target(event);
+    const touch = stylusTouches(event)[0];
+    if (!el || !touch) return;
+    if (event.cancelable) event.preventDefault();
+    start = { el, x: touch.clientX, y: touch.clientY, moved: false };
+  };
+  const onTouchMove = (event) => {
+    const touch = stylusTouches(event)[0];
+    if (!start || !touch) return;
+    if (event.cancelable) event.preventDefault();
+    if (!start.moved && Math.hypot(touch.clientX - start.x, touch.clientY - start.y) > TAP_PX) {
+      start.moved = true;
+      onBlocked?.(start.el);
+    }
+  };
+  const onTouchEnd = (event) => {
+    if (!start || !stylusTouches(event).length) return;
+    if (event.cancelable) event.preventDefault();
+    // 펜으로 톡 누르면 칸에 초점을 주어 키보드로 쓰게 한다.
+    if (!start.moved) start.el.focus();
+    start = null;
+  };
+
+  root.addEventListener('touchstart', onTouchStart, { passive: false, capture: true });
+  root.addEventListener('touchmove', onTouchMove, { passive: false, capture: true });
+  root.addEventListener('touchend', onTouchEnd, { passive: false, capture: true });
+  return () => {
+    root.removeEventListener('touchstart', onTouchStart, { capture: true });
+    root.removeEventListener('touchmove', onTouchMove, { capture: true });
+    root.removeEventListener('touchend', onTouchEnd, { capture: true });
+  };
+}

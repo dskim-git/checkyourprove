@@ -263,6 +263,7 @@ AI와 탐구하기 → 교사가 지정한 명제의 연구 모드 흐름
 - 증명 칸(1단계 나의 증명, 2단계 AI 증명 옮겨 적기, 4단계 최종 증명)마다 키보드와 펜 필기를 고를 수 있습니다(구현 2, 2026-11-26). 외부 라이브러리 없이 캔버스로 만들었습니다.
   - 펜 모드는 그림판 형태입니다: 펜, **획 지우개**(닿은 획을 통째로 지움, 사용자 결정), 되돌리기(그리기·지우기), 칸 늘리기.
   - **손바닥 오입력 방지(사용자 결정)**: 기본으로 펜(애플펜슬 등)과 마우스만 그립니다. 펜을 쓰기 전에는 필기 칸 위의 손가락 터치를 화면 스크롤로 바꾸고, 펜을 한 번 쓰면 그 뒤로는 칸 위의 손가락·손바닥 터치를 모두 무시합니다(화면은 칸 밖을 밀어 움직임). 펜이 없는 기기는 "손가락으로도 쓰기"를 켜면 손가락으로 그릴 수 있고, 켠 기록이 남습니다.
+  - **글 칸은 키보드로만(2026-11-26 사용자 결정)**: 증명을 펜으로 쓰더라도 의견 칸(막힌 점 등), 키보드 모드의 증명 칸, AI 대화 입력창은 키보드로만 씁니다. iPad Scribble(애플펜슬 손글씨 → 글자)과 Android 스타일러스 손글씨 입력을 막고(`ui/forms.js` `keyboardOnlyText`), 펜으로 칸을 톡 누르면 키보드가 뜨게 합니다. 펜으로 쓰려다 막힌 횟수는 `track.penOnText`로 남깁니다.
   - **획 빠짐 방지(2026-11-26 사용자 피드백 반영)**: 칸 위의 터치 기본 동작을 막아 iPad의 Scribble(손글씨 인식)·확대경이 펜 획을 가로채지 않게 하고, 앞 획의 "뗌" 신호를 놓쳐도 다음 획이 막히지 않게 합니다. 기기가 끊은 획(pointercancel)도 버리지 않고 `c: 1` 표시와 함께 저장합니다. 점 사이는 2차 곡선으로 이어 빠르게 써도 각지지 않게 그립니다.
   - **키보드와 펜 내용은 둘 다 보존·제출합니다(사용자 결정).** 어느 쪽이든 내용이 있으면 "작성함"으로 인정합니다. 다른 방식에 쓴 내용이 있으면 "함께 제출돼요" 안내를 보여 줍니다. 마지막으로 쓴 입력 방식을 다음 칸의 기본값으로 씁니다.
   - **2단계 펜 옮겨 적기(사용자 결정)**: 글자 비교를 할 수 없으므로 필기 양(보이는 획 30개 이상, 획 길이 합 3000 이상, 폭 1000 기준)만 확인하고 넘어갑니다. 기록에 `transcriptCheck: 'teacher'`를 남겨 교사가 대화의 AI 답과 비교해 확인합니다(구현 3 채점 화면에서 나란히 보여 줄 것). 학생 화면에도 이 사실을 안내합니다.
@@ -380,7 +381,7 @@ AI와 탐구하기 → 교사가 지정한 명제의 연구 모드 흐름
 - 단계별 `items` 입력값: 5절 연구 설계의 전체 흐름과 같음. 3단계 필드: `compareNote`, `myAdvantage`, `moreAccurate`, `myChecklist`, `stuckResolved`, `aiChecklist`, `aiIssues`, `aiHelpful`, `plan`, `aiOpinion`
 - 작성 과정 `track`: `activeMs`, `firstInputAt`, `inputCount`, `deleteCount`, `snapshots`(증명 중간 저장본, 30초마다 바뀌었을 때), `methodChanges`(증명법 변경)
 - 2단계 추가: `chat.messages`(시각 포함 대화 전체, AI 답마다 증명 도움 정도 `coverage`), `proofHelpAt`, `transcriptMatch`, `chat.requestLog`(요청 ID, 모델, 프롬프트 버전, 입력 키, 메시지 수), `pasteAttempts`, `tabSwitches`
-- 펜 필기(1·2·4단계 증명 칸): `ink[필드]`(필기 기록, `state/inkModel.js`), `inputMode[필드]`(keyboard/pen), `track.modeChanges`(입력 방식 바꾼 기록), 2단계 `transcriptCheck`('text' 글자 일치 / 'teacher' 필기라 교사 확인). 글 없이 필기로만 옮겨 적으면 `transcriptMatch`는 null입니다.
+- 펜 필기(1·2·4단계 증명 칸): `ink[필드]`(필기 기록, `state/inkModel.js`), `inputMode[필드]`(keyboard/pen), `track.modeChanges`(입력 방식 바꾼 기록), `track.penOnText`(글 칸에 펜으로 쓰려다 막힌 횟수), 2단계 `transcriptCheck`('text' 글자 일치 / 'teacher' 필기라 교사 확인). 글 없이 필기로만 옮겨 적으면 `transcriptMatch`는 null입니다.
   - 필기 기록: `{ v, w: 1000, h, startedAt, strokes: [{ id, t, p(입력 도구 pen/touch/mouse), lw, d: [x, y, 0, dx, dy, dt, ...] }], ops: [{ t, k, op: erase|undo|restore|grow|finger, ... }] }` — `t`는 필기 시작부터 ms, `k`는 그 동작 때까지 그린 획 수(획과 동작의 순서)
 - `TODO`: 교사 채점·태그(구현 3), 설문 응답(구현 4), 원리 활동 응답(구현 5)
 - AI 요약을 쓰게 되면 요약 결과와 원본 기록의 연결 정보도 남깁니다.

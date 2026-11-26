@@ -40,7 +40,8 @@ export function propositionIdsFor(classroom) {
   return getResearch().propositionIds ?? classroom.researchPropositionIds;
 }
 
-const track = () => ({ activeMs: 0, firstInputAt: null, inputCount: 0, deleteCount: 0, snapshots: [], methodChanges: [], modeChanges: [] });
+// penOnText: 글 칸(의견 등)에 펜으로 쓰려다 막힌 횟수 (글 칸은 키보드로만 쓴다)
+const track = () => ({ activeMs: 0, firstInputAt: null, inputCount: 0, deleteCount: 0, snapshots: [], methodChanges: [], modeChanges: [], penOnText: 0 });
 
 // 증명 칸의 펜 필기: ink[필드] = 필기 기록(state/inkModel.js), inputMode[필드] = 'keyboard' | 'pen'
 const pen = () => ({ ink: {}, inputMode: {} });

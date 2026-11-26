@@ -142,6 +142,8 @@
   transition: border-color var(--dur-micro) var(--ease-snap);
 }
 textarea.field__input { resize: vertical; }
+/* Android 크롬의 스타일러스 손글씨 입력을 끈다(handwriting 제외). iPad Scribble은 forms.js keyboardOnlyText가 막는다. */
+.page--research textarea, .page--research input[type='text'] { touch-action: pan-x pan-y pinch-zoom; }
 .field__input:hover, .field__select:hover { border-color: var(--color-ink-2); }
 .field__input:focus-visible, .field__select:focus-visible { outline: none; border-color: var(--color-focus); box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-focus) 30%, transparent); }
 .field__input[aria-invalid='true'] { border-color: var(--color-coral-deep); }
