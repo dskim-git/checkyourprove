@@ -7,6 +7,7 @@ import { getStage, MORE_ACCURATE_OPTIONS, optionLabel, RESEARCH_STAGES, STUCK_RE
 import { buildResearchRequest } from '../../services/aiRequests.js';
 import { requestResearchChat } from '../../services/mockAiService.js';
 import { PROOF_HELP_MIN, proofCoverage, transcriptMatch } from '../../services/proofHelp.js';
+import { beyondCurriculum, classifyStudentMessage, GUARDRAIL_VERSION } from '../../services/researchGuardrails.js';
 import { getClassroom } from '../../state/classroomStore.js';
 import {
   canEnterStage, ensureStage, findStage, hasProofHelp, isItemComplete, missingFields, noteInput, noteMethodChange,
@@ -141,6 +142,7 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
     }
     if (n === 2) {
       const chatPane = `<section class="chat-pane" aria-label="AI와 대화">
+          <p class="note-chip">${icons.info}<span>이 AI는 이 명제의 증명에 대한 질문에만 답하고, 고등학교 1학년 교육과정(공통수학1·공통수학2) 안에서 설명해요. 증명과 관계없는 이야기에는 답하지 않아요.</span></p>
           ${mockAiNote('프로토타입: AI 응답은 미리 준비한 예시이며 실제 AI가 아닙니다. AI는 1단계에서 쓴 나의 증명을 볼 수 없습니다.')}
           <ol class="chat__log" data-chat-log aria-label="AI 대화 기록" aria-live="polite">${chatMessages(item.chat.messages, { pending })}</ol>
           <form class="chat__form" data-chat-form novalidate>
@@ -367,7 +369,9 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
       input.focus();
       return;
     }
-    item.chat.messages.push({ role: 'student', text, at: nowIso() });
+    // 가드레일 분류를 함께 기록한다(교사용: 증명과 무관한 질문, 규칙 바꾸기 요청 등)
+    const verdict = classifyStudentMessage(text, problem);
+    item.chat.messages.push({ role: 'student', text, at: nowIso(), topic: verdict.category });
     noteInput(item, 'chat');
     pending = true;
     save();
@@ -383,7 +387,16 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
     });
     const reply = await requestResearchChat(request);
     const coverage = proofCoverage(reply.text, problem);
-    item.chat.messages.push({ role: 'ai', text: reply.text, at: nowIso(), requestId: request.requestId, coverage });
+    item.chat.messages.push({
+      role: 'ai',
+      text: reply.text,
+      at: nowIso(),
+      requestId: request.requestId,
+      coverage,
+      guard: reply.guard ?? null,
+      guardVersion: GUARDRAIL_VERSION,
+      curriculumFlags: reply.guard ? [] : beyondCurriculum(reply.text, problem),
+    });
     if (coverage >= PROOF_HELP_MIN) item.proofHelpAt ??= nowIso();
     pending = false;
     save();

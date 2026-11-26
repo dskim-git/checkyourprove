@@ -8,7 +8,7 @@ export const PROMPT_VERSIONS = {
   stepCheck: 'step-check-proto-0',
   coach: 'coach-proto-0',
   grade: 'grade-proto-0',
-  research: 'research-proto-0',
+  research: 'research-proto-1',
 };
 
 // TODO: 사용할 모델이 정해지면 서버에서 실제 모델 식별자를 기록한다.
@@ -72,6 +72,8 @@ export function buildResearchRequest({ problem, messages }) {
     ...baseRequest('rrq', 'research', PROMPT_VERSIONS.research),
     mode: 'research',
     stage: 2,
+    // 서버는 이 버전의 가드레일(질문 분류, 교육과정 범위, 시스템 지침)을 적용한다(services/researchGuardrails.js).
+    guardrail: 'research-guard-1',
     input: { ...propositionOf(problem), messages: toTranscript(messages) },
   };
 }

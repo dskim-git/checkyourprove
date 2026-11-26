@@ -3,12 +3,14 @@
 // 실제 AI를 호출하지 않고, 요청 입력(request.input)의 명제와 이 대화만 보고 미리 준비한 문장을 돌려준다.
 // 학생의 1단계 증명은 입력에 존재하지 않는다(AGENTS.md 6절).
 // 2단계는 "AI의 증명 얻기"이므로, 학생이 요청하면 증명 전체를 보여 준다.
+// 가드레일(services/researchGuardrails.js): 증명과 무관한 이야기, 규칙 바꾸기, 교육과정 밖 요청에는 답하지 않는다.
 // TODO: 서버 측 엔드포인트가 준비되면 fetch 호출로 교체한다. 함수 이름·인자·반환 형태({ text })는 유지한다.
 
 import { getProblem } from '../data/problems/index.js';
 import { fullProofText } from '../data/proofModel.js';
 import { methodOptionLabel } from '../data/research.js';
 import { normalizeMath } from './textMatch.js';
+import { classifyStudentMessage, guardReply } from './researchGuardrails.js';
 
 const RESPONSE_DELAY_MS = 700;
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -17,7 +19,6 @@ const includesAny = (text, words) => words.some((word) => text.includes(normaliz
 const PROOF_WORDS = ['증명', '풀어', '알려', '보여', '해줘', '해 줘', '써줘', '써 줘'];
 const WHY_WORDS = ['왜', '이유', '설명', '이해', '모르겠', '어떻게'];
 const SHORT_WORDS = ['짧게', '간단히', '요약'];
-const OFF_TOPIC_WORDS = ['게임', '노래', '아이돌', '연예인', '점심', '급식', '유튜브', '웹툰', '드라마'];
 const METHOD_WORDS = {
   direct: ['직접', '연역'],
   contrapositive: ['대우'],
@@ -39,9 +40,9 @@ export async function requestResearchChat(request) {
   const last = normalizeMath(studentTurns.at(-1)?.text ?? '');
   const methodName = methodOptionLabel(problem.method) || '직접증명';
 
-  if (includesAny(last, OFF_TOPIC_WORDS)) {
-    return { text: `지금은 이 명제의 증명에 집중해 볼게요.\n\n명제: ${problem.statement}\n\n증명이 필요하면 "증명해 줘"라고 말해 주세요.` };
-  }
+  // 가드레일: 증명과 관련된 질문이 아니면 답하지 않고 이 명제의 증명으로 안내한다.
+  const verdict = classifyStudentMessage(studentTurns.at(-1)?.text ?? '', problem);
+  if (verdict.category !== 'proof') return { text: guardReply(verdict, problem), guard: verdict.category };
 
   const askedMethod = Object.entries(METHOD_WORDS).find(([, words]) => includesAny(last, words))?.[0];
   if (askedMethod && askedMethod !== problem.method) {
