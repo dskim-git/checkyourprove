@@ -8,6 +8,8 @@
 //   #/research                           AI와 탐구하기(연구 모드): 명제와 4단계 지도
 //   #/research/:stage(/:index)           연구 단계 화면 (stage 1~4, index는 명제 순서)
 //   #/teacher                            교사 화면 미리보기
+//   #/teacher/grading(/:key)             증명 채점 목록 / 증명 하나 채점 (key = 학생 id~단계~명제 id)
+//   #/teacher/rubric                     채점 루브릭 보기·고치기
 // 해시 방식은 배포 환경(Vercel)에서 별도 rewrite 설정 없이 동작한다.
 // TODO: 라우팅 방식(해시 / History API)은 AGENTS.md의 결정 필요 항목이다.
 
@@ -20,6 +22,9 @@ import { renderRecords } from './views/recordsView.js';
 import { renderResearchHome } from './views/research/researchHomeView.js';
 import { renderResearchStage } from './views/research/stageView.js';
 import { renderTeacher } from './views/teacherView.js';
+import { renderGradingHome } from './views/teacher/gradingHomeView.js';
+import { renderGrade } from './views/teacher/gradeView.js';
+import { renderRubric } from './views/teacher/rubricView.js';
 import { renderNotFound } from './ui/components.js';
 
 const ID = '([\\w-]+)';
@@ -34,6 +39,9 @@ const ROUTES = [
   { section: 'student', tab: 'research', title: 'AI와 탐구하기', pattern: /^\/research$/, render: renderResearchHome },
   { section: 'student', tab: 'research', view: 'lesson', title: 'AI와 탐구하기', pattern: /^\/research\/([1-4])(?:\/(\d+))?$/, render: renderResearchStage },
   { section: 'teacher', tab: null, view: 'wide', title: '교사 화면 미리보기', pattern: /^\/teacher$/, render: renderTeacher },
+  { section: 'teacher', tab: null, view: 'wide', title: '증명 채점', pattern: /^\/teacher\/grading$/, render: renderGradingHome },
+  { section: 'teacher', tab: null, view: 'wide', title: '증명 채점', pattern: /^\/teacher\/grading\/([\w~-]+)$/, render: renderGrade },
+  { section: 'teacher', tab: null, view: 'wide', title: '채점 루브릭', pattern: /^\/teacher\/rubric$/, render: renderRubric },
 ];
 
 const APP_TITLE = '증명 연습실';

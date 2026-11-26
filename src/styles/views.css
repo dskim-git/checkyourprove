@@ -986,6 +986,29 @@ a.prop-tabs__item:active { translate: 0 2px; }
   body[data-view='wide'] .compare-cards { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 }
 
+/* 교사: 증명 채점 */
+.grading-settings { display: grid; gap: var(--space-sm); }
+.rater-names { display: grid; gap: var(--space-sm); padding-top: var(--space-sm); max-width: 24rem; }
+.grade-progress { font-size: var(--text-lg); }
+.grade-count { color: var(--color-muted); font-weight: var(--body-weight); }
+.grade-who { display: flex; flex-wrap: wrap; gap: var(--space-2xs); }
+.grade-prop { display: grid; gap: var(--space-2xs); }
+.grade-layout { align-items: start; }
+.grade-proof, .grade-extras, .grade-form { display: grid; gap: var(--space-sm); align-content: start; }
+.grade-extras { padding-top: var(--space-md); border-top: var(--rule-hair) solid var(--color-rule); }
+.grade-field { padding-top: var(--space-sm); border-top: var(--rule-hair) solid var(--color-rule); }
+.grade-field .check { min-height: 40px; padding-block: var(--space-2xs); }
+.grade-total { font-size: var(--text-lg); }
+.grade-total strong { font-size: var(--text-xl); }
+.grade-actions { position: sticky; bottom: 0; padding-block: var(--space-sm); background: var(--grain), var(--color-paper); box-shadow: var(--shadow-bar); }
+.rubric-form { display: grid; gap: var(--space-lg); }
+.rubric-edit { padding-top: var(--space-md); border-top: var(--rule-hair) solid var(--color-rule); gap: var(--space-sm); }
+.rubric-level { grid-template-columns: 3.5rem minmax(0, 1fr); align-items: center; }
+.grade-table tbody th { white-space: nowrap; }
+.grade-filter { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2xs) var(--space-md); }
+.grade-filter legend { float: left; margin-inline-end: var(--space-xs); }
+.grade-filter .check { min-height: 40px; }
+
 /* 넓은 화면: 일부 화면은 두 칸 */
 @media (min-width: 56rem) {
   body[data-view='wide'] .split { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
