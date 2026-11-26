@@ -1005,6 +1005,8 @@ a.prop-tabs__item:active { translate: 0 2px; }
 .rubric-edit { padding-top: var(--space-md); border-top: var(--rule-hair) solid var(--color-rule); gap: var(--space-sm); }
 .rubric-level { grid-template-columns: 3.5rem minmax(0, 1fr); align-items: center; }
 .grade-table tbody th { white-space: nowrap; }
+.grade-table .grade-group th { padding-top: var(--space-md); background: var(--color-paper-2); font-weight: var(--display-weight); white-space: normal; }
+.grade-table .grade-group .meta { margin-inline-start: var(--space-xs); font-weight: var(--body-weight); }
 .grade-extras--read { padding-top: 0; border-top: 0; }
 .grade-sub { display: grid; gap: var(--space-xs); }
 .grade-sub__title { font-size: var(--text-md); }

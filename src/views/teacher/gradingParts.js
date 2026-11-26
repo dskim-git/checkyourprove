@@ -1,18 +1,41 @@
 // 교사 채점 화면들이 함께 쓰는 도구: 채점 대상 순서, 추가 확인 남은 항목, 선택 줄 마크업
 
 import { REVISION_CHECKLIST } from '../../data/research.js';
+import { RESEARCH_PROPOSITIONS } from '../../data/researchPropositions.js';
 import { blindOrder, getGrading } from '../../state/gradingStore.js';
 import { gradingTargets, itemAt, researchStudents } from '../../state/researchRoster.js';
 import { escapeHtml } from '../../ui/dom.js';
 
-/** 지금 설정(예시 학생 포함, 블라인드)에 따른 채점 대상과 채점 순서 */
+/** 명제 순서: 연구 명제 목록 순, 그 밖의 명제는 뒤에 id 순 */
+const propositionRank = (problemId) => {
+  const i = RESEARCH_PROPOSITIONS.findIndex((p) => p.id === problemId);
+  return i === -1 ? RESEARCH_PROPOSITIONS.length : i;
+};
+
+/**
+ * 지금 설정(예시 학생 포함, 블라인드, 채점 순서)에 따른 채점 대상과 채점 순서
+ * 채점 순서 'proposition'은 같은 명제끼리 모은다(일관된 채점). 묶음 안의 순서는 블라인드면 무작위, 아니면 학생 순이다.
+ */
 export function gradingQueue(raterId) {
   const g = getGrading();
   const students = researchStudents({ includeSamples: g.includeSamples });
   const targets = gradingTargets(students);
   const byKey = new Map(targets.map((t) => [t.key, t]));
-  const keys = g.blind ? blindOrder(raterId, targets.map((t) => t.key)) : targets.map((t) => t.key);
-  return { students, targets: keys.map((key) => byKey.get(key)), blind: g.blind };
+  let ordered = (g.blind ? blindOrder(raterId, targets.map((t) => t.key)) : targets.map((t) => t.key)).map((key) => byKey.get(key));
+  const byProposition = g.sortBy === 'proposition';
+  if (byProposition) {
+    ordered = ordered
+      .map((t, i) => ({ t, i }))
+      .sort((a, b) => propositionRank(a.t.problemId) - propositionRank(b.t.problemId) || a.t.problemId.localeCompare(b.t.problemId) || a.i - b.i)
+      .map(({ t }) => t);
+  }
+  return { students, targets: ordered, blind: g.blind, byProposition };
+}
+
+/** 같은 명제 묶음 안에서의 위치 { n, total } */
+export function groupPosition(targets, target) {
+  const group = targets.filter((t) => t.problemId === target.problemId);
+  return { n: group.indexOf(target) + 1, total: group.length };
 }
 
 /** 4단계: 3단계에서 학생이 체크한 내 증명의 보완할 점 ('찾지 못했다' 제외) */

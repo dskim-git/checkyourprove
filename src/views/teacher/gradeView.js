@@ -17,13 +17,13 @@ import { escapeHtml } from '../../ui/dom.js';
 import { breadcrumb, chatMessages, notice, renderNotFound } from '../../ui/components.js';
 import { inkViewHtml, mountInkViews } from '../../ui/inkCanvas.js';
 import { statementHtml } from '../../ui/mathText.js';
-import { checkedRevisions, gradingQueue, hasExtras, pendingChecks, radioLines, revisionLabel } from './gradingParts.js';
+import { checkedRevisions, gradingQueue, groupPosition, hasExtras, pendingChecks, radioLines, revisionLabel } from './gradingParts.js';
 
 const methodText = (id, other) => (id === 'other' ? `기타: ${other || '쓰지 않음'}` : methodOptionLabel(id) || '고르지 않음');
 
 export function renderGrade(root, [key]) {
   const rater = currentRater();
-  const { targets, blind } = gradingQueue(rater.id);
+  const { targets, blind, byProposition } = gradingQueue(rater.id);
   const index = targets.findIndex((t) => t.key === key);
   const target = targets[index];
   if (!target) {
@@ -144,7 +144,7 @@ export function renderGrade(root, [key]) {
       ${breadcrumb([{ label: '교사 화면', href: '#/teacher' }, { label: '증명 채점', href: '#/teacher/grading' }, { label: `증명 ${index + 1}` }])}
       <header class="page-intro">
         <h1>증명 ${index + 1} <span class="grade-count">/ ${targets.length}</span></h1>
-        <p class="grade-who">${who}<span class="tag">채점자: ${escapeHtml(rater.name)}</span></p>
+        <p class="grade-who">${who}${byProposition ? (() => { const g = groupPosition(targets, target); return `<span class="tag tag--strong">명제 ${target.propIndex + 1} 묶음 ${g.n} / ${g.total}</span>`; })() : ''}<span class="tag">채점자: ${escapeHtml(rater.name)}</span></p>
       </header>
       <section class="proposition grade-prop" aria-label="명제">
         <p class="meta">명제 ${target.propIndex + 1}</p>

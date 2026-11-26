@@ -26,7 +26,7 @@ export function renderGradingHome(root) {
   const draw = () => {
     const g = getGrading();
     const rater = currentRater();
-    const { targets, blind } = gradingQueue(rater.id);
+    const { targets, blind, byProposition } = gradingQueue(rater.id);
     const graded = targets.filter((t) => scoreOf(rater.id, t.key)).length;
     const next = targets.find((t) => !scoreOf(rater.id, t.key)) ?? targets.find((t) => pendingChecks(t, scoreOf(rater.id, t.key)).length);
 
@@ -67,6 +67,17 @@ export function renderGradingHome(root) {
             <input type="checkbox" name="includeSamples"${g.includeSamples ? ' checked' : ''}>
             <span>예시 학생 포함 <span class="meta">화면 확인용 가상 학생 6명의 기록을 함께 보여 줍니다.</span></span>
           </label>
+          <fieldset class="choice-group">
+            <legend>채점 순서</legend>
+            <label class="check">
+              <input type="radio" name="sortBy" value="mixed"${g.sortBy !== 'proposition' ? ' checked' : ''}>
+              <span>${g.blind ? '섞어서' : '학생 순'} <span class="meta">${g.blind ? '모든 증명을 채점자마다 정해진 무작위 순서로 채점합니다.' : '학생마다 명제·단계 순서로 채점합니다.'}</span></span>
+            </label>
+            <label class="check">
+              <input type="radio" name="sortBy" value="proposition"${g.sortBy === 'proposition' ? ' checked' : ''}>
+              <span>같은 명제끼리 <span class="meta">한 명제의 증명을 모두 채점한 뒤 다음 명제로 넘어갑니다. 같은 기준으로 일관되게 채점하기 좋습니다.${g.blind ? ' 명제 안에서는 학생과 단계가 섞인 순서입니다.' : ''}</span></span>
+            </label>
+          </fieldset>
           <p class="save-status" data-grading-status aria-live="polite"></p>
         </form>
       </section>
@@ -82,7 +93,7 @@ export function renderGradingHome(root) {
               ${next ? `<a class="button button--primary" href="#/teacher/grading/${next.key}" data-start>${graded ? '이어서 채점하기' : '채점 시작하기'}</a>` : '<p class="meta">모든 증명을 채점했습니다.</p>'}
             </div>
             ${filterBar()}
-            ${targetTable(targets, rater, blind)}`
+            ${targetTable(targets, rater, blind, byProposition)}`
           : '<p class="empty-text">채점할 증명이 없습니다. 학생이 1·2·4단계를 제출하면 여기에 나타납니다.</p>'}
       </section>
 
@@ -105,18 +116,27 @@ export function renderGradingHome(root) {
       : filter === 'done' ? Boolean(score) && !left.length
         : true);
 
-  function targetTable(targets, rater, blind) {
+  function targetTable(targets, rater, blind, byProposition) {
+    const cols = blind ? 5 : 6;
+    let lastGroup = null;
     const rows = targets.map((t, i) => {
       const score = scoreOf(rater.id, t.key);
       const left = pendingChecks(t, score);
       if (!shows(score, left)) return '';
+      let groupRow = '';
+      if (byProposition && t.problemId !== lastGroup) {
+        lastGroup = t.problemId;
+        const group = targets.filter((x) => x.problemId === t.problemId);
+        const done = group.filter((x) => scoreOf(rater.id, x.key)).length;
+        groupRow = `<tr class="grade-group"><th scope="colgroup" colspan="${cols}">명제 ${t.propIndex + 1} ${escapeHtml(t.problem?.title ?? '')} <span class="meta">${group.length}개 중 ${done}개 채점함</span></th></tr>`;
+      }
       const status = score
         ? `채점함${left.length ? ` <span class="tag tag--warn">${escapeHtml(left.join(', '))} 남음</span>` : ''}`
         : '<span class="meta">아직</span>';
       const who = blind
         ? `<th scope="row"><a href="#/teacher/grading/${t.key}">증명 ${i + 1}</a></th>`
         : `<th scope="row"><a href="#/teacher/grading/${t.key}">${escapeHtml(t.student.pseudonym)}</a>${t.student.sample ? ' <span class="tag tag--proto">예시</span>' : ''}</th><td>${escapeHtml(t.stageDef.label)}</td>`;
-      return `<tr>
+      return `${groupRow}<tr>
         ${who}
         <td>명제 ${t.propIndex + 1}</td>
         <td>${status}</td>
@@ -130,7 +150,7 @@ export function renderGradingHome(root) {
     return `<div class="table-wrap" role="region" aria-labelledby="grading-progress-heading" tabindex="0">
       <table class="data-table grade-table" data-grading-table>
         <thead><tr>${head}<th scope="col">명제</th><th scope="col">상태</th><th scope="col">합계</th><th scope="col">채점 시각</th></tr></thead>
-        <tbody>${rows || `<tr><td colspan="${blind ? 5 : 6}" class="meta">이 보기에 해당하는 증명이 없습니다.</td></tr>`}</tbody>
+        <tbody>${rows || `<tr><td colspan="${cols}" class="meta">이 보기에 해당하는 증명이 없습니다.</td></tr>`}</tbody>
       </table>
     </div>`;
   }
@@ -168,7 +188,7 @@ export function renderGradingHome(root) {
     const form = event.target.closest('[data-grading-settings]');
     if (!form || event.target.matches('[data-rater-name]')) return;
     const data = new FormData(form);
-    updateGradingSettings({ currentRater: data.get('rater'), blind: data.get('blind') === 'on', includeSamples: data.get('includeSamples') === 'on' });
+    updateGradingSettings({ currentRater: data.get('rater'), blind: data.get('blind') === 'on', includeSamples: data.get('includeSamples') === 'on', sortBy: data.get('sortBy') ?? 'mixed' });
     draw();
     root.querySelector('[data-grading-status]').textContent = '설정을 저장했습니다.';
   };
