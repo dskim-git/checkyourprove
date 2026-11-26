@@ -6,9 +6,11 @@ import { getProblem } from '../../data/problems/index.js';
 import { getStage, MORE_ACCURATE_OPTIONS, optionLabel, RESEARCH_STAGES, STUCK_RESOLVED_OPTIONS } from '../../data/research.js';
 import { buildResearchRequest } from '../../services/aiRequests.js';
 import { requestResearchChat } from '../../services/mockAiService.js';
+import { PROOF_HELP_MIN, proofCoverage, transcriptMatch } from '../../services/proofHelp.js';
 import { getClassroom } from '../../state/classroomStore.js';
 import {
-  canEnterStage, ensureStage, findStage, hasAiReply, isItemComplete, missingFields, noteInput, noteMethodChange,
+  canEnterStage, ensureStage, findStage, hasProofHelp, isItemComplete, missingFields, noteInput, noteMethodChange,
+  proofHelpTexts,
   propositionIdsFor, saveResearch, snapshot, stageStatus, submitStage,
 } from '../../state/researchStore.js';
 import { escapeHtml, formatDateTime, nowIso } from '../../ui/dom.js';
@@ -65,9 +67,12 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
   }
 
   let fields = null;
-  // 2단계: AI의 답을 받기 전에는 대화 화면에만 머문다.
+  // 2단계: AI 답마다 증명 도움 정도를 매긴다(예전 기록도 채운다).
+  if (n === 2) item.chat.messages.forEach((m) => { if (m.role === 'ai' && m.coverage == null) m.coverage = proofCoverage(m.text, problem); });
+  const hasAiReply = (it) => hasProofHelp(it);
+  // 2단계: AI에게서 증명 도움을 받기 전에는 대화 화면에만 머문다.
   let chatTab = n === 2 && hasAiReply(item) ? 'record' : 'chat';
-  const CHAT_FIRST = '먼저 AI와 대화해 AI의 증명을 얻으세요. AI의 답을 받은 뒤에 기록할 수 있습니다.';
+  const CHAT_FIRST = 'AI에게 이 명제의 증명이나 증명 방법을 물어보세요. AI에게서 증명에 대한 도움을 받아야 기록할 수 있습니다.';
   let pending = false;
   const save = () => saveResearch();
   const hrefFor = (i) => `#/research/${n}/${i}`;
@@ -377,7 +382,9 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
       messageCount: request.input.messages.length,
     });
     const reply = await requestResearchChat(request);
-    item.chat.messages.push({ role: 'ai', text: reply.text, at: nowIso(), requestId: request.requestId });
+    const coverage = proofCoverage(reply.text, problem);
+    item.chat.messages.push({ role: 'ai', text: reply.text, at: nowIso(), requestId: request.requestId, coverage });
+    if (coverage >= PROOF_HELP_MIN) item.proofHelpAt ??= nowIso();
     pending = false;
     save();
     if (root.isConnected && chatTab === 'chat') draw({ focus: '#chat-input' });
@@ -415,6 +422,8 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
     }
     if (!window.confirm(`${n}단계를 제출할까요? 제출하면 이 단계의 내용은 다시 고칠 수 없습니다.`)) return;
     tick();
+    // 교사용 기록: 옮겨 적은 글이 AI 답에서 온 정도
+    if (n === 2) ids.forEach((id) => { const it = stage.items[id]; it.transcriptMatch = transcriptMatch(it.aiProof, proofHelpTexts(it)); });
     submitStage(n);
     window.location.hash = '#/research';
   }

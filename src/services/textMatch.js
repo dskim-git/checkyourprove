@@ -133,6 +133,19 @@ export function similarity(a, b) {
   return (2 * common) / total;
 }
 
+/** a의 글자 두 개 묶음 중 b에도 있는 비율 0~1 (a가 b에서 온 내용인지 볼 때 쓴다. 문자 이름은 무시) */
+export function containment(a, b) {
+  const x = bigrams(a);
+  const y = bigrams(b);
+  const total = [...x.values()].reduce((s, n) => s + n, 0);
+  if (!total) return 0;
+  let common = 0;
+  x.forEach((count, gram) => {
+    common += Math.min(count, y.get(gram) ?? 0);
+  });
+  return common / total;
+}
+
 /** 증명 글을 문장 단위로 나눈다 (줄바꿈, 마침표, 쉼표 뒤 "따라서/그러므로" 등) */
 export function splitSentences(text) {
   return String(text ?? '')

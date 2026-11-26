@@ -13,6 +13,7 @@ import { findStage, getResearch, propositionIdsFor, resetResearch, stageStatus }
 import { escapeHtml, formatDateTime, formatTime } from '../ui/dom.js';
 import { breadcrumb, notice } from '../ui/components.js';
 import { formatActive } from './research/stageView.js';
+import { PROOF_HELP_MIN } from '../services/proofHelp.js';
 
 export function renderTeacher(root) {
   const classroom = getClassroom();
@@ -203,7 +204,10 @@ function researchProgress(classroom) {
     const items = st ? ids.map((id) => st.items[id]).filter(Boolean) : [];
     const chats = items.reduce((sum, it) => sum + (it.chat?.messages.filter((m) => m.role === 'student').length ?? 0), 0);
     const pastes = items.reduce((sum, it) => sum + (it.pasteAttempts ?? 0), 0);
-    const extra = stage.n === 2 && st ? `질문 ${chats}회, 붙여넣기 시도 ${pastes}회` : '–';
+    const helped = items.filter((it) => (it.chat?.messages ?? []).some((m) => m.role === 'ai' && (m.coverage ?? 0) >= PROOF_HELP_MIN)).length;
+    const matches = items.map((it) => it.transcriptMatch).filter((v) => v != null);
+    const matchText = matches.length ? `, 옮겨 적기 일치 ${Math.round((matches.reduce((a, b) => a + b, 0) / matches.length) * 100)}%` : '';
+    const extra = stage.n === 2 && st ? `질문 ${chats}회, 증명 도움 ${helped}/${items.length}, 붙여넣기 시도 ${pastes}회${matchText}` : '–';
     return `<tr>
       <th scope="row">${stage.n}단계 ${escapeHtml(stage.short)}</th>
       <td>${escapeHtml(status.label)}</td>

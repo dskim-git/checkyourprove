@@ -60,7 +60,8 @@ export async function requestResearchChat(request) {
     return { text: `증명의 각 단계에서 생각할 점을 정리해 볼게요.\n\n${explain}` };
   }
 
-  if (includesAny(last, PROOF_WORDS) || studentTurns.length === 1) {
+  // 증명을 요청해야 증명을 준다(의미 없는 질문에는 안내만 한다).
+  if (includesAny(last, PROOF_WORDS)) {
     return { text: `${methodName}을 이용해 증명해 볼게요.\n\n[증명]\n${fullProofText(problem)}\n\n궁금한 단계가 있으면 물어보세요.` };
   }
 

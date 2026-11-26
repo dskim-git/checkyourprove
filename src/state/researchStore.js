@@ -9,6 +9,7 @@
 // TODO: Firestore 연동 시 학생별 문서로 옮기고, 제출 뒤 수정 금지와 단계 열림 여부를 보안 규칙·서버에서 확인한다.
 
 import { readJson, writeJson, removeKey } from './storage.js';
+import { PROOF_HELP_MIN, transcriptOk } from '../services/proofHelp.js';
 
 const STORAGE_KEY = 'checkyourprove.prototype.research.v1';
 const SNAPSHOT_LIMIT = 200;
@@ -92,8 +93,13 @@ export function noteMethodChange(item, field, from, to) {
   if (from && from !== to) item.track.methodChanges.push({ at: now(), field, from, to });
 }
 
-/** 2단계: AI의 답을 한 번 이상 받았는가 (받아야 기록하기로 넘어갈 수 있다) */
-export const hasAiReply = (item) => Boolean(item.chat?.messages.some((m) => m.role === 'ai'));
+/** 2단계: 증명 도움으로 인정된 AI 답들 (명제 증명 단계의 핵심을 PROOF_HELP_MIN 이상 담은 답) */
+export const proofHelpTexts = (item) => (item.chat?.messages ?? [])
+  .filter((m) => m.role === 'ai' && (m.coverage ?? 0) >= PROOF_HELP_MIN)
+  .map((m) => m.text);
+
+/** 2단계: AI에게서 증명 도움을 한 번 이상 받았는가 (받아야 기록하기로 넘어갈 수 있다) */
+export const hasProofHelp = (item) => proofHelpTexts(item).length > 0;
 
 /**
  * 채워야 할 항목: [{ field, message }] — 화면에 나오는 순서대로.
@@ -115,8 +121,11 @@ export function missingFields(n, item) {
     text('stuck', `어려웠던 점이나 막힌 점을 쓰세요. ${NONE}`);
   }
   if (n === 2) {
-    need(hasAiReply(item), 'chat', '먼저 "AI와 대화"에서 AI에게 질문해 AI의 증명을 얻으세요.');
+    need(hasProofHelp(item), 'chat', '먼저 "AI와 대화"에서 AI에게 이 명제의 증명을 물어 증명 도움을 받으세요.');
     text('aiProof', 'AI의 증명을 옮겨 적으세요.');
+    if (filled(item.aiProof) && hasProofHelp(item)) {
+      need(transcriptOk(item.aiProof, proofHelpTexts(item)), 'aiProof', '옮겨 적은 내용이 AI의 답변과 많이 다르거나 너무 짧아요. 위의 대화에서 AI의 증명을 보고 그대로 옮겨 적으세요.');
+    }
     need(filled(item.aiMethod), 'aiMethod', 'AI가 사용한 증명 방법을 고르세요.');
     if (item.aiMethod === 'other') text('aiMethodOther', 'AI가 사용한 증명 방법을 쓰세요.');
     need(item.confidence != null, 'confidence', '확신 정도를 별로 고르세요.');
