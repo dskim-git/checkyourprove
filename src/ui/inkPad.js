@@ -21,6 +21,9 @@ const PEN_HINT = '펜으로 쓰는 동안 손바닥이 닿아도 괜찮아요. �
 // 이 화면에서 펜 입력을 본 적이 있는가 (있으면 필기 칸 위의 손가락 터치를 손바닥으로 본다)
 let penSeen = false;
 
+/** 이 화면에서 펜(애플펜슬 등)으로 필기한 적이 있는가 */
+export const penWasUsed = () => penSeen;
+
 const hasTouchScreen = () => (navigator.maxTouchPoints ?? 0) > 0;
 
 /** 필기 칸 HTML. labelledBy는 칸의 이름이 되는 요소 id */

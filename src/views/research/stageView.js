@@ -18,6 +18,7 @@ import { icons } from '../../ui/icons.js';
 import { breadcrumb, chatMessages, mockAiNote, notice, renderNotFound } from '../../ui/components.js';
 import { bindFields, handleChatShortcut, handleSymbolInsert, keyboardOnlyText } from '../../ui/forms.js';
 import { mountInkViews } from '../../ui/inkCanvas.js';
+import { penWasUsed } from '../../ui/inkPad.js';
 import { statementHtml } from '../../ui/mathText.js';
 import {
   checklistField, checklistText, choiceField, handleModeSwitch, methodField, methodText, mountProofPads, noteField, proofField,
@@ -568,6 +569,23 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
   };
   const releaseKeyboardOnly = keyboardOnlyText(root, { onBlocked: onPenOnText, onTap: onPenTap });
 
+  // 펜을 쓴 직후 iPadOS(Scribble 켜짐)는 글 칸을 손가락으로 눌러도 키보드 대신 작은 펜 도구 막대를 띄울 수 있다.
+  // 칸을 고른 뒤 화면 높이가 줄지 않으면(키보드가 안 올라옴) 방법을 안내한다. 웹에서 키보드를 직접 띄울 수는 없다.
+  const KEYBOARD_CHECK_MS = 900;
+  let keyboardTimer = 0;
+  const onTextFocus = (event) => {
+    const el = event.target;
+    const viewport = window.visualViewport;
+    if (locked || !viewport || !penWasUsed() || !el.matches?.('textarea, input[type="text"]') || el.closest('[data-ink-pad]')) return;
+    const before = viewport.height;
+    window.clearTimeout(keyboardTimer);
+    keyboardTimer = window.setTimeout(() => {
+      if (document.activeElement !== el || viewport.height < before - 120) return;
+      keyboardNote(el, '키보드가 나오지 않으면 화면 아래쪽 작은 막대의 키보드 단추를 누르세요. 펜을 쓴 직후에는 아이패드가 키보드 대신 이 막대를 띄울 수 있어요. (선생님께: 설정 › Apple Pencil › 손글씨 입력을 끄면 바로 키보드가 나와요.)');
+    }, KEYBOARD_CHECK_MS);
+  };
+  root.addEventListener('focusin', onTextFocus);
+
   const onSubmitForm = (event) => {
     const form = event.target.closest('[data-chat-form]');
     if (!form) return;
@@ -605,6 +623,8 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
     root.removeEventListener('keydown', handleChatShortcut);
     document.removeEventListener('visibilitychange', onVisibility);
     releaseKeyboardOnly();
+    window.clearTimeout(keyboardTimer);
+    root.removeEventListener('focusin', onTextFocus);
   };
 }
 
