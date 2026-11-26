@@ -53,10 +53,10 @@ export function renderTeacher(root) {
       <div class="actions actions--start">
         <a class="button button--primary" href="#/teacher/grading">증명 채점하기</a>
         <a class="button button--secondary" href="#/teacher/chats">AI 대화 태그</a>
+        <a class="button button--secondary" href="#/teacher/analysis">연구 분석</a>
         <a class="button button--secondary" href="#/teacher/rubric">채점 루브릭</a>
-        <button type="button" class="button button--secondary" disabled aria-describedby="unimplemented-note">기록 내려받기 (미구현)</button>
         <button type="button" class="button button--ghost" data-action="reset-research">이 브라우저의 연구 기록 초기화</button>
-        <p class="actions__note" id="unimplemented-note">분석 지표, 내려받기, 면담 기능은 다음 작업에서 추가합니다.</p>
+        <p class="actions__note" id="unimplemented-note">기록 내려받기(CSV)는 연구 분석 화면에 있습니다. 면담 기능은 다음 작업에서 추가합니다.</p>
       </div>
     </section>
   </div>`;

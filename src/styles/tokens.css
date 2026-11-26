@@ -27,6 +27,9 @@
   --color-sugar-soft: oklch(95% 0.02 236); --color-accent-soft: oklch(95% 0.07 96);
   --color-on-ink: var(--color-paper);
 
+  /* 분석 차트: 1단계 나 / 2단계 AI / 4단계 최종 (dataviz 검사 통과, 적록 색각 경계 구간이라 모양도 다르게 쓴다) */
+  --color-chart-mine: oklch(60% 0.13 58); --color-chart-ai: var(--color-accent-2); --color-chart-final: var(--color-mint-deep);
+
   --font-display: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
   --font-body: var(--font-display);
   --font-outlier: ui-monospace, "Cascadia Mono", "D2Coding", Consolas, monospace;
