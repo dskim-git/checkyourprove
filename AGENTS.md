@@ -80,26 +80,29 @@ src/
 │  ├─ problems/            # 증명법별 명제(direct, contrapositive, contradiction, induction) — 단계별 증명 데이터
 │  ├─ proofModel.js        # 단계 문장의 빈칸 해석, 예시 증명 만들기, 점검 기준 만들기
 │  ├─ levels.js            # 증명 연습 7단계 활동 정의, 통과 기준, 테스트 버전 자유 이동 설정
-│  ├─ methods.js, modes.js, classroom.js, sampleRecords.js
+│  ├─ research.js          # 연구 모드 단계(1~4), 증명법 선택지, 보완할 점 체크리스트
+│  ├─ researchPropositions.js # 연구 명제(수업 활동지와 같은 명제 3개, 예시 증명은 더미 AI용)
+│  ├─ methods.js, classroom.js, sampleRecords.js
 ├─ state/
 │  ├─ attemptStore.js      # 증명 연습 활동 기록 (활동 단계 × 명제)
 │  ├─ practiceProgress.js  # 통과·인증·잠금 계산
-│  ├─ sessionStore.js, sessionModels.js   # AI와 탐구하기(연구 모드) 세션
+│  ├─ researchStore.js     # AI와 탐구하기 기록 (단계 × 명제, 제출 후 잠금, 시간·작성 과정)
+│  ├─ motivation.js        # 연속 학습일·통과 수·인증 배지·이어서 하기
 │  └─ classroomStore.js, storage.js       # 수업 설정, localStorage 임시 보관
 ├─ services/
 │  ├─ aiRequests.js        # AI 요청 입력 구성 (활동별·모드별로 다른 함수)
 │  ├─ mockProofChecker.js  # 더미 AI 점검·코치·채점 (→ 추후 서버 호출로 교체)
-│  ├─ mockAiService.js     # 더미 AI 대화 (연구 모드)
+│  ├─ mockAiService.js     # 더미 AI 대화 (연구 모드 2단계)
 │  └─ textMatch.js         # 수식 답 비교용 정규화, 문자 이름·같은 뜻의 말을 고려한 느슨한 비교
-├─ ui/                     # 공통 마크업·폼·아이콘 도구
+├─ ui/                     # 공통 마크업·폼·아이콘 도구, mathText.js(수식 줄바꿈 규칙)
 ├─ views/
 │  ├─ hubView.js           # 학생 홈 (타일 3개)
 │  ├─ practice/            # 증명법 선택 → 활동 단계 선택 → 명제 선택 → 활동 화면
 │  │  └─ activities/       # 활동 7종 모듈 (createData, mount). 빈칸 고르기·채우기는 fillBlanks.js 하나를 함께 씀
 │  ├─ recordsView.js       # 내 기록
-│  ├─ researchView.js      # AI와 탐구하기 (연구 모드)
+│  ├─ research/            # AI와 탐구하기: researchHomeView(4단계 지도), stageView(단계 화면), researchParts(입력 부품)
 │  └─ teacherView.js       # 교사 화면 미리보기
-└─ styles/                 # base / layout / components / views CSS
+└─ styles/                 # app.css(진입, Hallmark 스탬프) → tokens / base / layout / components / views
 ```
 
 - 화면 코드(`views/`)는 데이터를 직접 만들지 않고 `data/`, `state/`, `services/`를 통해 다룹니다. Firebase·서버 연동 시 `state/`와 `services/`의 구현만 바꾸는 것을 목표로 합니다.
@@ -318,12 +321,13 @@ AI와 탐구하기 → 교사가 지정한 명제의 연구 모드 흐름
 
 #### 구현 순서 (로드맵 2단계 안, 더미 AI와 브라우저 저장으로 화면부터)
 
-1. 연구 흐름: 교사가 명제·단계 열기 → 학생 1~4단계(명제 여러 개, 제출 후 잠금, 시간 기록) → 2단계 자유 대화(더미)
+1. 연구 흐름: 교사가 명제·단계 열기 → 학생 1~4단계(명제 여러 개, 제출 후 잠금, 시간 기록) → 2단계 자유 대화(더미) — 완료(2026-11-26)
 2. 펜 필기 입력
 3. 교사 채점(루브릭, 블라인드)과 대화 태그, 분석 지표
 4. 설문 편집과 사전·사후 설문, 연구 동의
 5. "AI는 어떻게 답할까?" 원리 활동
 6. 면담 후보 추천과 면담 기록(녹음·전사는 서버 연결 뒤)
+7. (마지막, 사용자 결정 2026-11-26) 사전·사후 설문 문항 확정, 필기 글자 변환 범위, 면담 음성 전사 서비스
 
 ---
 
@@ -350,15 +354,15 @@ AI와 탐구하기 → 교사가 지정한 명제의 연구 모드 흐름
 - 시도 횟수와 정답·예시 보기 사용 여부를 남겨, 교사가 학생이 어디에서 막히는지 볼 수 있게 합니다.
 - `TODO`: 실제 서비스에서는 통과·인증 판정을 서버에서 확정합니다. 클라이언트가 보낸 "통과" 값을 그대로 믿지 않습니다.
 
-### 연구 모드 기록 대상 후보
+### 연구 모드 기록 (현재 구조: `state/researchStore.js`)
 
-- AI 사용 전에 작성한 학생의 증명(초안)과 작성 시각
-- AI 대화: 각 질문과 응답, 발생 순서, 시각
-- AI에 실제로 전달된 입력 전체와 모델 설정(모델 식별자, 파라미터, 프롬프트 버전)
-- AI가 제시한 증명
-- 비교·비판·성찰 기록
-- 최종 증명, 그리고 초안 대비 수정 내용
-- AI 요약을 쓴 경우, 요약 결과와 요약에 사용된 원본 기록의 연결 정보
+- `propositionIds`: 학생이 1단계를 처음 열 때 고정한 명제 목록
+- `stages[1~4]`: `startedAt`, `submittedAt`(제출 후 수정 불가), `activeMs`(화면을 보고 있던 시간), `leaves`(화면 이탈 횟수), `items[명제 id]`
+- 단계별 `items` 입력값: 5절 연구 설계의 전체 흐름 표와 같음
+- 작성 과정 `track`: `activeMs`, `firstInputAt`, `inputCount`, `deleteCount`, `snapshots`(증명 중간 저장본, 30초마다 바뀌었을 때), `methodChanges`(증명법 변경)
+- 2단계 추가: `chat.messages`(시각 포함 대화 전체), `chat.requestLog`(요청 ID, 모델, 프롬프트 버전, 입력 키, 메시지 수), `pasteAttempts`, `tabSwitches`
+- `TODO`: 필기 획 데이터(구현 2), 교사 채점·태그(구현 3), 설문 응답(구현 4), 원리 활동 응답(구현 5)
+- AI 요약을 쓰게 되면 요약 결과와 원본 기록의 연결 정보도 남깁니다.
 
 ### 원칙
 
@@ -486,7 +490,7 @@ AI와 탐구하기 → 교사가 지정한 명제의 연구 모드 흐름
 | 완료 | 화면 골격·라우팅, 증명 연습하기 7단계 프로토타입(인증, 더미 AI) | 학생이 혼자 연습할 수 있음 | 완료 |
 | 0 | 준비: git 저장소 만들기, GitHub 업로드, Vercel 연결 | 배포 주소에서 앱이 열리고, 푸시하면 자동 배포됨 | 완료 (2026-11-26) |
 | 1 | 디자인·UI 개편, 수식 표시(KaTeX 검토), 모바일 점검 | 디자인 토큰과 공통 부품이 정리되고 폰 화면에서 확인함 | 진행 중 (2026-11-26 Hallmark 개편 완료, 사용자 폰 확인과 수식 표시 남음) |
-| 2 | AI와 탐구하기(연구 모드) 재설계 (더미 AI): 4단계 흐름, 펜 필기, 교사 채점·분석·면담, 설문, AI 원리 활동 | 5절 연구 설계의 구현 순서 1~6이 더미 AI로 동작함 | 다음 (설계 2026-11-26 정리) |
+| 2 | AI와 탐구하기(연구 모드) 재설계 (더미 AI): 4단계 흐름, 펜 필기, 교사 채점·분석·면담, 설문, AI 원리 활동 | 5절 연구 설계의 구현 순서 1~6이 더미 AI로 동작함 | 진행 중 (구현 1 연구 흐름 4단계 완료 2026-11-26, 다음은 구현 2 펜 필기) |
 | 3 | 데이터 수집 명세와 연구 윤리 결정 (문서 작업) | 수집 항목, 가명 처리, 동의·보존·삭제 기준이 이 문서에 기록됨 | 예정 |
 | 4 | Firebase: 로그인, 학급 가입, 역할 구분, Firestore, 보안 규칙, 서버 함수 뼈대 | 3단계 명세대로 저장되고 권한이 서버 규칙으로 강제됨 | 예정 |
 | 5 | OpenRouter 연결 (연구 모드 먼저, 다음 연습 모드), 요청 한도, AI 응답 평가 세트 | 서버 함수를 거쳐 실제 AI가 응답하고, 평가 세트로 품질을 비교할 수 있음 | 예정 |

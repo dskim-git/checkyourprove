@@ -63,16 +63,15 @@ export function buildGradeRequest({ problem, studentProof }) {
 const toTranscript = (messages) => messages.map(({ role, text }) => ({ role, text }));
 
 /**
- * 연구 모드 요청: 학생 초안을 인자로 받지 않으며 입력에도 넣지 않는다.
+ * 연구 모드 2단계 대화 요청: 학생의 1단계 증명을 인자로 받지 않으며 입력에도 넣지 않는다.
  * 입력은 명제와 이 대화의 메시지로만 구성한다(화이트리스트).
- *
- * @param {'dialogue' | 'proof'} purpose 대화 응답 또는 AI 증명 생성
+ * TODO: 서버는 이 학생에게 2단계가 열려 있고 아직 제출하지 않았을 때만 요청을 받는다.
  */
-export function buildResearchRequest({ problem, messages, purpose = 'dialogue' }) {
+export function buildResearchRequest({ problem, messages }) {
   return {
     ...baseRequest('rrq', 'research', PROMPT_VERSIONS.research),
     mode: 'research',
-    purpose,
+    stage: 2,
     input: { ...propositionOf(problem), messages: toTranscript(messages) },
   };
 }

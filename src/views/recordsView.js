@@ -3,10 +3,11 @@
 import { METHODS, getMethod } from '../data/methods.js';
 import { LEVELS, getLevel } from '../data/levels.js';
 import { getProblem } from '../data/problems/index.js';
-import { MODES } from '../data/modes.js';
+import { RESEARCH_STAGES } from '../data/research.js';
 import { getClassroom } from '../state/classroomStore.js';
 import { listAttempts, clearAllAttempts } from '../state/attemptStore.js';
-import { findSession, clearAllSessions } from '../state/sessionStore.js';
+import { findStage, resetResearch, stageStatus } from '../state/researchStore.js';
+import { formatActive } from './research/stageView.js';
 import { levelStates } from '../state/practiceProgress.js';
 import { passedCount, streak } from '../state/motivation.js';
 import { escapeHtml, formatDateTime } from '../ui/dom.js';
@@ -64,20 +65,27 @@ export function renderRecords(root) {
     }).join('');
 
     const classroom = getClassroom();
-    const researchProblem = getProblem(classroom.researchProblemId);
-    const researchSession = researchProblem ? findSession('research', researchProblem.id) : null;
-    const researchLine = !researchSession || !researchSession.draft.text.trim()
-      ? '<p class="empty-text">아직 기록이 없습니다.</p>'
-      : `<a class="record" href="#/research/${researchProblem.id}">
+    const researchRows = RESEARCH_STAGES.map((stage) => {
+      const status = stageStatus(stage.n, classroom);
+      const record = findStage(stage.n);
+      if (!record) return '';
+      const meta = record.submittedAt
+        ? `제출 ${escapeHtml(formatDateTime(record.submittedAt))}, 작업 시간 ${formatActive(record.activeMs)}`
+        : `시작 ${escapeHtml(formatDateTime(record.startedAt))}, 작업 시간 ${formatActive(record.activeMs)}`;
+      return `<li>
+        <a class="record" href="#/research/${stage.n}">
           <span class="record__main">
-            <span class="record__title">${escapeHtml(researchProblem.title)}</span>
-            <span class="record__meta">${researchSession.completedAt
-              ? `완료 (${escapeHtml(formatDateTime(researchSession.completedAt))})`
-              : `진행 중 (${researchSession.step + 1} / ${MODES.research.steps.length}단계)`}</span>
+            <span class="record__title">${stage.n}단계 ${escapeHtml(stage.title)}</span>
+            <span class="record__meta">${meta}</span>
           </span>
-          <span class="status status--${researchSession.completedAt ? 'passed' : 'progress'}">${researchSession.completedAt ? icons.done : icons.progress}<span>${researchSession.completedAt ? '완료' : '진행 중'}</span></span>
+          <span class="status status--${status.state === 'submitted' ? 'passed' : 'progress'}">${status.state === 'submitted' ? icons.done : icons.progress}<span>${escapeHtml(status.state === 'submitted' ? '제출 완료' : '진행 중')}</span></span>
           <span class="visually-hidden">보기</span>
-        </a>`;
+        </a>
+      </li>`;
+    }).join('');
+    const researchLine = researchRows
+      ? `<ul class="record-list">${researchRows}</ul>`
+      : '<p class="empty-text">아직 기록이 없습니다. <a href="#/research">AI와 탐구하기</a>에서 시작해 보세요.</p>';
 
     root.innerHTML = `<div class="page">
       ${breadcrumb([{ label: '홈', href: '#/' }, { label: '내 기록' }])}
@@ -116,7 +124,7 @@ export function renderRecords(root) {
     if (!event.target.closest('[data-action="clear-all"]')) return;
     if (!window.confirm('이 브라우저에 저장된 모든 기록(증명 연습, AI와 탐구하기)을 지울까요? 지운 내용은 되돌릴 수 없습니다.')) return;
     clearAllAttempts();
-    clearAllSessions();
+    resetResearch();
     draw();
   };
 

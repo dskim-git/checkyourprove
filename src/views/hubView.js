@@ -8,6 +8,7 @@ import { listAttempts } from '../state/attemptStore.js';
 import { certifiedLevelCount } from '../state/practiceProgress.js';
 import { continueAttempt, passedCount, streak } from '../state/motivation.js';
 import { escapeHtml } from '../ui/dom.js';
+import { researchSummary } from './research/researchHomeView.js';
 import { icons } from '../ui/icons.js';
 
 function statStrip() {
@@ -53,15 +54,13 @@ function continueCard() {
 export function renderHub(root) {
   const classroom = getClassroom();
   const attempts = listAttempts().length;
-  const researchProblem = getProblem(classroom.researchProblemId);
-
-  const researchTile = classroom.researchOpen && researchProblem
-    ? `<a class="tile tile--research" href="#/research/${researchProblem.id}">
+  const researchTile = classroom.researchOpen
+    ? `<a class="tile tile--research" href="#/research">
         <span class="tile__icon tile__glyph" aria-hidden="true">?</span>
         <span class="tile__text">
           <span class="tile__title">AI와 탐구하기</span>
-          <span class="tile__desc">선생님이 정한 명제를 내가 먼저 증명한 뒤, AI와 탐구하고 두 증명을 비교합니다.</span>
-          <span class="tile__meta">오늘의 명제: ${escapeHtml(researchProblem.title)}</span>
+          <span class="tile__desc">내가 먼저 증명하고, AI의 증명을 얻어 비교한 뒤 최종 증명을 완성합니다.</span>
+          <span class="tile__meta">${escapeHtml(researchSummary(classroom))}</span>
         </span>
         <span class="tile__go">${icons.chevronRight}</span>
       </a>`

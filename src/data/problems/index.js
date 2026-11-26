@@ -6,13 +6,15 @@ import direct from './direct.js';
 import contrapositive from './contrapositive.js';
 import contradiction from './contradiction.js';
 import induction from './induction.js';
+import { RESEARCH_PROPOSITIONS } from '../researchPropositions.js';
 
 const DIFFICULTY_ORDER = { 기초: 0, 표준: 1, 심화: 2 };
 
 export const PROBLEMS = [...direct, ...contrapositive, ...contradiction, ...induction];
 
+/** 연습 명제와 연구 명제(AI와 탐구하기)를 모두 찾는다. 연구 명제는 연습 목록(PROBLEMS)에는 넣지 않는다. */
 export function getProblem(id) {
-  return PROBLEMS.find((problem) => problem.id === id) ?? null;
+  return PROBLEMS.find((problem) => problem.id === id) ?? RESEARCH_PROPOSITIONS.find((problem) => problem.id === id) ?? null;
 }
 
 export function problemsByMethod(methodId) {

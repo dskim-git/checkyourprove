@@ -26,26 +26,6 @@ export function difficultyTag(difficulty) {
   return `<span class="tag tag--difficulty">난이도 ${escapeHtml(difficulty)}</span>`;
 }
 
-/** 단계 표시. current가 steps.length와 같으면 모든 단계를 마친 상태다. */
-export function stepIndicator(steps, current) {
-  const total = steps.length;
-  const items = steps
-    .map((label, index) => {
-      const state = index < current ? 'done' : index === current ? 'current' : 'todo';
-      const srText = { done: '완료', current: '현재 단계', todo: '남은 단계' }[state];
-      return `<li class="steps__item is-${state}"${state === 'current' ? ' aria-current="step"' : ''}>
-        <span class="steps__marker" aria-hidden="true">${state === 'done' ? '✓' : index + 1}</span>
-        <span class="steps__label">${escapeHtml(label)}<span class="visually-hidden"> (${srText})</span></span>
-      </li>`;
-    })
-    .join('');
-  const summary = current >= total ? '모든 단계 완료' : `${current + 1} / ${total}단계: ${steps[current]}`;
-  return `<nav class="steps" aria-label="활동 단계">
-    <p class="steps__summary" aria-hidden="true">${escapeHtml(summary)}</p>
-    <ol class="steps__list">${items}</ol>
-  </nav>`;
-}
-
 export function propositionBlock(problem) {
   const method = getMethod(problem.method);
   return `<div class="proposition-wrap"><section class="proposition" aria-label="명제">
@@ -108,34 +88,6 @@ export function chatMessages(messages, { pending = false } = {}) {
     </li>`);
   }
   return items.join('');
-}
-
-/** 대화창: 메시지 목록과 입력 폼 */
-export function chatPanel({ messages, pending, label, help }) {
-  return `<div class="chat">
-    ${mockAiNote('프로토타입: AI 응답은 미리 준비한 예시 문장이며 실제 AI가 아닙니다.')}
-    <ol class="chat__log" data-chat-log aria-label="AI 대화 기록" aria-live="polite">${chatMessages(messages, { pending })}</ol>
-    <form class="chat__form" data-chat-form novalidate>
-      <label class="field__label" for="chat-input">${escapeHtml(label)}</label>
-      <p class="field__help" id="chat-input-help">${escapeHtml(help)} Ctrl + Enter로 보낼 수 있습니다.</p>
-      <textarea id="chat-input" class="field__input" rows="3" aria-describedby="chat-input-help"></textarea>
-      <div class="chat__form-actions">
-        <button type="submit" class="button button--secondary" data-chat-send${pending ? ' disabled' : ''}>보내기</button>
-      </div>
-    </form>
-  </div>`;
-}
-
-/** AI 요청 입력 미리보기(개발·연구 확인용) */
-export function requestPreview(request) {
-  const body = request
-    ? `<pre class="code-block"><code>${escapeHtml(JSON.stringify(request, null, 2))}</code></pre>`
-    : '<p class="empty-text">아직 보낸 요청이 없습니다.</p>';
-  return `<details class="disclosure">
-    <summary>마지막 AI 요청 입력 보기</summary>
-    <p class="disclosure__note">실제 서비스에서는 서버가 이 형식으로 입력을 구성합니다. 지금은 더미 응답을 사용합니다.</p>
-    ${body}
-  </details>`;
 }
 
 export function renderNotFound(root) {

@@ -11,7 +11,10 @@ export const DEFAULT_CLASSROOM = {
   unlockAll: false,
   // AI와 탐구하기(연구 모드)
   researchOpen: true,
-  researchProblemId: 'contradiction-sqrt2',
+  // 연구 명제(활동지와 같은 순서). 연구 명제와 연습 명제 중에서 고를 수 있다.
+  researchPropositionIds: ['research-cube-remainder', 'research-square-odd', 'research-coprime-odd'],
+  // 교사가 열어 준 단계(1~4). 학생은 열린 단계 중 앞 단계를 제출한 단계만 할 수 있다.
+  researchStagesOpen: [1],
   // 오류가 포함된 AI 증명 제공은 기본값으로 꺼져 있으며, 아직 구현하지 않았다.
   flawedAiProofEnabled: false,
 };

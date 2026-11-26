@@ -1,6 +1,6 @@
 // 브라우저 임시 보관 (localStorage)
 // 프로토타입 전용. 사생활 보호 모드 등에서 저장이 막혀도 앱이 동작하도록 예외를 삼킨다.
-// TODO: Firestore 연동 시 이 모듈을 사용하는 스토어(sessionStore, classroomStore)의 구현을 교체한다.
+// TODO: Firestore 연동 시 이 모듈을 사용하는 스토어(attemptStore, researchStore, classroomStore)의 구현을 교체한다.
 
 // 앱 이름을 checkyourproof → checkyourprove로 바꾸기 전의 저장 키 (이미 쌓인 테스트 기록을 옮겨 온다)
 const LEGACY_PREFIX = 'checkyourproof.';

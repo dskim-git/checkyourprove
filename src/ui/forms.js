@@ -1,7 +1,6 @@
 // 폼 입력 도구: 라벨이 연결된 입력 필드, 자동 임시 보존, 필수 입력 확인, 수학 기호 입력
 
 import { escapeHtml, formatTime, setPath } from './dom.js';
-import { saveSession } from '../state/sessionStore.js';
 
 const SYMBOLS = [
   ['²', '제곱'],
@@ -65,10 +64,10 @@ export function saveStatusText(session) {
 
 /**
  * root 안의 [data-field] 입력을 기록 객체와 연결하고, 입력할 때마다 잠시 뒤 자동 저장한다.
- * save는 기록을 저장하는 함수다(기본: 연구 모드 세션 저장).
+ * save는 기록을 저장하는 함수다(필수).
  * 반환한 flush()는 대기 중인 저장을 즉시 실행하고, dispose()는 연결을 해제한다.
  */
-export function bindFields(root, session, save = saveSession) {
+export function bindFields(root, session, save) {
   let timer = null;
 
   const persist = () => {

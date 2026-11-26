@@ -5,14 +5,14 @@
 import { METHODS, getMethod } from '../data/methods.js';
 import { LEVELS, getLevel } from '../data/levels.js';
 import { PROBLEMS, getProblem } from '../data/problems/index.js';
-import { fullProofText } from '../data/proofModel.js';
-import { SAMPLE_ACTIVITY, SAMPLE_RESEARCH_RECORDS } from '../data/sampleRecords.js';
+import { RESEARCH_PROPOSITIONS } from '../data/researchPropositions.js';
+import { RESEARCH_STAGES } from '../data/research.js';
+import { SAMPLE_ACTIVITY } from '../data/sampleRecords.js';
 import { getClassroom, saveClassroom } from '../state/classroomStore.js';
+import { findStage, getResearch, propositionIdsFor, resetResearch, stageStatus } from '../state/researchStore.js';
 import { escapeHtml, formatDateTime, formatTime } from '../ui/dom.js';
-import { icons } from '../ui/icons.js';
-import { breadcrumb, chatMessages, notice, proofText } from '../ui/components.js';
-
-let selectedRecordIndex = 0;
+import { breadcrumb, notice } from '../ui/components.js';
+import { formatActive } from './research/stageView.js';
 
 export function renderTeacher(root) {
   const classroom = getClassroom();
@@ -41,22 +41,17 @@ export function renderTeacher(root) {
       ${activityTable()}
     </section>
 
-    <section class="panel" aria-labelledby="record-heading">
+    <section class="panel" aria-labelledby="research-progress-heading">
       <div class="section-head">
-        <h2 id="record-heading" class="section-title">AI와 탐구하기 기록 미리보기</h2>
-        <span class="tag tag--proto">예시 데이터</span>
+        <h2 id="research-progress-heading" class="section-title">AI와 탐구하기 진행 현황</h2>
+        <span class="tag tag--proto">이 브라우저의 학생</span>
       </div>
-      <div class="field field--inline">
-        <label class="field__label" for="record-select">학생 기록 선택</label>
-        <select id="record-select" class="field__select">
-          ${SAMPLE_RESEARCH_RECORDS.map((record, index) => `<option value="${index}"${index === selectedRecordIndex ? ' selected' : ''}>${escapeHtml(record.pseudonym)}: ${escapeHtml(getProblem(record.problemId).title)}</option>`).join('')}
-        </select>
-      </div>
-      <div data-record-detail>${recordDetail(SAMPLE_RESEARCH_RECORDS[selectedRecordIndex])}</div>
+      <p class="meta">서버 연결 전이라 이 브라우저에서 활동한 학생 한 명의 기록만 보입니다. 학생이 1단계를 시작하면 그때의 명제 목록으로 고정됩니다.</p>
+      <div data-research-progress>${researchProgress(classroom)}</div>
       <div class="actions actions--start">
         <button type="button" class="button button--secondary" disabled aria-describedby="unimplemented-note">기록 내려받기 (미구현)</button>
-        <button type="button" class="button button--secondary" disabled aria-describedby="unimplemented-note">AI 요약 만들기 (미구현)</button>
-        <p class="actions__note" id="unimplemented-note">내려받기와 AI 요약은 형식과 권한 설계가 정해진 뒤 구현합니다. AI 요약은 원본 기록을 대체하지 않고 원본과 연결해 저장할 예정입니다.</p>
+        <button type="button" class="button button--ghost" data-action="reset-research">이 브라우저의 연구 기록 초기화</button>
+        <p class="actions__note" id="unimplemented-note">채점, 분석, 내려받기, 면담 기능은 다음 작업에서 추가합니다.</p>
       </div>
     </section>
   </div>`;
@@ -64,11 +59,6 @@ export function renderTeacher(root) {
   const form = root.querySelector('[data-settings-form]');
 
   const onChange = (event) => {
-    if (event.target.id === 'record-select') {
-      selectedRecordIndex = Number(event.target.value);
-      root.querySelector('[data-record-detail]').innerHTML = recordDetail(SAMPLE_RESEARCH_RECORDS[selectedRecordIndex]);
-      return;
-    }
     const status = root.querySelector('[data-settings-status]');
     if (form.contains(event.target) && status) status.textContent = '저장하지 않은 변경 사항이 있습니다.';
   };
@@ -77,21 +67,37 @@ export function renderTeacher(root) {
     if (event.target !== form) return;
     event.preventDefault();
     const data = new FormData(form);
+    const propositionIds = data.getAll('researchPropositionIds');
+    if (!propositionIds.length) {
+      root.querySelector('[data-settings-status]').textContent = '탐구할 명제를 하나 이상 고르세요.';
+      return;
+    }
     saveClassroom({
       ...classroom,
       requiredClears: Number(data.get('requiredClears')),
       unlockAll: data.get('unlockAll') === 'on',
       researchOpen: data.get('researchOpen') === 'on',
-      researchProblemId: data.get('researchProblemId'),
+      researchPropositionIds: propositionIds,
+      researchStagesOpen: data.getAll('researchStagesOpen').map(Number).sort(),
     });
+    root.querySelector('[data-research-progress]').innerHTML = researchProgress(getClassroom());
     root.querySelector('[data-settings-status]').textContent = `설정을 저장했습니다 (${formatTime(new Date().toISOString())}). 학생 화면에 바로 반영됩니다.`;
+  };
+
+  const onClick = (event) => {
+    if (!event.target.closest('[data-action="reset-research"]')) return;
+    if (!window.confirm('이 브라우저에 저장된 AI와 탐구하기 기록을 모두 지울까요? 시연·시험용 기능이며 되돌릴 수 없습니다.')) return;
+    resetResearch();
+    root.querySelector('[data-research-progress]').innerHTML = researchProgress(getClassroom());
   };
 
   root.addEventListener('change', onChange);
   root.addEventListener('submit', onSubmit);
+  root.addEventListener('click', onClick);
   return () => {
     root.removeEventListener('change', onChange);
     root.removeEventListener('submit', onSubmit);
+    root.removeEventListener('click', onClick);
   };
 }
 
@@ -99,9 +105,17 @@ function settingsForm(classroom) {
   const clearOptions = [1, 2, 3]
     .map((n) => `<option value="${n}"${classroom.requiredClears === n ? ' selected' : ''}>명제 ${n}개 통과</option>`)
     .join('');
-  const researchOptions = PROBLEMS.map(
-    (p) => `<option value="${p.id}"${classroom.researchProblemId === p.id ? ' selected' : ''}>[${escapeHtml(getMethod(p.method).shortLabel)}] ${escapeHtml(p.title)}</option>`,
-  ).join('');
+  const chosen = new Set(classroom.researchPropositionIds);
+  const propositionCheck = (p, label) => `<label class="check">
+      <input type="checkbox" name="researchPropositionIds" value="${p.id}"${chosen.has(p.id) ? ' checked' : ''}>
+      <span>${label} <span class="meta">${escapeHtml(p.statement)}</span></span>
+    </label>`;
+  const researchChecks = RESEARCH_PROPOSITIONS.map((p) => propositionCheck(p, `<strong>${escapeHtml(p.title)}</strong>`)).join('');
+  const practiceChecks = PROBLEMS.map((p) => propositionCheck(p, `[${escapeHtml(getMethod(p.method).shortLabel)}] ${escapeHtml(p.title)}`)).join('');
+  const stageChecks = RESEARCH_STAGES.map((stage) => `<label class="check">
+      <input type="checkbox" name="researchStagesOpen" value="${stage.n}"${classroom.researchStagesOpen.includes(stage.n) ? ' checked' : ''}>
+      <span>${stage.n}단계 ${escapeHtml(stage.title)}${stage.usesAi ? ' <span class="tag">AI 사용</span>' : ''}</span>
+    </label>`).join('');
 
   return `<form class="settings-form" data-settings-form novalidate>
     <div class="field">
@@ -128,18 +142,27 @@ function settingsForm(classroom) {
         <input type="checkbox" name="researchOpen"${classroom.researchOpen ? ' checked' : ''}>
         <span>학생 홈에서 AI와 탐구하기 열기</span>
       </label>
-      <div class="field field--inline">
-        <label class="field__label" for="research-problem">탐구할 명제</label>
-        <p class="field__help" id="research-problem-help">모든 학생이 같은 명제로 활동합니다.</p>
-        <select id="research-problem" name="researchProblemId" class="field__select" aria-describedby="research-problem-help">${researchOptions}</select>
-      </div>
+      <fieldset class="choice-group">
+        <legend class="field__label">단계 열기</legend>
+        <p class="field__help">수업 차시에 맞춰 단계를 열어 주세요. 학생은 앞 단계를 제출해야 다음 단계를 할 수 있습니다. 3·4단계는 함께 열어 같은 차시에 이어서 해도 됩니다.</p>
+        ${stageChecks}
+      </fieldset>
+      <fieldset class="choice-group">
+        <legend class="field__label">탐구할 명제</legend>
+        <p class="field__help">모든 학생이 같은 명제로 활동합니다. 학생이 1단계를 시작한 뒤에는 바꿔도 그 학생의 기록에는 반영되지 않습니다.</p>
+        ${researchChecks}
+        <details class="disclosure">
+          <summary>연습 명제에서 고르기 (${PROBLEMS.length}개)</summary>
+          <div class="choice-group">${practiceChecks}</div>
+        </details>
+      </fieldset>
     </fieldset>
 
     <fieldset class="choice-group is-unavailable" disabled>
       <legend class="field__label">연구용 고급 설정 <span class="tag tag--proto">미구현</span></legend>
       <label class="check">
         <input type="checkbox"${classroom.flawedAiProofEnabled ? ' checked' : ''}>
-        <span>오류가 포함된 AI 증명 제공 <span class="meta">· 기본값 꺼짐. 교사가 명시적으로 설정하고 관리하는 기능으로 따로 구현할 예정입니다.</span></span>
+        <span>오류가 포함된 AI 증명 제공 <span class="meta">기본값은 꺼짐입니다. 교사가 명시적으로 설정하고 관리하는 기능으로 따로 구현할 예정입니다.</span></span>
       </label>
     </fieldset>
 
@@ -171,62 +194,34 @@ function activityTable() {
   </div>`;
 }
 
-function recordDetail(record) {
-  const problem = getProblem(record.problemId);
-  const requests = record.aiDialogue.requestLog.map((req) => `<tr>
-      <td>${escapeHtml(formatTime(req.sentAt))}</td>
-      <td>${req.purpose === 'proof' ? '증명 생성' : '대화'}</td>
-      <td><code>${escapeHtml(req.inputKeys.join(', '))}</code></td>
-      <td>${req.inputKeys.includes('studentDraft') ? '포함됨' : `${icons.check}<span>포함 안 됨</span>`}</td>
-      <td>${escapeHtml(req.promptVersion)}</td>
-    </tr>`).join('');
-
-  const pendingText = '아직 이 단계에 도달하지 않았습니다.';
-  const c = record.comparison;
-
-  return `<ol class="timeline">
-    <li class="timeline__item">
-      <h3 class="timeline__title">1. 확정한 초안 <span class="meta">${escapeHtml(formatDateTime(record.draft.confirmedAt))}</span></h3>
-      ${proofText(record.draft.text)}
-    </li>
-    <li class="timeline__item">
-      <h3 class="timeline__title">2. AI 탐구 <span class="meta">메시지 ${record.aiDialogue.messages.length}개</span></h3>
-      <div class="table-wrap" role="region" aria-label="AI 요청 입력 기록" tabindex="0">
-        <table class="data-table data-table--compact">
-          <thead><tr><th scope="col">시각</th><th scope="col">목적</th><th scope="col">AI 입력 필드</th><th scope="col">학생 초안</th><th scope="col">프롬프트</th></tr></thead>
-          <tbody>${requests}</tbody>
-        </table>
-      </div>
-      <details class="disclosure">
-        <summary>대화 기록 보기</summary>
-        <ol class="chat__log chat__log--compact">${chatMessages(record.aiDialogue.messages)}</ol>
-      </details>
-    </li>
-    <li class="timeline__item">
-      <h3 class="timeline__title">3. AI의 증명 <span class="meta">${escapeHtml(formatDateTime(record.aiProof.generatedAt))}</span></h3>
-      ${record.aiProof.generatedAt ? proofText(fullProofText(problem)) : `<p class="empty-text">${pendingText}</p>`}
-    </li>
-    <li class="timeline__item">
-      <h3 class="timeline__title">4. 비교·평가</h3>
-      ${c ? `<dl class="record-list">
-        <div><dt>내 증명의 잘한 점</dt><dd>${escapeHtml(c.ownStrengths)}</dd></div>
-        <div><dt>내 증명의 부족한 점</dt><dd>${escapeHtml(c.ownWeaknesses)}</dd></div>
-        <div><dt>AI 증명의 잘한 점</dt><dd>${escapeHtml(c.aiStrengths)}</dd></div>
-        <div><dt>AI 증명의 부족한 점</dt><dd>${escapeHtml(c.aiWeaknesses)}</dd></div>
-        <div><dt>AI 증명에서 아쉬운 점</dt><dd>${escapeHtml(c.aiRegrets)}</dd></div>
-      </dl>` : `<p class="empty-text">${pendingText}</p>`}
-    </li>
-    <li class="timeline__item">
-      <h3 class="timeline__title">5. 최종 증명</h3>
-      ${record.finalProof ? proofText(record.finalProof.text) : `<p class="empty-text">${pendingText}</p>`}
-    </li>
-    <li class="timeline__item">
-      <h3 class="timeline__title">6. 반영 성찰</h3>
-      ${record.reflection ? `<dl class="record-list">
-        <div><dt>내 초안 반영</dt><dd>${record.reflection.ownReflectedLevel} / 5</dd></div>
-        <div><dt>AI 증명 반영</dt><dd>${record.reflection.aiReflectedLevel} / 5</dd></div>
-        <div><dt>설명</dt><dd>${escapeHtml(record.reflection.explanation)}</dd></div>
-      </dl>` : `<p class="empty-text">${pendingText}</p>`}
-    </li>
-  </ol>`;
+function researchProgress(classroom) {
+  const record = getResearch();
+  const ids = propositionIdsFor(classroom);
+  const rows = RESEARCH_STAGES.map((stage) => {
+    const status = stageStatus(stage.n, classroom);
+    const st = findStage(stage.n);
+    const items = st ? ids.map((id) => st.items[id]).filter(Boolean) : [];
+    const chats = items.reduce((sum, it) => sum + (it.chat?.messages.filter((m) => m.role === 'student').length ?? 0), 0);
+    const pastes = items.reduce((sum, it) => sum + (it.pasteAttempts ?? 0), 0);
+    const extra = stage.n === 2 && st ? `질문 ${chats}회, 붙여넣기 시도 ${pastes}회` : '–';
+    return `<tr>
+      <th scope="row">${stage.n}단계 ${escapeHtml(stage.short)}</th>
+      <td>${escapeHtml(status.label)}</td>
+      <td>${st ? escapeHtml(formatDateTime(st.startedAt)) : '–'}</td>
+      <td>${st?.submittedAt ? escapeHtml(formatDateTime(st.submittedAt)) : '–'}</td>
+      <td>${st ? formatActive(st.activeMs) : '–'}</td>
+      <td>${st ? `${st.leaves}회` : '–'}</td>
+      <td>${extra}</td>
+    </tr>`;
+  }).join('');
+  const fixed = record.propositionIds
+    ? `<p class="meta">고정된 명제: ${record.propositionIds.map((id, i) => `명제 ${i + 1} ${escapeHtml(getProblem(id)?.title ?? id)}`).join(', ')}</p>`
+    : '<p class="meta">아직 1단계를 시작하지 않았습니다.</p>';
+  return `${fixed}
+    <div class="table-wrap" role="region" aria-labelledby="research-progress-heading" tabindex="0">
+      <table class="data-table">
+        <thead><tr><th scope="col">단계</th><th scope="col">상태</th><th scope="col">시작</th><th scope="col">제출</th><th scope="col">작업 시간</th><th scope="col">화면 이탈</th><th scope="col">AI 대화</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
 }
