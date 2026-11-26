@@ -28,6 +28,20 @@ export function methodField({ field, otherField, legend, help = '', value = '', 
   </fieldset>`;
 }
 
+/** 하나를 고르는 문항 (칩 모양 라디오) */
+export function choiceField({ field, legend, help = '', options, value = '' }) {
+  const chips = options.map((option) => `<label class="pick">
+      <input type="radio" name="${field}" value="${option.id}" data-field="${field}"${value === option.id ? ' checked' : ''}>
+      <span>${escapeHtml(option.label)}</span>
+    </label>`).join('');
+  return `<fieldset class="field pick-group" id="f-${field}" aria-describedby="f-${field}-error">
+    <legend class="field__label">${escapeHtml(legend)} <span class="field__req">(필수)</span></legend>
+    ${help ? `<p class="field__help">${escapeHtml(help)}</p>` : ''}
+    <div class="pick-group__options">${chips}</div>
+    ${errorSlot(field)}
+  </fieldset>`;
+}
+
 /** 확신 정도: 별 1~5 */
 export function starField({ field, legend, value = null }) {
   const stars = CONFIDENCE_LABELS.map((label, i) => {
@@ -99,7 +113,7 @@ export function proofField({ field, label, help, value, rows = 9 }) {
     .replace(`id="f-${field}-error"`, `id="f-${field}-error" data-error-for="${field}"`);
 }
 
-export function noteField({ field, label, help = '', value = '', rows = 3, required = false }) {
+export function noteField({ field, label, help = '', value = '', rows = 3, required = true }) {
   return textArea({ id: `f-${field}`, field, label, help, value, rows, required })
     .replace(`id="f-${field}-error"`, `id="f-${field}-error" data-error-for="${field}"`);
 }

@@ -54,4 +54,23 @@ export const REVISION_CHECKLIST = [
 ];
 export const CHECKLIST_NONE = { id: 'none', label: '보완할 점을 찾지 못했다' };
 
+/** 3단계: 어느 증명이 더 정확하다고 생각하는가 */
+export const MORE_ACCURATE_OPTIONS = [
+  { id: 'mine', label: '나의 증명' },
+  { id: 'ai', label: 'AI의 증명' },
+  { id: 'both', label: '둘 다 정확함' },
+  { id: 'neither', label: '둘 다 부족함' },
+  { id: 'unsure', label: '잘 모르겠음' },
+];
+
+/** 3단계: 1단계에서 막힌 점이 AI의 증명으로 해결되었는가 */
+export const STUCK_RESOLVED_OPTIONS = [
+  { id: 'resolved', label: '해결되었다' },
+  { id: 'partly', label: '일부 해결되었다' },
+  { id: 'not', label: '해결되지 않았다' },
+  { id: 'none', label: '막힌 점이 없었다' },
+];
+
+export const optionLabel = (options, id) => options.find((o) => o.id === id)?.label ?? '';
+
 export const CONFIDENCE_LABELS = ['전혀 확신하지 않음', '조금 확신함', '보통', '꽤 확신함', '매우 확신함'];

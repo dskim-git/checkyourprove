@@ -3,7 +3,7 @@
 // 작업 시간, 화면 이탈, 첫 입력, 입력·지우기 횟수, 증명 중간 저장본, 증명법 변경을 기록한다.
 
 import { getProblem } from '../../data/problems/index.js';
-import { getStage, RESEARCH_STAGES } from '../../data/research.js';
+import { getStage, MORE_ACCURATE_OPTIONS, optionLabel, RESEARCH_STAGES, STUCK_RESOLVED_OPTIONS } from '../../data/research.js';
 import { buildResearchRequest } from '../../services/aiRequests.js';
 import { requestResearchChat } from '../../services/mockAiService.js';
 import { getClassroom } from '../../state/classroomStore.js';
@@ -17,7 +17,7 @@ import { breadcrumb, chatMessages, mockAiNote, notice, renderNotFound } from '..
 import { bindFields, handleChatShortcut, handleSymbolInsert } from '../../ui/forms.js';
 import { statementHtml } from '../../ui/mathText.js';
 import {
-  checklistField, checklistText, methodField, methodText, noteField, proofField, ratioField, readList, readProof,
+  checklistField, checklistText, choiceField, methodField, methodText, noteField, proofField, ratioField, readList, readProof,
   showErrors, starField, starsText, syncRatio, syncStars,
 } from './researchParts.js';
 
@@ -57,6 +57,12 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
     renderNotFound(root);
     return null;
   }
+  // 주소로 바로 들어와도 앞 명제를 다 채우지 않았으면 그 명제로 돌려보낸다.
+  const blocked = locked ? -1 : ids.findIndex((id, i) => i < index && !isItemComplete(n, stage.items[id]));
+  if (blocked !== -1) {
+    window.location.replace(`#/research/${n}/${blocked}`);
+    return null;
+  }
 
   let fields = null;
   let chatTab = item.chat?.messages.length ? 'record' : 'chat';
@@ -65,14 +71,17 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
   const hrefFor = (i) => `#/research/${n}/${i}`;
 
   // ── 머리말과 명제 탭 ─────────────────────
+  // 앞의 명제를 모두 채워야 그 다음 명제로 갈 수 있다(제출한 단계는 자유롭게 본다)
+  const reachable = (i) => locked || ids.slice(0, i).every((id) => isItemComplete(n, stage.items[id]));
+
   function propTabs() {
     const tabs = ids.map((id, i) => {
       const done = isItemComplete(n, stage.items[id]);
       const label = `명제 ${i + 1}`;
       const mark = done ? `<span class="prop-tabs__mark">${icons.check}<span class="visually-hidden">(작성 완료)</span></span>` : '';
-      return i === index
-        ? `<li><span class="prop-tabs__item is-current" aria-current="page">${label}${mark}</span></li>`
-        : `<li><a class="prop-tabs__item${done ? ' is-done' : ''}" href="${hrefFor(i)}">${label}${mark}</a></li>`;
+      if (i === index) return `<li><span class="prop-tabs__item is-current" aria-current="page">${label}${mark}</span></li>`;
+      if (!reachable(i)) return `<li><span class="prop-tabs__item is-locked" aria-disabled="true">${label}<span class="prop-tabs__mark">${icons.lock}<span class="visually-hidden">(앞 명제를 먼저 채우세요)</span></span></span></li>`;
+      return `<li><a class="prop-tabs__item${done ? ' is-done' : ''}" href="${hrefFor(i)}" data-go="${i}">${label}${mark}</a></li>`;
     }).join('');
     return `<nav class="prop-tabs" aria-label="명제 선택"><ul>${tabs}</ul></nav>`;
   }
@@ -101,7 +110,7 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
       <summary>나의 증명 (${k}단계)</summary>
       ${readList([['증명 방법', escapeHtml(methodText(it.method, it.methodOther))], ['확신 정도', starsText(it.confidence)]])}
       ${readProof(it.proof)}
-      ${k === 1 && it.stuck?.trim() ? readList([['어려웠던 점·막힌 점', escapeHtml(it.stuck)]]) : ''}
+      ${k === 1 ? readList([['어려웠던 점·막힌 점', escapeHtml(it.stuck || '쓰지 않음')]]) : ''}
     </details>`;
   }
 
@@ -112,7 +121,7 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
       <summary>AI의 증명 (2단계에 옮겨 적은 것)</summary>
       ${readList([['AI가 쓴 증명 방법', escapeHtml(methodText(it.aiMethod, it.aiMethodOther))], ['AI 증명 확신 정도', starsText(it.confidence)]])}
       ${readProof(it.aiProof)}
-      ${it.notable?.trim() ? readList([['AI 답변에서 특징적인 점', escapeHtml(it.notable)]]) : ''}
+      ${readList([['AI 답변에서 특징적인 점', escapeHtml(it.notable || '쓰지 않음')]])}
     </details>`;
   }
 
@@ -121,7 +130,7 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
       return `${methodField({ field: 'method', otherField: 'methodOther', legend: '사용할 증명 방법', value: item.method, otherValue: item.methodOther })}
         ${proofField({ field: 'proof', label: '나의 증명', help: '내 힘으로 증명을 쓰세요. 끝까지 못 했다면 쓴 데까지 적으세요.', value: item.proof })}
         ${starField({ field: 'confidence', legend: '나의 증명이 옳다고 확신하는 정도', value: item.confidence })}
-        ${noteField({ field: 'stuck', label: '증명에서 어려웠던 점이나 막힌 점', help: '없으면 비워 두어도 됩니다.', value: item.stuck })}`;
+        ${noteField({ field: 'stuck', label: '증명에서 어려웠던 점이나 막힌 점', help: '어디에서 막혔는지, 무엇이 어려웠는지 쓰세요. 없으면 "없음"이라고 쓰세요.', value: item.stuck })}`;
     }
     if (n === 2) {
       const chatPane = `<section class="chat-pane" aria-label="AI와 대화">
@@ -137,12 +146,19 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
             </div>
           </form>
         </section>`;
+      const chatRef = item.chat.messages.length
+        ? `<section class="chat-ref" aria-labelledby="chat-ref-title">
+            <p class="chat-ref__head" id="chat-ref-title">${icons.chat}<span>AI와 나눈 대화</span><span class="chat-ref__note">보면서 옮겨 적으세요</span></p>
+            <ol class="chat__log chat__log--ref" aria-label="AI와 나눈 대화">${chatMessages(item.chat.messages)}</ol>
+          </section>`
+        : `<p class="note-chip">${icons.info}<span>아직 AI와 대화하지 않았습니다. "AI와 대화" 탭에서 먼저 AI의 증명을 얻으세요.</span></p>`;
       const recordPane = `<section class="record-pane" aria-label="AI의 증명 기록하기">
-          ${methodField({ field: 'aiMethod', otherField: 'aiMethodOther', legend: 'AI가 사용한 증명 방법', value: item.aiMethod, otherValue: item.aiMethodOther })}
-          ${proofField({ field: 'aiProof', label: 'AI의 증명 옮겨 적기', help: 'AI가 알려 준 증명을 고치거나 요약하지 말고 그대로 직접 옮겨 적으세요. 붙여넣기는 할 수 없습니다.', value: item.aiProof })}
+          ${chatRef}
+          ${proofField({ field: 'aiProof', label: 'AI의 증명 옮겨 적기', help: '위의 대화를 보면서 AI가 알려 준 증명을 고치거나 요약하지 말고 그대로 직접 옮겨 적으세요. 붙여넣기는 할 수 없습니다.', value: item.aiProof })}
           <p class="paste-note" data-paste-note role="status" hidden>AI의 증명은 직접 옮겨 적어 주세요. 붙여넣기는 할 수 없습니다.</p>
+          ${methodField({ field: 'aiMethod', otherField: 'aiMethodOther', legend: 'AI가 사용한 증명 방법', value: item.aiMethod, otherValue: item.aiMethodOther })}
           ${starField({ field: 'confidence', legend: 'AI의 증명이 옳다고 확신하는 정도', value: item.confidence })}
-          ${noteField({ field: 'notable', label: 'AI 답변에서 특징적인 점', help: '잘한 점, 생략, 오류, 표현 등 눈에 띈 점을 쓰세요.', value: item.notable, rows: 4 })}
+          ${noteField({ field: 'notable', label: 'AI 답변에서 특징적인 점', help: '잘한 점, 생략, 오류, 표현 등 눈에 띈 점을 쓰세요. 없으면 "없음"이라고 쓰세요.', value: item.notable, rows: 4 })}
         </section>`;
       return `<div class="seg" role="tablist" aria-label="2단계 화면">
           <button type="button" role="tab" class="seg__item${chatTab === 'chat' ? ' is-on' : ''}" aria-selected="${chatTab === 'chat'}" data-tab-to="chat">${icons.chat}<span>AI와 대화</span><span class="seg__count num">${item.chat.messages.length}</span></button>
@@ -152,28 +168,55 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
     }
     if (n === 3) {
       return `<div class="compare-cards">${myProofCard(1)}${aiProofCard()}</div>
-        ${checklistField({ field: 'myChecklist', legend: '내 증명에서 보완할 점', values: item.myChecklist })}
-        ${checklistField({ field: 'aiChecklist', legend: 'AI 증명에서 보완할 점', values: item.aiChecklist })}
-        ${noteField({ field: 'aiIssues', label: 'AI 증명에서 보완할 부분과 이유', help: '설명이 부족하거나 잘못된 부분이 어디인지, 왜 그런지 짧게 쓰세요. 찾지 못했다면 "찾지 못함"이라고 쓰세요.', value: item.aiIssues, required: true })}
-        ${noteField({ field: 'aiHelpful', label: 'AI의 답변 중 도움이 된 점', help: '최종 증명을 쓰는 데 도움이 될 풀이 방법, 식, 설명을 구체적으로 쓰세요.', value: item.aiHelpful })}
-        ${noteField({ field: 'aiOpinion', label: 'AI에 대한 나의 의견', help: '이 명제를 AI와 함께 탐구하며 AI에 대해 느낀 점을 쓰세요.', value: item.aiOpinion })}`;
+        <section class="form-section" aria-labelledby="sec-a">
+          <h2 class="form-section__title" id="sec-a"><span class="form-section__key" aria-hidden="true">A</span>두 증명 비교하기</h2>
+          ${noteField({ field: 'compareNote', label: '나의 증명과 AI의 증명의 공통점과 차이점', help: '증명 방법, 풀이 흐름, 사용한 식이나 근거를 견주어 쓰세요.', value: item.compareNote, rows: 4 })}
+          ${noteField({ field: 'myAdvantage', label: '내 증명이 AI의 증명보다 나은 점', help: '더 정확하거나, 더 알기 쉽거나, 더 간결한 부분을 쓰세요. 없으면 "없음"이라고 쓰세요.', value: item.myAdvantage })}
+          ${choiceField({ field: 'moreAccurate', legend: '어느 증명이 더 정확하다고 생각하나요?', options: MORE_ACCURATE_OPTIONS, value: item.moreAccurate })}
+        </section>
+        <section class="form-section" aria-labelledby="sec-b">
+          <h2 class="form-section__title" id="sec-b"><span class="form-section__key" aria-hidden="true">B</span>내 증명 점검하기</h2>
+          ${checklistField({ field: 'myChecklist', legend: 'AI의 증명과 비교했을 때 내 증명에서 보완할 점', values: item.myChecklist })}
+          ${choiceField({ field: 'stuckResolved', legend: '1단계에서 막힌 점이 AI의 증명을 보고 해결되었나요?', help: `1단계에 쓴 막힌 점: ${prior(1)?.stuck || '없음'}`, options: STUCK_RESOLVED_OPTIONS, value: item.stuckResolved })}
+        </section>
+        <section class="form-section" aria-labelledby="sec-c">
+          <h2 class="form-section__title" id="sec-c"><span class="form-section__key" aria-hidden="true">C</span>AI 증명 점검하기</h2>
+          ${checklistField({ field: 'aiChecklist', legend: '같은 기준으로 본 AI 증명에서 보완할 점', values: item.aiChecklist })}
+          ${noteField({ field: 'aiIssues', label: 'AI 증명에서 보완할 부분과 이유', help: '설명이 부족하거나 잘못된 부분이 어디인지, 왜 그런지 짧게 쓰세요. 찾지 못했다면 "찾지 못함"이라고 쓰세요.', value: item.aiIssues })}
+          ${noteField({ field: 'aiHelpful', label: 'AI의 답변 중 도움이 된 점', help: '최종 증명을 쓰는 데 도움이 될 풀이 방법, 식, 설명을 구체적으로 쓰세요. 없으면 "없음"이라고 쓰세요.', value: item.aiHelpful })}
+        </section>
+        <section class="form-section" aria-labelledby="sec-d">
+          <h2 class="form-section__title" id="sec-d"><span class="form-section__key" aria-hidden="true">D</span>정리하기</h2>
+          ${noteField({ field: 'plan', label: '최종 증명에 어떻게 활용할까요?', help: '내 증명에서 살릴 부분과 AI의 증명에서 가져올 부분을 쓰세요.', value: item.plan, rows: 4 })}
+          ${noteField({ field: 'aiOpinion', label: 'AI에 대한 나의 의견', help: '이 명제를 AI와 함께 탐구하며 AI에 대해 느낀 점을 쓰세요. 없으면 "없음"이라고 쓰세요.', value: item.aiOpinion })}
+        </section>`;
     }
     const analysis = prior(3);
     return `<div class="compare-cards" aria-label="앞 단계 기록">
           ${myProofCard(1, false)}${aiProofCard(false)}
-          ${analysis ? `<details class="ref-card"><summary>비교 분석 (3단계)</summary>${readList([
-            ['내 증명에서 보완할 점', checklistText(analysis.myChecklist)],
-            ['AI 증명에서 보완할 점', checklistText(analysis.aiChecklist)],
-            ['AI 증명에서 보완할 부분과 이유', escapeHtml(analysis.aiIssues)],
-            ['AI의 답변 중 도움이 된 점', escapeHtml(analysis.aiHelpful || '쓰지 않음')],
-          ])}</details>` : ''}
+          ${analysis ? `<details class="ref-card"><summary>비교 분석 (3단계)</summary>${analysisList(analysis)}</details>` : ''}
       </div>
       ${methodField({ field: 'method', otherField: 'methodOther', legend: '최종 증명에 사용할 증명 방법', value: item.method, otherValue: item.methodOther })}
       ${proofField({ field: 'proof', label: '최종 증명', help: '나의 증명과 AI의 증명을 비교한 결과를 바탕으로 최종 증명을 쓰세요.', value: item.proof, rows: 10 })}
-      ${noteField({ field: 'usedFromMine', label: '나의 증명에서 가져온 부분', help: '1단계 나의 증명에서 그대로 쓰거나 고쳐 쓴 부분을 적으세요.', value: item.usedFromMine })}
-      ${noteField({ field: 'usedFromAi', label: 'AI의 증명에서 가져온 부분', help: '2단계 AI의 증명에서 참고한 부분을 적으세요.', value: item.usedFromAi })}
+      ${noteField({ field: 'usedFromMine', label: '나의 증명에서 가져온 부분', help: '1단계 나의 증명에서 그대로 쓰거나 고쳐 쓴 부분을 적으세요. 없으면 "없음"이라고 쓰세요.', value: item.usedFromMine })}
+      ${noteField({ field: 'usedFromAi', label: 'AI의 증명에서 가져온 부분', help: '2단계 AI의 증명에서 참고한 부분을 적으세요. 없으면 "없음"이라고 쓰세요.', value: item.usedFromAi })}
       ${ratioField({ field: 'ratioMine', value: item.ratioMine })}
       ${starField({ field: 'confidence', legend: '최종 증명이 옳다고 확신하는 정도', value: item.confidence })}`;
+  }
+
+  function analysisList(a) {
+    return readList([
+      ['두 증명의 공통점과 차이점', escapeHtml(a.compareNote || '쓰지 않음')],
+      ['내 증명이 AI의 증명보다 나은 점', escapeHtml(a.myAdvantage || '쓰지 않음')],
+      ['더 정확하다고 생각한 증명', escapeHtml(optionLabel(MORE_ACCURATE_OPTIONS, a.moreAccurate) || '고르지 않음')],
+      ['내 증명에서 보완할 점', checklistText(a.myChecklist)],
+      ['1단계 막힌 점 해결', escapeHtml(optionLabel(STUCK_RESOLVED_OPTIONS, a.stuckResolved) || '고르지 않음')],
+      ['AI 증명에서 보완할 점', checklistText(a.aiChecklist)],
+      ['AI 증명에서 보완할 부분과 이유', escapeHtml(a.aiIssues || '쓰지 않음')],
+      ['AI의 답변 중 도움이 된 점', escapeHtml(a.aiHelpful || '쓰지 않음')],
+      ['최종 증명 활용 계획', escapeHtml(a.plan || '쓰지 않음')],
+      ['AI에 대한 나의 의견', escapeHtml(a.aiOpinion || '쓰지 않음')],
+    ]);
   }
 
   function readBody() {
@@ -194,15 +237,7 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
       ])}
       <details class="ref-card"><summary>AI와 나눈 대화 (${item.chat.messages.length})</summary><ol class="chat__log chat__log--compact">${chatMessages(item.chat.messages)}</ol></details>`;
     }
-    if (n === 3) {
-      return readList([
-        ['내 증명에서 보완할 점', checklistText(item.myChecklist)],
-        ['AI 증명에서 보완할 점', checklistText(item.aiChecklist)],
-        ['AI 증명에서 보완할 부분과 이유', escapeHtml(item.aiIssues)],
-        ['AI의 답변 중 도움이 된 점', escapeHtml(item.aiHelpful || '쓰지 않음')],
-        ['AI에 대한 나의 의견', escapeHtml(item.aiOpinion || '쓰지 않음')],
-      ]);
-    }
+    if (n === 3) return analysisList(item);
     return readList([
       ['증명 방법', escapeHtml(methodText(item.method, item.methodOther))],
       ['최종 증명', readProof(item.proof)],
@@ -227,7 +262,7 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
       ${index > 0 ? `<a class="button button--ghost" href="${hrefFor(index - 1)}">이전 명제</a>` : ''}
       ${last
         ? `<button type="button" class="button button--primary" data-action="submit">${n}단계 제출하기</button>`
-        : `<a class="button button--primary" href="${hrefFor(index + 1)}">다음 명제</a>`}
+        : `<a class="button button--primary" href="${hrefFor(index + 1)}" data-go="${index + 1}">다음 명제</a>`}
     </div>`;
   }
 
@@ -367,8 +402,25 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
     window.location.hash = '#/research';
   }
 
+  /** 앞으로 이동할 때 이 명제를 다 채웠는지 확인한다. */
+  function guardForward(event, target) {
+    if (locked || target <= index) return;
+    fields?.flush();
+    const missing = missingFields(n, item);
+    if (!missing.length) return;
+    event.preventDefault();
+    const box = root.querySelector('[data-submit-errors]');
+    box.innerHTML = notice('warn', `아직 채우지 않은 항목이 ${missing.length}개 있습니다`, '이 명제의 모든 항목을 채워야 다음 명제로 넘어갈 수 있어요. 의견을 쓰는 칸은 쓸 내용이 없으면 "없음"이라고 쓰세요.');
+    showErrors(root, missing);
+  }
+
   const onClick = (event) => {
     if (handleSymbolInsert(event, root)) return;
+    const go = event.target.closest('[data-go]');
+    if (go) {
+      guardForward(event, Number(go.dataset.go));
+      return;
+    }
     const tab = event.target.closest('[data-tab-to]');
     if (tab && tab.dataset.tabTo !== chatTab) {
       fields?.flush();

@@ -45,7 +45,12 @@ const ITEM_FACTORIES = {
     aiMethod: '', aiMethodOther: '', aiProof: '', confidence: null, notable: '',
     pasteAttempts: 0, tabSwitches: 0, chat: { messages: [], requestLog: [] }, track: track(),
   }),
-  3: () => ({ myChecklist: [], aiChecklist: [], aiIssues: '', aiHelpful: '', aiOpinion: '', track: track() }),
+  3: () => ({
+    compareNote: '', myAdvantage: '', moreAccurate: '',
+    myChecklist: [], stuckResolved: '',
+    aiChecklist: [], aiIssues: '', aiHelpful: '',
+    plan: '', aiOpinion: '', track: track(),
+  }),
   4: () => ({ method: '', methodOther: '', proof: '', usedFromMine: '', usedFromAi: '', ratioMine: null, confidence: null, track: track() }),
 };
 
@@ -87,28 +92,50 @@ export function noteMethodChange(item, field, from, to) {
   if (from && from !== to) item.track.methodChanges.push({ at: now(), field, from, to });
 }
 
-/** 제출 전에 채워야 할 항목: [{ field, message }] */
+/**
+ * 채워야 할 항목: [{ field, message }] — 화면에 나오는 순서대로.
+ * 모든 항목이 필수다. 의견을 쓰는 칸은 쓸 내용이 없으면 "없음"이라고 쓰게 한다.
+ */
 export function missingFields(n, item) {
   const missing = [];
   const need = (ok, field, message) => !ok && missing.push({ field, message });
   const filled = (v) => String(v ?? '').trim().length > 0;
+  const text = (field, message) => need(filled(item[field]), field, message);
+  const NONE = '쓸 내용이 없으면 "없음"이라고 쓰세요.';
   if (n === 1 || n === 4) {
     need(filled(item.method), 'method', '증명 방법을 고르세요.');
-    if (item.method === 'other') need(filled(item.methodOther), 'methodOther', '사용한 증명 방법을 쓰세요.');
-    need(filled(item.proof), 'proof', '증명을 쓰세요. 끝까지 못 했다면 쓴 데까지 적으세요.');
+    if (item.method === 'other') text('methodOther', '사용한 증명 방법을 쓰세요.');
+    text('proof', '증명을 쓰세요. 끝까지 못 했다면 쓴 데까지 적으세요.');
+  }
+  if (n === 1) {
+    need(item.confidence != null, 'confidence', '확신 정도를 별로 고르세요.');
+    text('stuck', `어려웠던 점이나 막힌 점을 쓰세요. ${NONE}`);
   }
   if (n === 2) {
+    text('aiProof', 'AI의 증명을 옮겨 적으세요.');
     need(filled(item.aiMethod), 'aiMethod', 'AI가 사용한 증명 방법을 고르세요.');
-    if (item.aiMethod === 'other') need(filled(item.aiMethodOther), 'aiMethodOther', 'AI가 사용한 증명 방법을 쓰세요.');
-    need(filled(item.aiProof), 'aiProof', 'AI의 증명을 옮겨 적으세요.');
+    if (item.aiMethod === 'other') text('aiMethodOther', 'AI가 사용한 증명 방법을 쓰세요.');
+    need(item.confidence != null, 'confidence', '확신 정도를 별로 고르세요.');
+    text('notable', `AI 답변에서 특징적인 점을 쓰세요. ${NONE}`);
   }
   if (n === 3) {
+    text('compareNote', '두 증명의 공통점과 차이점을 쓰세요.');
+    text('myAdvantage', `내 증명이 AI의 증명보다 나은 점을 쓰세요. ${NONE}`);
+    need(filled(item.moreAccurate), 'moreAccurate', '어느 증명이 더 정확한지 고르세요.');
     need(item.myChecklist.length > 0, 'myChecklist', '내 증명에서 보완할 점을 하나 이상 고르세요. 없으면 "찾지 못했다"를 고르세요.');
+    need(filled(item.stuckResolved), 'stuckResolved', '막힌 점이 해결되었는지 고르세요.');
     need(item.aiChecklist.length > 0, 'aiChecklist', 'AI 증명에서 보완할 점을 하나 이상 고르세요. 없으면 "찾지 못했다"를 고르세요.');
-    need(filled(item.aiIssues), 'aiIssues', 'AI 증명에서 보완할 부분과 이유를 쓰세요. 찾지 못했다면 "찾지 못함"이라고 쓰세요.');
+    text('aiIssues', 'AI 증명에서 보완할 부분과 이유를 쓰세요. 찾지 못했다면 "찾지 못함"이라고 쓰세요.');
+    text('aiHelpful', `AI의 답변 중 도움이 된 점을 쓰세요. ${NONE}`);
+    text('plan', '최종 증명에 어떻게 활용할지 쓰세요.');
+    text('aiOpinion', `AI에 대한 나의 의견을 쓰세요. ${NONE}`);
   }
-  if (n === 4) need(item.ratioMine != null, 'ratioMine', '반영 비율을 표시하세요.');
-  if (n !== 3) need(item.confidence != null, 'confidence', '확신 정도를 고르세요.');
+  if (n === 4) {
+    text('usedFromMine', `나의 증명에서 가져온 부분을 쓰세요. ${NONE}`);
+    text('usedFromAi', `AI의 증명에서 가져온 부분을 쓰세요. ${NONE}`);
+    need(item.ratioMine != null, 'ratioMine', '반영 비율을 칸으로 표시하세요.');
+    need(item.confidence != null, 'confidence', '확신 정도를 별로 고르세요.');
+  }
   return missing;
 }
 
