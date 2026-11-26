@@ -1,8 +1,11 @@
 // 교사 채점·분석 화면 확인용 예시 연구 기록 (가상의 학생 6명, 실제 학생 정보가 아님)
 // 구조는 state/researchStore.js의 기록과 같다. 증명의 질을 학생마다 다르게 해 채점·비교를 시험할 수 있게 했다.
+// 일부 학생은 증명을 펜으로 썼다(data/sampleHandwriting.js로 만든 손글씨). 그 필기에는 미리 만든 "AI가 읽은 글"(inkReading)을 붙였다.
+//   실제 AI 글자 변환은 아직 없다(AGENTS.md 5절 TODO). 일부러 한 곳을 잘못 읽은 예시도 있다(교사가 원본 필기와 비교해야 함을 보이려고).
 // TODO: 서버 연결 뒤에는 실제 학급 학생의 기록으로 바뀌고, 이 예시는 교사 화면의 "예시 학생 포함"을 끄면 빠진다.
 
 import { fullProofText } from './proofModel.js';
+import { handwritingInk } from './sampleHandwriting.js';
 import { RESEARCH_PROPOSITIONS } from './researchPropositions.js';
 
 const P = Object.fromEntries(RESEARCH_PROPOSITIONS.map((p) => [p.id, p]));
@@ -42,13 +45,13 @@ const STUCK_FOR = {
   alt: '어떤 증명법을 써야 할지 고민했다',
 };
 
-/** 학생별 1단계 → 4단계 증명 유형, 반영 비율(나의 답변 칸 수), 2단계 옮겨 적기 */
+/** 학생별 1단계 → 4단계 증명 유형, 반영 비율(나의 답변 칸 수), 2단계 옮겨 적기, 펜으로 쓴 단계 */
 const PROFILES = [
   { s1: 'numeric', s4: 'full', ratio: 2, transcript: 'full', confidence: [2, 5, 4] },
-  { s1: 'full', s4: 'full', ratio: 3, transcript: 'full', confidence: [4, 4, 5] },
-  { s1: 'flawed', s4: 'full', ratio: 5, transcript: 'full', confidence: [3, 4, 4] },
+  { s1: 'full', s4: 'full', ratio: 3, transcript: 'full', confidence: [4, 4, 5], pen: [1, 4] },
+  { s1: 'flawed', s4: 'full', ratio: 5, transcript: 'full', confidence: [3, 4, 4], pen: [2] },
   { s1: 'partial', s4: 'partial', ratio: 6, transcript: 'partial', confidence: [1, 3, 2] },
-  { s1: 'full', s4: 'alt', ratio: 8, transcript: 'full', confidence: [5, 3, 4] },
+  { s1: 'full', s4: 'alt', ratio: 8, transcript: 'full', confidence: [5, 3, 4], pen: [1] },
   { s1: 'alt', s4: 'flawed', ratio: 7, transcript: 'full', confidence: [3, 3, 3] },
 ];
 // 명제마다 유형을 조금씩 돌려 학생 안에서도 차이가 나게 한다
@@ -70,6 +73,20 @@ function aiReply(problem) {
   return `${name}을 이용해 증명해 볼게요.\n\n[증명]\n${fullProofText(problem)}\n\n궁금한 단계가 있으면 물어보세요.`;
 }
 
+/** 예시 "AI가 읽은 글": 원래 글을 그대로 읽되, 일부 예시는 위첨자 하나를 잘못 읽는다(² → 2) */
+function reading(text, misread, at) {
+  const read = misread && text.includes('²') ? text.replace('²', '2') : misread && text.includes('³') ? text.replace('³', '3') : text;
+  return { text: read, source: 'sample', model: null, at };
+}
+
+/** 증명 칸을 펜으로 쓴 것으로 바꾼다: 글은 비우고 손글씨 필기와 AI가 읽은 글을 넣는다 */
+function asHandwriting(item, field, text, seed, at, misread) {
+  item[field] = '';
+  item.ink = { [field]: handwritingInk(text, { seed, startedAt: at }) };
+  item.inputMode = { [field]: 'pen' };
+  item.inkReading = { [field]: reading(text, misread, at) };
+}
+
 function buildRecord(profile, index) {
   const day = 18 + (index % 3);
   const stage1 = {};
@@ -85,6 +102,8 @@ function buildRecord(profile, index) {
     const aiFull = fullProofText(problem);
     const aiLines = aiFull.split('\n');
     stage1[id] = { method: mine.method, methodOther: '', proof: mine.text, confidence: profile.confidence[0], stuck: STUCK_FOR[v1], ink: {}, inputMode: {}, track: track(6) };
+    const pen = profile.pen ?? [];
+    if (pen.includes(1)) asHandwriting(stage1[id], 'proof', mine.text, index * 100 + i + 1, at(day, 9, 2), i === 0);
     const reply = aiReply(problem);
     stage2[id] = {
       aiMethod: problem.intendedMethod,
@@ -108,6 +127,11 @@ function buildRecord(profile, index) {
       inputMode: {},
       track: track(5),
     };
+    if (pen.includes(2)) {
+      asHandwriting(stage2[id], 'aiProof', stage2[id].aiProof, index * 100 + i + 11, at(day + 1, 10, 6), i === 1);
+      stage2[id].transcriptMatch = null;
+      stage2[id].transcriptCheck = 'teacher';
+    }
     stage3[id] = {
       compareNote: v1 === 'full' ? '둘 다 같은 흐름이다' : 'AI는 문자를 써서 모든 경우를 다루었다',
       myAdvantage: v1 === 'full' ? '설명이 짧고 분명하다' : '없음',
@@ -133,6 +157,7 @@ function buildRecord(profile, index) {
       inputMode: {},
       track: track(8),
     };
+    if (pen.includes(4)) asHandwriting(stage4[id], 'proof', final.text, index * 100 + i + 21, at(day + 2, 9, 25), false);
   });
   return {
     propositionIds: [...IDS],
@@ -146,9 +171,15 @@ function buildRecord(profile, index) {
   };
 }
 
-export const SAMPLE_RESEARCH_STUDENTS = PROFILES.map((profile, i) => ({
-  id: `sample-${String(i + 1).padStart(2, '0')}`,
-  pseudonym: `예시 학생 ${String(i + 1).padStart(2, '0')}`,
-  sample: true,
-  record: buildRecord(profile, i),
-}));
+let cache = null;
+
+/** 예시 학생 기록 (처음 부를 때 한 번 만든다: 손글씨 필기 생성이 들어 있어 학생 화면을 불러올 때는 만들지 않는다) */
+export function sampleResearchStudents() {
+  cache ??= PROFILES.map((profile, i) => ({
+    id: `sample-${String(i + 1).padStart(2, '0')}`,
+    pseudonym: `예시 학생 ${String(i + 1).padStart(2, '0')}`,
+    sample: true,
+    record: buildRecord(profile, i),
+  }));
+  return cache;
+}

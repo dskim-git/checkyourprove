@@ -3,7 +3,7 @@
 // TODO: 서버 연결 뒤에는 학급 학생들의 기록을 서버에서 불러온다(교사 권한 확인 후).
 
 import { GRADED_STAGES } from '../data/rubric.js';
-import { SAMPLE_RESEARCH_STUDENTS } from '../data/sampleResearch.js';
+import { sampleResearchStudents } from '../data/sampleResearch.js';
 import { getProblem } from '../data/problems/index.js';
 import { hasInk } from './inkModel.js';
 import { getResearch } from './researchStore.js';
@@ -12,7 +12,7 @@ export const LOCAL_STUDENT_ID = 'local';
 
 export function researchStudents({ includeSamples = true } = {}) {
   const local = { id: LOCAL_STUDENT_ID, pseudonym: '이 브라우저 학생', sample: false, record: getResearch() };
-  return includeSamples ? [local, ...SAMPLE_RESEARCH_STUDENTS] : [local];
+  return includeSamples ? [local, ...sampleResearchStudents()] : [local];
 }
 
 export const targetKey = (studentId, stage, problemId) => `${studentId}~${stage}~${problemId}`;
@@ -44,6 +44,7 @@ export function gradingTargets(students) {
           item,
           text: item[def.field] ?? '',
           ink: item.ink?.[def.field] ?? null,
+          reading: item.inkReading?.[def.field] ?? null,
         });
       });
     });

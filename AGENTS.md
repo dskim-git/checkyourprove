@@ -82,7 +82,8 @@ src/
 │  ├─ levels.js            # 증명 연습 7단계 활동 정의, 통과 기준, 테스트 버전 자유 이동 설정
 │  ├─ research.js          # 연구 모드 단계(1~4), 증명법 선택지, 보완할 점 체크리스트
 │  ├─ rubric.js            # 연구 모드 채점 루브릭(10점), 완성도·실제 증명법·옮겨 적기·보완 여부 선택지
-│  ├─ sampleResearch.js    # 교사 채점 화면 확인용 예시 학생 6명의 연구 기록(가상 데이터)
+│  ├─ sampleResearch.js    # 교사 채점 화면 확인용 예시 학생 6명의 연구 기록(가상 데이터, 일부는 펜 필기)
+│  ├─ sampleHandwriting.js # 예시 학생용 손글씨 필기 생성(한글 자모·숫자·기호 획을 배치, 외부 라이브러리 없음)
 │  ├─ researchPropositions.js # 연구 명제(수업 활동지와 같은 명제 3개, 예시 증명은 더미 AI용)
 │  ├─ methods.js, classroom.js, sampleRecords.js
 ├─ state/
@@ -277,7 +278,8 @@ AI와 탐구하기 → 교사가 지정한 명제의 연구 모드 흐름
 - 필기는 **획 데이터(좌표·시간)로만 저장**하고, 이미지는 필요할 때 획 데이터로 만듭니다(브라우저 저장 용량 절약, 읽기 화면의 "이미지로 받기"). 지운 획도 지우지 않고 남겨 작성 과정을 그대로 다시 재생할 수 있습니다(읽기 화면의 "작성 과정 다시 보기", 긴 쉼은 줄여서 3배속).
   - 좌표는 화면 폭과 관계없이 폭 1000의 논리 좌표로, 앞 점과의 차이를 정수로 저장합니다.
   - `TODO`(Firebase 연결 시): 필기 기록이 커질 수 있으므로 문서 크기 한도(1MB)를 확인하고 필요하면 필기를 별도 문서나 Storage로 나눕니다.
-- `TODO`(5단계 이후): 필기 이미지를 AI가 글자로 옮기고 학생이 확인·수정합니다. 원본 필기는 보존합니다. 이 변환은 "글자 옮기기 전용"으로 제한하고 증명 내용에는 관여하지 않게 합니다. `결정 필요`: 1·3·4단계에서도 이 변환을 쓸지.
+- **채점 화면의 "AI가 읽은 글"(2026-11-27, 화면 미리보기)**: 교사 채점 화면 왼쪽에 펜으로 쓴 필기와 그 아래 "AI가 읽은 글"을 함께 보여 줍니다. 지금은 실제 AI가 없어 예시 학생(02: 1·4단계, 03: 2단계 옮겨 적기, 05: 1단계)에게만 미리 만든 글(`item.inkReading[필드]` = { text, source: 'sample', model, at })을 넣었고, 일부러 한 곳을 잘못 읽은 예시(² → 2)를 두어 교사가 원본 필기와 비교해야 함을 보입니다. 실제 학생 필기에는 "AI 연결 뒤 제공" 안내만 나옵니다.
+- `TODO`(5단계 이후): 필기 이미지를 AI가 글자로 옮기고 학생이 확인·수정합니다. 결과는 `inkReading`에 원본 필기와 연결해 남깁니다(모델, 프롬프트 버전, 시각). 원본 필기는 보존합니다. 이 변환은 "글자 옮기기 전용"으로 제한하고 증명 내용에는 관여하지 않게 합니다. `결정 필요`: 1·3·4단계에서도 이 변환을 쓸지.
 
 #### 수집 기록
 
@@ -397,7 +399,7 @@ AI와 탐구하기 → 교사가 지정한 명제의 연구 모드 흐름
 - 단계별 `items` 입력값: 5절 연구 설계의 전체 흐름과 같음. 3단계 필드: `compareNote`, `myAdvantage`, `moreAccurate`, `myChecklist`, `stuckResolved`, `aiChecklist`, `aiIssues`, `aiHelpful`, `plan`, `aiOpinion`
 - 작성 과정 `track`: `activeMs`, `firstInputAt`, `inputCount`, `deleteCount`, `snapshots`(증명 중간 저장본, 30초마다 바뀌었을 때), `methodChanges`(증명법 변경)
 - 2단계 추가: `chat.messages`(시각 포함 대화 전체, AI 답마다 증명 도움 정도 `coverage`), `proofHelpAt`, `transcriptMatch`, `chat.requestLog`(요청 ID, 모델, 프롬프트 버전, 입력 키, 메시지 수), `pasteAttempts`, `tabSwitches`
-- 펜 필기(1·2·4단계 증명 칸): `ink[필드]`(필기 기록, `state/inkModel.js`), `inputMode[필드]`(keyboard/pen), `track.modeChanges`(입력 방식 바꾼 기록), `track.penOnText`(글 칸에 펜으로 쓰려다 막힌 횟수), 2단계 `transcriptCheck`('text' 글자 일치 / 'teacher' 필기라 교사 확인). 글 없이 필기로만 옮겨 적으면 `transcriptMatch`는 null입니다.
+- 펜 필기(1·2·4단계 증명 칸): `ink[필드]`(필기 기록, `state/inkModel.js`), `inputMode[필드]`(keyboard/pen), `track.modeChanges`(입력 방식 바꾼 기록), `track.penOnText`(글 칸에 펜으로 쓰려다 막힌 횟수), 2단계 `transcriptCheck`('text' 글자 일치 / 'teacher' 필기라 교사 확인), `inkReading[필드]`(AI가 필기를 글자로 옮긴 결과, 지금은 예시 학생만). 글 없이 필기로만 옮겨 적으면 `transcriptMatch`는 null입니다.
   - 필기 기록: `{ v, w: 1000, h, startedAt, strokes: [{ id, t, p(입력 도구 pen/touch/mouse), lw, d: [x, y, 0, dx, dy, dt, ...] }], ops: [{ t, k, op: erase|undo|restore|grow|finger, ... }] }` — `t`는 필기 시작부터 ms, `k`는 그 동작 때까지 그린 획 수(획과 동작의 순서)
 - 교사 채점(`state/gradingStore.js`, 저장 키 `checkyourprove.prototype.grading.v1`): 채점자 목록, 지금 채점자, 블라인드·예시 학생 설정, 루브릭 수정, 채점자별 블라인드 순서 씨앗, `scores[채점자][대상 key]` = 기준별 점수, 완성도, 실제 증명법, 메모, 옮겨 적기 확인(2단계), 보완 여부·막힌 점 극복(4단계), 채점 시각, 루브릭 수정 시각, 블라인드 여부
 - `TODO`: 대화 태그(구현 3-2), 설문 응답(구현 4), 원리 활동 응답(구현 5)

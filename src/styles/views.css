@@ -1006,6 +1006,10 @@ a.prop-tabs__item:active { translate: 0 2px; }
 .rubric-level { grid-template-columns: 3.5rem minmax(0, 1fr); align-items: center; }
 .grade-table tbody th { white-space: nowrap; }
 .grade-extras--read { padding-top: 0; border-top: 0; }
+.grade-sub { display: grid; gap: var(--space-xs); }
+.grade-sub__title { font-size: var(--text-md); }
+.grade-reading { padding: var(--space-sm); border-radius: var(--radius-card); background: var(--color-sugar-soft); }
+.grade-reading .proof-text { background: var(--color-card); }
 
 /* 넓은 화면: 왼쪽(증명)은 고정하고 오른쪽(채점)만 내려간다. 왼쪽이 화면보다 길면 왼쪽 안에서 스크롤한다. */
 @media (min-width: 56rem) {

@@ -43,9 +43,20 @@ export function renderGrade(root, [key]) {
     const hasText = String(target.text).trim().length > 0;
     const strokes = inkStats(target.ink).strokes;
     const chosen = methodText(item[stageDef.methodField], item[stageDef.otherField]);
+    const reading = target.reading;
+    const readBlock = reading
+      ? `<div class="grade-sub grade-reading">
+          <h3 class="grade-sub__title">AI가 읽은 글${reading.source === 'sample' ? ' <span class="tag tag--proto">예시</span>' : ''}</h3>
+          <p class="meta">필기를 글자로만 옮긴 것입니다. 증명 내용은 고치지 않으며, 잘못 읽을 수 있으니 위의 필기와 비교해 보세요.${reading.source === 'sample' ? ' 실제 AI가 아니라 미리 만든 예시입니다.' : ''}</p>
+          <div class="proof-text">${escapeHtml(reading.text)}</div>
+        </div>`
+      : `<div class="grade-sub grade-reading">
+          <h3 class="grade-sub__title">AI가 읽은 글</h3>
+          <p class="meta">필기를 글자로 옮기는 AI는 실제 AI를 연결한 뒤에 제공합니다.</p>
+        </div>`;
     const body = [
-      hasText ? `<div class="proof-text">${escapeHtml(target.text)}</div>` : '',
-      strokes ? inkViewHtml(target.key, target.ink) : '',
+      strokes ? `<div class="grade-sub"><h3 class="grade-sub__title">펜으로 쓴 필기</h3>${inkViewHtml(target.key, target.ink)}</div>${readBlock}` : '',
+      hasText ? `<div class="grade-sub">${strokes ? '<h3 class="grade-sub__title">키보드로 쓴 글</h3>' : ''}<div class="proof-text">${escapeHtml(target.text)}</div></div>` : '',
     ].join('') || '<p class="empty-text">쓴 내용이 없습니다.</p>';
     return `<section class="grade-proof" aria-labelledby="proof-heading">
       <h2 id="proof-heading" class="section-title">채점할 증명</h2>
