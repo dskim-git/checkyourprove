@@ -58,9 +58,8 @@ export function renderResearch(root, [problemId]) {
     root.innerHTML = `<div class="page page--solve">
       ${breadcrumb([{ label: '홈', href: '#/' }, { label: 'AI와 탐구하기' }])}
       <header class="solve-header">
-        <p class="eyebrow">AI와 탐구하기 · ${escapeHtml(method.label)}</p>
         <h1 class="solve-title">${escapeHtml(problem.title)}</h1>
-        <p class="meta">연구 모드의 화면 흐름은 다음 단계에서 다시 설계할 예정입니다.</p>
+        <p class="meta">AI와 탐구하기, ${escapeHtml(method.label)}. 연구 모드의 화면 흐름은 다음 단계에서 다시 설계할 예정입니다.</p>
       </header>
       ${stepIndicator(MODE.steps, session.step)}
       ${propositionBlock(problem)}
@@ -159,7 +158,7 @@ export function renderResearch(root, [problemId]) {
     return `<article class="proof-article" aria-labelledby="ai-proof-title">
       <header class="proof-article__head">
         <h${headingLevel} id="ai-proof-title" class="side-title">AI의 증명</h${headingLevel}>
-        <p class="meta">생성 ${escapeHtml(formatDateTime(session.aiProof.generatedAt))} · 모델 ${escapeHtml(MODEL_PLACEHOLDER)} · 프롬프트 ${escapeHtml(PROMPT_VERSIONS.research)}</p>
+        <p class="meta">생성 ${escapeHtml(formatDateTime(session.aiProof.generatedAt))}, 모델 ${escapeHtml(MODEL_PLACEHOLDER)}, 프롬프트 ${escapeHtml(PROMPT_VERSIONS.research)}</p>
       </header>
       ${proofText(session.aiProof.text)}
     </article>`;
@@ -241,41 +240,46 @@ export function renderResearch(root, [problemId]) {
   function doneStep() {
     const c = session.comparison;
     const r = session.reflection;
-    const level = (value) => (value ? `${value} · ${LEVEL_OPTIONS[value - 1]}` : '선택하지 않음');
+    const level = (value) => (value ? `${value}점 (${LEVEL_OPTIONS[value - 1]})` : '선택하지 않음');
     return `<h2 id="step-heading" class="step-title" tabindex="-1">활동 완료</h2>
       ${notice('success', '연구 활동 기록을 제출했습니다', '이 기록은 현재 이 브라우저에만 임시로 보관됩니다. 서버 저장은 아직 연결되지 않았습니다.')}
       <ol class="timeline">
         <li class="timeline__item">
-          <h3 class="timeline__title">1. 확정한 초안 <span class="meta">${escapeHtml(formatDateTime(session.draft.confirmedAt))}</span></h3>
+          <h3 class="timeline__title">1. 확정한 초안</h3>
+          <p class="meta">${escapeHtml(formatDateTime(session.draft.confirmedAt))}</p>
           ${proofText(session.draft.text)}
         </li>
         <li class="timeline__item">
-          <h3 class="timeline__title">2. AI 탐구 <span class="meta">메시지 ${session.aiDialogue.messages.length}개 · AI 요청 ${session.aiDialogue.requestLog.length}회</span></h3>
+          <h3 class="timeline__title">2. AI 탐구</h3>
+          <p class="meta">메시지 ${session.aiDialogue.messages.length}개, AI 요청 ${session.aiDialogue.requestLog.length}회</p>
           <details class="disclosure">
             <summary>대화 기록 보기</summary>
             <ol class="chat__log chat__log--compact">${chatMessages(session.aiDialogue.messages)}</ol>
           </details>
         </li>
         <li class="timeline__item">
-          <h3 class="timeline__title">3. AI의 증명 <span class="meta">${escapeHtml(formatDateTime(session.aiProof.generatedAt))}</span></h3>
+          <h3 class="timeline__title">3. AI의 증명</h3>
+          <p class="meta">${escapeHtml(formatDateTime(session.aiProof.generatedAt))}</p>
           ${proofText(session.aiProof.text)}
         </li>
         <li class="timeline__item">
           <h3 class="timeline__title">4. 비교·평가</h3>
           <dl class="record-list">
-            <div><dt>내 증명 · 잘한 점</dt><dd>${proofText(c.ownStrengths)}</dd></div>
-            <div><dt>내 증명 · 부족한 점</dt><dd>${proofText(c.ownWeaknesses)}</dd></div>
-            <div><dt>AI 증명 · 잘한 점</dt><dd>${proofText(c.aiStrengths)}</dd></div>
-            <div><dt>AI 증명 · 부족한 점</dt><dd>${proofText(c.aiWeaknesses)}</dd></div>
+            <div><dt>내 증명의 잘한 점</dt><dd>${proofText(c.ownStrengths)}</dd></div>
+            <div><dt>내 증명의 부족한 점</dt><dd>${proofText(c.ownWeaknesses)}</dd></div>
+            <div><dt>AI 증명의 잘한 점</dt><dd>${proofText(c.aiStrengths)}</dd></div>
+            <div><dt>AI 증명의 부족한 점</dt><dd>${proofText(c.aiWeaknesses)}</dd></div>
             <div><dt>AI 증명에서 아쉬운 점</dt><dd>${proofText(c.aiRegrets)}</dd></div>
           </dl>
         </li>
         <li class="timeline__item">
-          <h3 class="timeline__title">5. 최종 증명 <span class="meta">${escapeHtml(formatDateTime(session.finalProof.savedAt))}</span></h3>
+          <h3 class="timeline__title">5. 최종 증명</h3>
+          <p class="meta">${escapeHtml(formatDateTime(session.finalProof.savedAt))}</p>
           ${proofText(session.finalProof.text)}
         </li>
         <li class="timeline__item">
-          <h3 class="timeline__title">6. 반영 성찰 <span class="meta">${escapeHtml(formatDateTime(r.submittedAt))}</span></h3>
+          <h3 class="timeline__title">6. 반영 성찰</h3>
+          <p class="meta">${escapeHtml(formatDateTime(r.submittedAt))}</p>
           <dl class="record-list">
             <div><dt>내 초안 반영</dt><dd>${escapeHtml(level(r.ownReflectedLevel))}</dd></div>
             <div><dt>AI 증명 반영</dt><dd>${escapeHtml(level(r.aiReflectedLevel))}</dd></div>

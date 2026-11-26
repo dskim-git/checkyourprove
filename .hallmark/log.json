@@ -1,0 +1,32 @@
+[
+ {
+  "mode": "redesign",
+  "depth": "full",
+  "scope": "app",
+  "shape": "app screen",
+  "theme": "hum",
+  "axes": "light/rounded-sans/chromatic-yellow",
+  "hero": "none (app)",
+  "nav": "top app bar + bottom tab bar",
+  "footer": "small note",
+  "imagery": "none",
+  "photos": [],
+  "entry": "app.css",
+  "sections": [
+   "hub",
+   "methods",
+   "path",
+   "problems",
+   "lesson",
+   "records",
+   "teacher",
+   "research"
+  ],
+  "signature": "level path",
+  "waived": [
+   "72"
+  ],
+  "prompt": "mobile-first proof practice app for high school students",
+  "date": "2026-11-26"
+ }
+]

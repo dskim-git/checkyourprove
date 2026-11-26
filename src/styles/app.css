@@ -1,0 +1,13 @@
+/* Hallmark · shape: app screen · genre: playful · theme: Hum (deal 1/3, seed mobile-first-proof-practice-app-d579·35473f19·2026-11-26·r0) · redesign: full
+ * nav: top app bar (wordmark, teacher link) + bottom tab bar (home, practice, explore, records), tab bar hidden in a lesson · signature: the level path, seven card-stock stops per proof method · states: empty, in progress, passed, not passed, locked, AI pending
+ * axes: light/rounded-sans/chromatic-yellow · posture: full-palette · contrast: pass · v2.0.0 */
+/* Hallmark · pre-emit critique: P4 H4 E4 S4 R3 V4 · weakest: R, the Hangul face replaces Chillax, so the paper, the card stock and the four-colour jobs carry the theme */
+/* Hallmark · dropped #/practice/direct · the lesson back bar shows one step up (the problem list), the method path is one more tap back */
+/* Hallmark · waive 72 · details.solve-rule and details.proto-note are closed disclosures and the measured text is their hidden body · open, the body is padded 16px */
+/* Hallmark · reworded "어떤 활동으로 연습할까요?" to the method name · the path screen is titled by its method, the question moved to the lead */
+/* Note: Hum's Chillax has no Hangul; Pretendard (npm) runs head to label so Korean text never falls back mid-line */
+@import url("./tokens.css");
+@import url("./base.css");
+@import url("./layout.css");
+@import url("./components.css");
+@import url("./views.css");

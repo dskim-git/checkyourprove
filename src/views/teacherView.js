@@ -18,10 +18,10 @@ export function renderTeacher(root) {
   const classroom = getClassroom();
 
   root.innerHTML = `<div class="page page--teacher">
-    ${breadcrumb([{ label: '교사 화면 미리보기' }])}
+    ${breadcrumb([{ label: '학생 화면', href: '#/' }, { label: '교사 화면 미리보기' }])}
     <header class="page-intro">
-      <p class="eyebrow">교사 화면 미리보기</p>
       <h1>수업 관리</h1>
+      <p class="meta">교사 화면 미리보기</p>
       <p class="lead">증명 연습의 인증 기준과 AI와 탐구하기 활동을 정하고, 학생의 활동을 확인하는 화면의 기본 골격입니다.</p>
     </header>
 
@@ -49,7 +49,7 @@ export function renderTeacher(root) {
       <div class="field field--inline">
         <label class="field__label" for="record-select">학생 기록 선택</label>
         <select id="record-select" class="field__select">
-          ${SAMPLE_RESEARCH_RECORDS.map((record, index) => `<option value="${index}"${index === selectedRecordIndex ? ' selected' : ''}>${escapeHtml(record.pseudonym)} · ${escapeHtml(getProblem(record.problemId).title)}</option>`).join('')}
+          ${SAMPLE_RESEARCH_RECORDS.map((record, index) => `<option value="${index}"${index === selectedRecordIndex ? ' selected' : ''}>${escapeHtml(record.pseudonym)}: ${escapeHtml(getProblem(record.problemId).title)}</option>`).join('')}
         </select>
       </div>
       <div data-record-detail>${recordDetail(SAMPLE_RESEARCH_RECORDS[selectedRecordIndex])}</div>
@@ -118,7 +118,7 @@ function settingsForm(classroom) {
       </div>
       <label class="check">
         <input type="checkbox" name="unlockAll"${classroom.unlockAll ? ' checked' : ''}>
-        <span>모든 단계 열기 <span class="meta">· 시연·수업 진행용. 인증하지 않아도 모든 활동을 선택할 수 있습니다.</span></span>
+        <span>모든 단계 열기 <span class="meta">시연이나 수업 진행용입니다. 인증하지 않아도 모든 활동을 선택할 수 있습니다.</span></span>
       </label>
     </fieldset>
 
@@ -158,7 +158,7 @@ function activityTable() {
     return `<tr>
       <th scope="row">${escapeHtml(row.pseudonym)}</th>
       ${cells}
-      <td>${escapeHtml(getMethod(recent.method).shortLabel)} · ${escapeHtml(getLevel(recent.levelId).title)} · ${escapeHtml(getProblem(recent.problemId).title)} (${escapeHtml(recent.result)})</td>
+      <td>${escapeHtml(getMethod(recent.method).shortLabel)}, ${escapeHtml(getLevel(recent.levelId).title)}, ${escapeHtml(getProblem(recent.problemId).title)} (${escapeHtml(recent.result)})</td>
       <td>${escapeHtml(formatDateTime(row.lastActiveAt))}</td>
     </tr>`;
   }).join('');
@@ -209,10 +209,10 @@ function recordDetail(record) {
     <li class="timeline__item">
       <h3 class="timeline__title">4. 비교·평가</h3>
       ${c ? `<dl class="record-list">
-        <div><dt>내 증명 · 잘한 점</dt><dd>${escapeHtml(c.ownStrengths)}</dd></div>
-        <div><dt>내 증명 · 부족한 점</dt><dd>${escapeHtml(c.ownWeaknesses)}</dd></div>
-        <div><dt>AI 증명 · 잘한 점</dt><dd>${escapeHtml(c.aiStrengths)}</dd></div>
-        <div><dt>AI 증명 · 부족한 점</dt><dd>${escapeHtml(c.aiWeaknesses)}</dd></div>
+        <div><dt>내 증명의 잘한 점</dt><dd>${escapeHtml(c.ownStrengths)}</dd></div>
+        <div><dt>내 증명의 부족한 점</dt><dd>${escapeHtml(c.ownWeaknesses)}</dd></div>
+        <div><dt>AI 증명의 잘한 점</dt><dd>${escapeHtml(c.aiStrengths)}</dd></div>
+        <div><dt>AI 증명의 부족한 점</dt><dd>${escapeHtml(c.aiWeaknesses)}</dd></div>
         <div><dt>AI 증명에서 아쉬운 점</dt><dd>${escapeHtml(c.aiRegrets)}</dd></div>
       </dl>` : `<p class="empty-text">${pendingText}</p>`}
     </li>

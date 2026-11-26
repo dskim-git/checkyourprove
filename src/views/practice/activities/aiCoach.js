@@ -28,11 +28,11 @@ export default {
         : '';
       const strengths = review.strengths?.length ? feedbackDetails({ good: review.strengths }) : '';
       const items = (review.items ?? []).map((item) => `<li class="coach-item is-${item.verdict}">
-          <p class="coach-item__head">${item.verdict === 'fail' ? icons.alert : icons.progress}<span>${item.stepNumber}번째 흐름 · ${item.verdict === 'fail' ? '보완 필요' : '더 다듬으면 좋아요'}</span></p>
+          <p class="coach-item__head">${item.verdict === 'fail' ? icons.alert : icons.progress}<span>${item.stepNumber}번째 흐름: ${item.verdict === 'fail' ? '보완 필요' : '더 다듬으면 좋아요'}</span></p>
           ${feedbackDetails(item)}
         </li>`).join('');
       return `<div class="coach-review${review.complete ? ' is-complete' : ''}">
-        <p class="coach-review__head">${review.complete ? icons.check : icons.info}<span>AI 코치 피드백 · ${number}번째 검토</span></p>
+        <p class="coach-review__head">${review.complete ? icons.check : icons.info}<span>AI 코치 피드백 (${number}번째 검토)</span></p>
         <p>${escapeHtml(review.summary)}</p>
         ${strengths}
         ${items ? `<ol class="coach-items suggestions" aria-label="고칠 곳">${items}</ol>` : ''}

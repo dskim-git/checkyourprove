@@ -3,27 +3,44 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#f8f5ec" />
     <meta name="description" content="고등학교 수학 증명 연습 웹앱 (프로토타입)" />
     <title>증명 연습실</title>
   </head>
   <body>
     <a class="skip-link" href="#main">본문으로 건너뛰기</a>
-    <header class="site-header">
-      <div class="container site-header__inner">
-        <a class="brand" href="#/">증명 연습실 <span class="tag tag--proto">프로토타입</span></a>
-        <nav class="site-nav" aria-label="주 메뉴">
-          <a href="#/" data-nav="student">학생 화면</a>
-          <a href="#/teacher" data-nav="teacher">교사 화면 미리보기</a>
-        </nav>
+    <header class="app-bar">
+      <div class="app-bar__inner">
+        <a class="brand" href="#/">증명 연습실</a>
+        <span class="tag tag--proto">프로토타입</span>
+        <a class="app-bar__link" href="#/teacher" data-nav="teacher">교사 화면</a>
       </div>
     </header>
-    <main id="main" class="container site-main" tabindex="-1"></main>
-    <footer class="site-footer">
-      <div class="container">
-        <p>프로토타입 · 로그인, 서버 저장, 실제 AI 연결은 아직 없습니다. 작성한 내용은 이 브라우저에만 임시로 보관됩니다.</p>
-      </div>
+    <main id="main" class="app-main" tabindex="-1">
+      <noscript><p class="noscript">이 앱은 JavaScript가 켜져 있어야 동작합니다.</p></noscript>
+    </main>
+    <footer class="app-foot">
+      <p>프로토타입입니다. 로그인, 서버 저장, 실제 AI 연결은 아직 없습니다. 작성한 내용은 이 브라우저에만 임시로 보관됩니다.</p>
     </footer>
+    <nav class="tab-bar" aria-label="주 메뉴">
+      <a class="tab-bar__item" href="#/" data-tab="home">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 11.5 12 5l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5h-5v5H5a1 1 0 0 1-1-1Z"/></svg>
+        <span>홈</span>
+      </a>
+      <a class="tab-bar__item" href="#/practice" data-tab="practice">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg>
+        <span>연습</span>
+      </a>
+      <a class="tab-bar__item" href="#/research" data-tab="research">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 5h16v11H9l-5 4V5Z"/><path d="M8 9.5h8"/><path d="M8 12.5h5"/></svg>
+        <span>탐구</span>
+      </a>
+      <a class="tab-bar__item" href="#/records" data-tab="records">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="5" y="3.5" width="14" height="17" rx="2"/><path d="M9 8h6"/><path d="M9 12h6"/><path d="M9 16h3"/></svg>
+        <span>기록</span>
+      </a>
+    </nav>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

@@ -4,17 +4,17 @@ import { escapeHtml, formatTime } from './dom.js';
 import { icons } from './icons.js';
 import { getMethod } from '../data/methods.js';
 
-/** 현재 위치 표시. crumbs: [{ label, href? }] — 마지막 항목이 현재 화면 */
+/**
+ * 앱식 뒤로 가기 줄. crumbs: [{ label, href? }] — 마지막 항목이 현재 화면.
+ * 화면에는 바로 위 단계로 가는 버튼 하나만 보이고, 전체 경로는 화면 읽기 프로그램에 전달한다.
+ */
 export function breadcrumb(crumbs) {
-  const items = crumbs
-    .map((crumb, index) => {
-      const isLast = index === crumbs.length - 1;
-      return isLast || !crumb.href
-        ? `<li><span${isLast ? ' aria-current="page"' : ''}>${escapeHtml(crumb.label)}</span></li>`
-        : `<li><a href="${crumb.href}">${escapeHtml(crumb.label)}</a></li>`;
-    })
-    .join('');
-  return `<nav class="breadcrumb" aria-label="현재 위치"><ol>${items}</ol></nav>`;
+  const parent = [...crumbs.slice(0, -1)].reverse().find((crumb) => crumb.href);
+  const trail = crumbs.map((crumb) => crumb.label).join(', ');
+  return `<nav class="backbar" aria-label="현재 위치">
+    ${parent ? `<a class="backbar__link" href="${parent.href}">${icons.chevronLeft}<span>${escapeHtml(parent.label)}</span></a>` : ''}
+    <span class="visually-hidden">현재 위치: ${escapeHtml(trail)}</span>
+  </nav>`;
 }
 
 export function methodTag(methodId) {
@@ -38,7 +38,7 @@ export function stepIndicator(steps, current) {
       </li>`;
     })
     .join('');
-  const summary = current >= total ? '모든 단계 완료' : `${current + 1} / ${total}단계 · ${steps[current]}`;
+  const summary = current >= total ? '모든 단계 완료' : `${current + 1} / ${total}단계: ${steps[current]}`;
   return `<nav class="steps" aria-label="활동 단계">
     <p class="steps__summary" aria-hidden="true">${escapeHtml(summary)}</p>
     <ol class="steps__list">${items}</ol>
@@ -47,15 +47,15 @@ export function stepIndicator(steps, current) {
 
 export function propositionBlock(problem) {
   const method = getMethod(problem.method);
-  return `<section class="proposition" aria-label="명제">
-    <p class="proposition__meta">
-      <span class="tag tag--strong">${escapeHtml(method.label)}</span>
-      <span>${escapeHtml(method.course)}</span>
-      <span>난이도 ${escapeHtml(problem.difficulty)}</span>
-    </p>
+  return `<div class="proposition-wrap"><section class="proposition" aria-label="명제">
     <p class="proposition__label">명제</p>
     <p class="proposition__statement">${escapeHtml(problem.statement)}</p>
-  </section>`;
+    <ul class="proposition__meta" aria-label="명제 정보">
+      <li class="tag tag--strong">${escapeHtml(method.label)}</li>
+      <li class="tag">${escapeHtml(method.course)}</li>
+      <li class="tag tag--difficulty">난이도 ${escapeHtml(problem.difficulty)}</li>
+    </ul>
+  </section></div>`;
 }
 
 const NOTICE_ICONS = { info: icons.info, warn: icons.alert, success: icons.check, lock: icons.lock, eye: icons.eye, eyeOff: icons.eyeOff };
@@ -83,7 +83,10 @@ export function proofText(text, { emptyText = '작성한 내용이 없습니다.
 }
 
 export function mockAiNote(text = '프로토타입: AI 점검은 실제 AI가 아니라 예시 규칙으로 동작합니다. 각 단계의 핵심(식의 꼴, 근거, 결론)이 드러나면 문자나 표현이 달라도 인정하지만, 예시와 아주 다른 방식으로 쓴 증명은 알아보지 못할 수 있습니다.') {
-  return `<p class="proto-note">${icons.info}<span>${escapeHtml(text)}</span></p>`;
+  return `<details class="proto-note">
+    <summary>${icons.info}<span>프로토타입 AI 안내</span></summary>
+    <p>${escapeHtml(text)}</p>
+  </details>`;
 }
 
 export function chatMessages(messages, { pending = false } = {}) {

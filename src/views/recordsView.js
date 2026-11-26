@@ -8,16 +8,26 @@ import { getClassroom } from '../state/classroomStore.js';
 import { listAttempts, clearAllAttempts } from '../state/attemptStore.js';
 import { findSession, clearAllSessions } from '../state/sessionStore.js';
 import { levelStates } from '../state/practiceProgress.js';
+import { passedCount, streak } from '../state/motivation.js';
 import { escapeHtml, formatDateTime } from '../ui/dom.js';
 import { icons } from '../ui/icons.js';
 import { breadcrumb } from '../ui/components.js';
 import { levelMeter, practiceHref, statusBadge } from './practice/practiceParts.js';
 
 function attemptStatus(attempt) {
-  const score = attempt.score != null ? ` · ${attempt.score}점` : '';
+  const score = attempt.score != null ? ` ${attempt.score}점` : '';
   if (attempt.status === 'passed') return { state: 'passed', label: `통과${score}` };
   if (attempt.status === 'ended') return { state: 'ended', label: `미통과${score}` };
   return { state: 'progress', label: attempt.passedAt ? '다시 푸는 중 (통과 기록 있음)' : '진행 중' };
+}
+
+function summary() {
+  const { days } = streak();
+  return `<ul class="stat-strip" aria-label="나의 학습 현황">
+    <li class="stat stat--streak${days > 0 ? ' is-on' : ''}"><span class="stat__icon">${icons.flame}</span><span class="stat__value num">${days}<span class="stat__unit">일</span></span><span class="stat__label">연속 학습</span></li>
+    <li class="stat"><span class="stat__icon">${icons.check}</span><span class="stat__value num">${passedCount()}<span class="stat__unit">개</span></span><span class="stat__label">통과한 활동</span></li>
+    <li class="stat"><span class="stat__icon">${icons.records}</span><span class="stat__value num">${listAttempts().length}<span class="stat__unit">개</span></span><span class="stat__label">활동 기록</span></li>
+  </ul>`;
 }
 
 export function renderRecords(root) {
@@ -28,10 +38,10 @@ export function renderRecords(root) {
       return `<li class="cert-row">
         <div class="cert-row__main">
           <p class="cert-row__title">${escapeHtml(method.label)}</p>
-          ${levelMeter(states)}
+          <p class="cert-row__count num">인증 ${certified} / ${LEVELS.length}</p>
         </div>
-        <p class="cert-row__count">인증 ${certified} / ${LEVELS.length}</p>
-        <a class="button button--secondary" href="${practiceHref(method.id)}">연습하기<span class="visually-hidden">: ${escapeHtml(method.label)}</span></a>
+        ${levelMeter(states)}
+        <a class="button button--secondary button--small" href="${practiceHref(method.id)}">연습하기<span class="visually-hidden">: ${escapeHtml(method.label)}</span></a>
       </li>`;
     }).join('');
 
@@ -40,14 +50,17 @@ export function renderRecords(root) {
       const problem = getProblem(attempt.problemId);
       const level = getLevel(attempt.levelId);
       if (!problem || !level) return '';
-      return `<tr>
-        <td>${escapeHtml(formatDateTime(attempt.updatedAt))}</td>
-        <td>${escapeHtml(getMethod(attempt.method).shortLabel)}</td>
-        <td>${escapeHtml(level.title)}</td>
-        <td>${escapeHtml(problem.title)}</td>
-        <td>${statusBadge(attemptStatus(attempt))}</td>
-        <td><a href="${practiceHref(attempt.method, attempt.levelId, attempt.problemId)}">보기<span class="visually-hidden">: ${escapeHtml(level.title)} ${escapeHtml(problem.title)}</span></a></td>
-      </tr>`;
+      return `<li>
+        <a class="record" href="${practiceHref(attempt.method, attempt.levelId, attempt.problemId)}">
+          <span class="record__main">
+            <span class="record__title">${escapeHtml(problem.title)}</span>
+            <span class="record__meta">${escapeHtml(getMethod(attempt.method).shortLabel)}, ${LEVELS.indexOf(level) + 1}단계 ${escapeHtml(level.title)}</span>
+            <time class="record__time" datetime="${escapeHtml(attempt.updatedAt)}">${escapeHtml(formatDateTime(attempt.updatedAt))}</time>
+          </span>
+          ${statusBadge(attemptStatus(attempt))}
+          <span class="visually-hidden">보기</span>
+        </a>
+      </li>`;
     }).join('');
 
     const classroom = getClassroom();
@@ -55,10 +68,16 @@ export function renderRecords(root) {
     const researchSession = researchProblem ? findSession('research', researchProblem.id) : null;
     const researchLine = !researchSession || !researchSession.draft.text.trim()
       ? '<p class="empty-text">아직 기록이 없습니다.</p>'
-      : `<p>${escapeHtml(researchProblem.title)} · ${researchSession.completedAt
-          ? `${icons.done} 완료 (${escapeHtml(formatDateTime(researchSession.completedAt))})`
-          : `${icons.progress} 진행 중 (${researchSession.step + 1} / ${MODES.research.steps.length}단계)`}
-          · <a href="#/research/${researchProblem.id}">보기</a></p>`;
+      : `<a class="record" href="#/research/${researchProblem.id}">
+          <span class="record__main">
+            <span class="record__title">${escapeHtml(researchProblem.title)}</span>
+            <span class="record__meta">${researchSession.completedAt
+              ? `완료 (${escapeHtml(formatDateTime(researchSession.completedAt))})`
+              : `진행 중 (${researchSession.step + 1} / ${MODES.research.steps.length}단계)`}</span>
+          </span>
+          <span class="status status--${researchSession.completedAt ? 'passed' : 'progress'}">${researchSession.completedAt ? icons.done : icons.progress}<span>${researchSession.completedAt ? '완료' : '진행 중'}</span></span>
+          <span class="visually-hidden">보기</span>
+        </a>`;
 
     root.innerHTML = `<div class="page">
       ${breadcrumb([{ label: '홈', href: '#/' }, { label: '내 기록' }])}
@@ -66,22 +85,18 @@ export function renderRecords(root) {
         <h1>내 기록</h1>
         <p class="lead">증명법별 인증 현황과 지금까지 한 활동을 확인합니다.</p>
       </header>
+      ${summary()}
 
       <section class="panel" aria-labelledby="cert-heading">
-        <h2 id="cert-heading" class="section-title">증명법별 인증 현황</h2>
+        <h2 id="cert-heading" class="section-title">증명법별 인증 배지</h2>
         <ul class="cert-list">${certRows}</ul>
       </section>
 
       <section class="panel" aria-labelledby="recent-heading">
         <h2 id="recent-heading" class="section-title">증명 연습 기록</h2>
         ${rows
-          ? `<div class="table-wrap" role="region" aria-labelledby="recent-heading" tabindex="0">
-              <table class="data-table">
-                <thead><tr><th scope="col">마지막 활동</th><th scope="col">증명법</th><th scope="col">활동</th><th scope="col">명제</th><th scope="col">결과</th><th scope="col"><span class="visually-hidden">열기</span></th></tr></thead>
-                <tbody>${rows}</tbody>
-              </table>
-            </div>`
-          : '<p class="empty-text">아직 증명 연습 기록이 없습니다.</p>'}
+          ? `<ul class="record-list" aria-labelledby="recent-heading">${rows}</ul>`
+          : '<p class="empty-text">아직 증명 연습 기록이 없습니다. <a href="#/practice">증명 연습하기</a>에서 첫 활동을 시작해 보세요.</p>'}
       </section>
 
       <section class="panel" aria-labelledby="research-record-heading">

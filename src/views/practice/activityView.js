@@ -7,9 +7,17 @@ import { getProblem, problemsByMethod } from '../../data/problems/index.js';
 import { getOrCreateAttempt, saveAttempt, finishAttempt, restartAttempt, findAttempt } from '../../state/attemptStore.js';
 import { isCertified, isUnlocked } from '../../state/practiceProgress.js';
 import { escapeHtml } from '../../ui/dom.js';
+import { icons } from '../../ui/icons.js';
 import { breadcrumb, notice, propositionBlock, renderNotFound } from '../../ui/components.js';
 import { practiceHref } from './practiceParts.js';
 import { ACTIVITIES } from './activities/index.js';
+
+/** 받침 유무에 따라 주격 조사 이/가 */
+function subjectParticle(word) {
+  const code = word.trim().charCodeAt(word.trim().length - 1) - 0xac00;
+  if (code < 0 || code > 11171) return '이(가)';
+  return code % 28 ? '이' : '가';
+}
 
 export function renderActivity(root, [methodId, levelId, problemId]) {
   const method = getMethod(methodId);
@@ -67,20 +75,28 @@ export function renderActivity(root, [methodId, levelId, problemId]) {
     const scoreText = attempt.score != null ? ` (${attempt.score}점)` : '';
     const nextLevel = LEVELS[index + 1];
     const certText = justCertified
-      ? ` "${level.title}" 단계를 인증했습니다.${nextLevel ? ` 다음 단계 "${nextLevel.title}"이(가) 열렸습니다.` : ' 이 증명법의 모든 단계를 인증했습니다.'}`
+      ? ` "${level.title}" 단계를 인증했습니다.${nextLevel ? ` 다음 단계 "${nextLevel.title}"${subjectParticle(nextLevel.title)} 열렸습니다.` : ' 이 증명법의 모든 단계를 인증했습니다.'}`
       : '';
-    const banner = attempt.status === 'passed'
-      ? notice('success', `통과했습니다${scoreText}`, `${certText.trim() || '잘했어요. 아래에서 결과를 다시 확인할 수 있습니다.'}`)
-      : notice('warn', `이번에는 통과하지 못했습니다${scoreText}`, failReason());
+    const passed = attempt.status === 'passed';
+    const banner = `<p class="result-box__body">${escapeHtml(passed
+      ? certText.trim() || '잘했어요. 아래에서 결과를 다시 확인할 수 있습니다.'
+      : failReason())}</p>`;
+    const medal = passed && justCertified
+      ? `<div class="medal" role="img" aria-label="인증 배지: ${escapeHtml(level.title)}">
+          <span class="medal__disc">${icons.award}</span>
+          <span class="medal__text"><span class="medal__title">인증 배지 획득</span><span>${escapeHtml(method.label)}, ${index + 1}단계 ${escapeHtml(level.title)}</span></span>
+        </div>`
+      : '';
 
     const next = nextProblem();
     const nextLevelLink = justCertified && nextLevel
       ? `<a class="button button--primary" href="${practiceHref(method.id, nextLevel.id)}">다음 단계로: ${escapeHtml(nextLevel.title)}</a>`
       : '';
-    return `<section class="result-box" aria-labelledby="result-heading">
-      <h2 id="result-heading" class="visually-hidden" tabindex="-1">결과</h2>
+    return `<section class="result-box ${passed ? 'is-passed' : 'is-ended'}" aria-labelledby="result-heading">
+      <h2 id="result-heading" class="result-box__title" tabindex="-1">${passed ? `통과했습니다${scoreText}` : `이번에는 통과하지 못했습니다${scoreText}`}</h2>
       ${banner}
-      <div class="actions actions--start">
+      ${medal}
+      <div class="result-actions">
         ${nextLevelLink}
         ${next ? `<a class="button ${nextLevelLink ? 'button--secondary' : 'button--primary'}" href="${practiceHref(method.id, level.id, next.id)}">다음 명제: ${escapeHtml(next.title)}</a>` : ''}
         <button type="button" class="button button--secondary" data-shell-action="restart">이 명제 다시 풀기</button>
@@ -105,7 +121,7 @@ export function renderActivity(root, [methodId, levelId, problemId]) {
   /** 같은 명제를 다른 활동 단계로 바로 열기 (열린 단계만 링크) */
   function levelSwitcher() {
     const links = LEVELS.map((item, i) => {
-      const label = `${i + 1}. ${escapeHtml(item.title)}`;
+      const label = `<span class="level-switch__num num">${i + 1}</span><span class="level-switch__name" aria-hidden="true">${escapeHtml(item.short)}</span><span class="visually-hidden">${escapeHtml(item.title)}</span>`;
       if (item.id === level.id) return `<li><span class="level-switch__item is-current" aria-current="page">${label}</span></li>`;
       if (!isUnlocked(method.id, i)) return '';
       return `<li><a class="level-switch__item" href="${practiceHref(method.id, item.id, problem.id)}">${label}</a></li>`;
@@ -116,18 +132,24 @@ export function renderActivity(root, [methodId, levelId, problemId]) {
   function draw({ focusResult = false } = {}) {
     cleanupActivity?.();
     root.innerHTML = `<div class="page page--solve">
-      ${breadcrumb(crumbs)}
+      <div class="lesson-top">
+        ${breadcrumb(crumbs)}
+        ${levelSwitcher()}
+      </div>
       <header class="solve-header">
-        <p class="eyebrow">${escapeHtml(method.label)} · ${index + 1}단계 · ${escapeHtml(level.title)}</p>
         <h1 class="solve-title">${escapeHtml(problem.title)}</h1>
-        <p class="meta">통과 기준: ${escapeHtml(level.passRule)}</p>
+        <details class="solve-rule">
+          <summary>${index + 1}단계 ${escapeHtml(level.title)}: 통과 기준</summary>
+          <p>${escapeHtml(level.passRule)}</p>
+        </details>
       </header>
-      ${levelSwitcher()}
-      ${propositionBlock(problem)}
       ${resultBanner()}
+      ${propositionBlock(problem)}
       <section class="step-panel" data-activity aria-label="${escapeHtml(level.title)} 활동"></section>
     </div>`;
     cleanupActivity = activity.mount(root.querySelector('[data-activity]'), ctx) ?? null;
+    const current = root.querySelector('.level-switch .is-current');
+    if (current) current.parentElement.parentElement.scrollLeft = current.offsetLeft - 16;
     if (focusResult) {
       window.scrollTo(0, 0);
       root.querySelector('#result-heading')?.focus({ preventScroll: true });

@@ -1,151 +1,38 @@
-/* 기본: 디자인 토큰, 초기화, 타이포그래피 */
-
-:root {
-  --color-bg: #f6f5f1;
-  --color-surface: #ffffff;
-  --color-surface-muted: #f0efe9;
-  --color-border: #d9d6cc;
-  --color-border-strong: #a9a597;
-  --color-text: #1d232a;
-  --color-text-muted: #545b64;
-  --color-accent: #1f4e79;
-  --color-accent-hover: #173c5e;
-  --color-accent-soft: #e5edf5;
-  --color-research: #35573a;
-  --color-research-soft: #e7efe6;
-  --color-warn: #7a4a00;
-  --color-warn-soft: #fbf0d9;
-  --color-success: #2b6234;
-  --color-success-soft: #e5f1e6;
-  --color-danger: #a12626;
-  --color-danger-soft: #fbe9e7;
-  --color-focus: #2563c9;
-
-  --font-sans: 'Pretendard', 'Pretendard Variable', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo',
-    'Malgun Gothic', '맑은 고딕', 'Noto Sans KR', system-ui, sans-serif;
-  --font-mono: ui-monospace, 'Cascadia Mono', 'D2Coding', Consolas, monospace;
-
-  --radius: 6px;
-  --radius-lg: 10px;
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 24px;
-  --space-6: 32px;
-  --space-7: 48px;
-
-  color-scheme: light;
-}
-
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
-html {
-  -webkit-text-size-adjust: 100%;
-  text-size-adjust: 100%;
-}
-
+/* 기본 규칙 (Hallmark scaffold의 base에 한글 화면용 설정을 더함) */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { overflow-x: clip; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; scrollbar-color: var(--color-muted) var(--color-paper); scroll-padding-top: var(--appbar-h); scroll-padding-bottom: calc(var(--tabbar-h) + var(--space-lg)); }
 body {
   margin: 0;
-  background: var(--color-bg);
-  color: var(--color-text);
-  font-family: var(--font-sans);
-  font-size: 1.0625rem;
-  line-height: 1.65;
+  background: var(--grain), var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-size: var(--text-md);
+  font-weight: var(--body-weight);
+  line-height: 1.6;
   word-break: keep-all;
   overflow-wrap: break-word;
+  -webkit-font-smoothing: antialiased;
+  caret-color: var(--color-accent-2);
 }
-
-h1,
-h2,
-h3,
-p,
-ul,
-ol,
-dl,
-dd,
-figure {
-  margin: 0;
-}
-
-h1 {
-  font-size: clamp(1.6rem, 1.2rem + 1.4vw, 2.1rem);
-  line-height: 1.3;
-  letter-spacing: -0.01em;
-}
-
-h2 {
-  font-size: 1.25rem;
-  line-height: 1.4;
-}
-
-h3 {
-  font-size: 1.0625rem;
-  line-height: 1.45;
-}
-
-a {
-  color: var(--color-accent);
-  text-underline-offset: 3px;
-}
-
-a:hover {
-  color: var(--color-accent-hover);
-}
-
-button,
-input,
-select,
-textarea {
-  font: inherit;
-  color: inherit;
-}
-
-code,
-pre {
-  font-family: var(--font-mono);
-  font-size: 0.875rem;
-}
-
-[hidden] {
-  display: none !important;
-}
-
-:focus-visible {
-  outline: 3px solid var(--color-focus);
-  outline-offset: 2px;
-}
-
-[tabindex='-1']:focus {
-  outline: none;
-}
-
-.visually-hidden {
-  position: absolute !important;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-.icon {
-  flex: none;
-  width: 1.15em;
-  height: 1.15em;
-  vertical-align: -0.2em;
-}
-
+::selection { background: color-mix(in oklab, var(--color-accent) 45%, transparent); color: var(--color-ink); }
+:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; transition: none; }
+[tabindex='-1']:focus { outline: none; }
+a { color: var(--color-accent-2); text-decoration-thickness: 1px; text-underline-offset: 0.18em; }
+a:hover { text-decoration-thickness: 2px; }
+h1, h2, h3 { margin: 0; font-family: var(--font-display); font-weight: var(--display-weight); font-synthesis: none; letter-spacing: var(--tracking-display); line-height: 1.25; overflow-wrap: break-word; min-width: 0; text-wrap: balance; }
+h1 { font-size: var(--text-display); }
+h2 { font-size: var(--text-section); }
+h3 { font-size: var(--text-title); line-height: 1.4; }
+p, ul, ol, dl, dd, figure { margin: 0; }
+p { text-wrap: pretty; }
+img, video { max-width: 100%; height: auto; display: block; }
+button, input, select, textarea { font: inherit; color: inherit; }
+code, pre { font-family: var(--font-outlier); font-size: var(--text-sm); }
+[hidden] { display: none !important; }
+.num, .figure, td.num { font-variant-numeric: tabular-nums; }
+.visually-hidden { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.icon { flex: none; width: 1.2em; height: 1.2em; vertical-align: -0.22em; }
 @media (prefers-reduced-motion: reduce) {
-  * {
-    scroll-behavior: auto !important;
-    transition: none !important;
-  }
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }

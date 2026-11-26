@@ -60,7 +60,7 @@ export function scaleField({ id, field, legend, help = '', value = null, options
 }
 
 export function saveStatusText(session) {
-  return session.updatedAt ? `이 브라우저에 임시 저장됨 · ${formatTime(session.updatedAt)}` : '';
+  return session.updatedAt ? `${formatTime(session.updatedAt)}에 이 브라우저에 임시 저장됨` : '';
 }
 
 /**

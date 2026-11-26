@@ -43,7 +43,7 @@ export default {
       }).join('');
       return `<div class="score-card${passed ? ' is-passed' : ''}">
           <p class="score-card__score"><strong>${score}</strong><span> / 100점</span></p>
-          <p class="score-card__meta">통과 기준 ${SOLO_PASS_SCORE}점 · ${passed ? '통과' : '미통과'}</p>
+          <p class="score-card__meta">통과 기준 ${SOLO_PASS_SCORE}점, ${passed ? '통과' : '미통과'}</p>
           <p>${escapeHtml(comment)}</p>
         </div>
         <section aria-labelledby="my-proof-heading" class="stack-section">

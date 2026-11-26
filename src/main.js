@@ -1,7 +1,5 @@
-import './styles/base.css';
-import './styles/layout.css';
-import './styles/components.css';
-import './styles/views.css';
+import 'pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css';
+import './styles/app.css';
 
 import { startRouter } from './router.js';
 

@@ -5,6 +5,7 @@
 //   #/practice/:method/:level            명제 선택
 //   #/practice/:method/:level/:problem   활동 화면
 //   #/records                            내 기록
+//   #/research                           AI와 탐구하기: 선생님이 정한 오늘의 명제로 이동
 //   #/research/:problem                  AI와 탐구하기(연구 모드)
 //   #/teacher                            교사 화면 미리보기
 // 해시 방식은 배포 환경(Vercel)에서 별도 rewrite 설정 없이 동작한다.
@@ -19,17 +20,35 @@ import { renderRecords } from './views/recordsView.js';
 import { renderResearch } from './views/researchView.js';
 import { renderTeacher } from './views/teacherView.js';
 import { renderNotFound } from './ui/components.js';
+import { getClassroom } from './state/classroomStore.js';
+import { escapeHtml } from './ui/dom.js';
+
+/** 탐구 탭: 오늘의 명제로 보내거나, 아직 열리지 않았으면 안내한다. */
+function renderResearchEntry(root) {
+  const { researchOpen, researchProblemId } = getClassroom();
+  if (researchOpen && researchProblemId) {
+    window.location.replace(`#/research/${researchProblemId}`);
+    return null;
+  }
+  root.innerHTML = `<div class="page">
+    <h1>AI와 탐구하기</h1>
+    <p class="lead">${escapeHtml('선생님이 아직 이 활동을 열지 않았습니다.')}</p>
+  </div>`;
+  return null;
+}
 
 const ID = '([\\w-]+)';
+// tab: 아래 탭 바에서 표시할 탭 · view: 'lesson'이면 활동에 집중하도록 탭 바를 숨긴다
 const ROUTES = [
-  { section: 'student', title: null, pattern: /^\/$/, render: renderHub },
-  { section: 'student', title: '증명 연습하기', pattern: /^\/practice$/, render: renderMethodSelect },
-  { section: 'student', title: '증명 연습하기', pattern: new RegExp(`^/practice/${ID}$`), render: renderLevelSelect },
-  { section: 'student', title: '증명 연습하기', pattern: new RegExp(`^/practice/${ID}/${ID}$`), render: renderProblemSelect },
-  { section: 'student', title: '증명 연습하기', pattern: new RegExp(`^/practice/${ID}/${ID}/${ID}$`), render: renderActivity },
-  { section: 'student', title: '내 기록', pattern: /^\/records$/, render: renderRecords },
-  { section: 'student', title: 'AI와 탐구하기', pattern: new RegExp(`^/research/${ID}$`), render: renderResearch },
-  { section: 'teacher', title: '교사 화면 미리보기', pattern: /^\/teacher$/, render: renderTeacher },
+  { section: 'student', tab: 'home', title: null, pattern: /^\/$/, render: renderHub },
+  { section: 'student', tab: 'practice', title: '증명 연습하기', pattern: /^\/practice$/, render: renderMethodSelect },
+  { section: 'student', tab: 'practice', title: '증명 연습하기', pattern: new RegExp(`^/practice/${ID}$`), render: renderLevelSelect },
+  { section: 'student', tab: 'practice', title: '증명 연습하기', pattern: new RegExp(`^/practice/${ID}/${ID}$`), render: renderProblemSelect },
+  { section: 'student', tab: 'practice', view: 'lesson', title: '증명 연습하기', pattern: new RegExp(`^/practice/${ID}/${ID}/${ID}$`), render: renderActivity },
+  { section: 'student', tab: 'records', title: '내 기록', pattern: /^\/records$/, render: renderRecords },
+  { section: 'student', tab: 'research', title: 'AI와 탐구하기', pattern: /^\/research$/, render: renderResearchEntry },
+  { section: 'student', tab: 'research', title: 'AI와 탐구하기', pattern: new RegExp(`^/research/${ID}$`), render: renderResearch },
+  { section: 'teacher', tab: null, view: 'wide', title: '교사 화면 미리보기', pattern: /^\/teacher$/, render: renderTeacher },
 ];
 
 const APP_TITLE = '증명 연습실';
@@ -62,9 +81,14 @@ export function startRouter(root) {
       renderNotFound(root);
     }
 
-    document.title = route?.title ? `${route.title} · ${APP_TITLE}` : APP_TITLE;
+    document.title = route?.title ? `${route.title} - ${APP_TITLE}` : APP_TITLE;
+    document.body.dataset.view = route?.view ?? 'app';
     document.querySelectorAll('[data-nav]').forEach((link) => {
       if (link.dataset.nav === route?.section) link.setAttribute('aria-current', 'page');
+      else link.removeAttribute('aria-current');
+    });
+    document.querySelectorAll('[data-tab]').forEach((link) => {
+      if (link.dataset.tab === route?.tab) link.setAttribute('aria-current', 'page');
       else link.removeAttribute('aria-current');
     });
 

@@ -15,12 +15,12 @@ export function problemStatus(levelId, problemId) {
   const attempt = findAttempt(levelId, problemId);
   if (!attempt) return { state: 'new', label: '시작 전', action: '시작하기' };
   if (attempt.passedAt && attempt.status !== 'in-progress') {
-    return { state: 'passed', label: attempt.score != null ? `통과 · ${attempt.score}점` : '통과', action: '다시 보기' };
+    return { state: 'passed', label: attempt.score != null ? `통과 ${attempt.score}점` : '통과', action: '다시 보기' };
   }
   if (attempt.status === 'ended') {
-    return { state: 'ended', label: attempt.score != null ? `미통과 · ${attempt.score}점` : '미통과', action: '다시 보기' };
+    return { state: 'ended', label: attempt.score != null ? `미통과 ${attempt.score}점` : '미통과', action: '다시 보기' };
   }
-  if (attempt.passedAt) return { state: 'passed', label: '통과 · 다시 푸는 중', action: '이어서 하기' };
+  if (attempt.passedAt) return { state: 'passed', label: '통과, 다시 푸는 중', action: '이어서 하기' };
   return { state: 'progress', label: '진행 중', action: '이어서 하기' };
 }
 

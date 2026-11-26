@@ -19,5 +19,10 @@ export const icons = {
   records: svg('<rect x="5" y="3.5" width="14" height="17" rx="1.5"/><path d="M9 8h6"/><path d="M9 12h6"/><path d="M9 16h3"/>'),
   arrowUp: svg('<path d="M12 19V5"/><path d="m6 11 6-6 6 6"/>'),
   arrowDown: svg('<path d="M12 5v14"/><path d="m6 13 6 6 6-6"/>'),
+  chevronLeft: svg('<path d="m15 5-7 7 7 7"/>'),
+  chevronRight: svg('<path d="m9 5 7 7-7 7"/>'),
+  flame: svg('<path d="M12 21c-3.9 0-6.5-2.6-6.5-6.1 0-3.4 2.4-5.2 3.6-8.4.4 2 1.6 3.2 2.8 3.6.1-2.7 1.3-5 3.4-7.1.3 3.3 4.2 6 4.2 11.2 0 3.9-3 6.8-7.5 6.8Z"/>'),
+  star: svg('<path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9L12 3.5Z"/>'),
+  play: svg('<path d="M8 5.5v13l10.5-6.5L8 5.5Z"/>'),
   award: svg('<circle cx="12" cy="9" r="5.5"/><path d="m8.5 13.5-1.5 7 5-2.5 5 2.5-1.5-7"/>'),
 };

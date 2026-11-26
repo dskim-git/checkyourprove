@@ -27,7 +27,7 @@ export function pickMiddleSteps(n, count) {
   return shuffle(pool).slice(0, count).sort((a, b) => a - b);
 }
 
-const VERDICT_TEXT = { pass: '통과', partial: '통과 · 보완하면 더 좋아요', fail: '보완 필요', info: '안내' };
+const VERDICT_TEXT = { pass: '통과', partial: '통과, 보완하면 더 좋아요', fail: '보완 필요', info: '안내' };
 const VERDICT_ICON = { pass: icons.check, partial: icons.check, fail: icons.alert, info: icons.info };
 
 /** 잘 쓴 부분 · 고칠 곳 · 고칠 점 · 고치는 방법 (AI 점검·코치·채점이 함께 쓰는 안내 목록) */
@@ -52,7 +52,7 @@ export function feedbackDetails({ good = [], where = null, fixes = [], how = '' 
 export function aiFeedback(feedback, { title = 'AI 점검' } = {}) {
   if (!feedback) return '';
   return `<div class="ai-feedback is-${feedback.verdict}">
-    <p class="ai-feedback__head">${VERDICT_ICON[feedback.verdict]}<span>${escapeHtml(title)} · ${VERDICT_TEXT[feedback.verdict]}</span></p>
+    <p class="ai-feedback__head">${VERDICT_ICON[feedback.verdict]}<span>${escapeHtml(title)}: ${VERDICT_TEXT[feedback.verdict]}</span></p>
     <p>${escapeHtml(feedback.message)}</p>
     ${feedbackDetails(feedback)}
   </div>`;
