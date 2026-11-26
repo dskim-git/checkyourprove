@@ -5,6 +5,7 @@ import { getLevel, levelIndex } from '../../data/levels.js';
 import { problemsByMethod } from '../../data/problems/index.js';
 import { isCertified, isUnlocked, clearedCount, requiredClears, problemStatus } from '../../state/practiceProgress.js';
 import { escapeHtml } from '../../ui/dom.js';
+import { statementHtml } from '../../ui/mathText.js';
 import { icons } from '../../ui/icons.js';
 import { breadcrumb, difficultyTag, notice, renderNotFound } from '../../ui/components.js';
 import { practiceHref, statusBadge } from './practiceParts.js';
@@ -45,7 +46,7 @@ export function renderProblemSelect(root, [methodId, levelId]) {
       <a class="problem is-${status.state}" href="${practiceHref(method.id, level.id, problem.id)}">
         <span class="problem__main">
           <span class="problem__title">${escapeHtml(problem.title)}</span>
-          <span class="problem__statement">${escapeHtml(problem.statement)}</span>
+          <span class="problem__statement">${statementHtml(problem.statement)}</span>
           <span class="problem__meta">${difficultyTag(problem.difficulty)}${statusBadge(status)}</span>
         </span>
         <span class="problem__action">${escapeHtml(status.action)}<span class="visually-hidden">: ${escapeHtml(problem.title)}</span>${icons.chevronRight}</span>

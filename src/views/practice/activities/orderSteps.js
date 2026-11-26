@@ -4,6 +4,7 @@
 import { REVEAL_AFTER_TRIES } from '../../../data/levels.js';
 import { stepText } from '../../../data/proofModel.js';
 import { escapeHtml } from '../../../ui/dom.js';
+import { mathText } from '../../../ui/mathText.js';
 import { icons } from '../../../ui/icons.js';
 import { shuffledOrder, triesNote } from './kit.js';
 
@@ -30,7 +31,7 @@ export default {
           </span>`;
         return `<li class="order-item">
           <span class="order-item__num" aria-hidden="true">${position + 1}</span>
-          <span class="order-item__text">${escapeHtml(stepText(problem.steps[stepIndex]))}</span>
+          <span class="order-item__text">${mathText(stepText(problem.steps[stepIndex]))}</span>
           ${mark}
           ${controls}
         </li>`;

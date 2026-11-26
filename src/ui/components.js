@@ -2,6 +2,7 @@
 
 import { escapeHtml, formatTime } from './dom.js';
 import { icons } from './icons.js';
+import { statementHtml } from './mathText.js';
 import { getMethod } from '../data/methods.js';
 
 /**
@@ -49,7 +50,7 @@ export function propositionBlock(problem) {
   const method = getMethod(problem.method);
   return `<div class="proposition-wrap"><section class="proposition" aria-label="명제">
     <p class="proposition__label">명제</p>
-    <p class="proposition__statement">${escapeHtml(problem.statement)}</p>
+    <p class="proposition__statement">${statementHtml(problem.statement)}</p>
     <ul class="proposition__meta" aria-label="명제 정보">
       <li class="tag tag--strong">${escapeHtml(method.label)}</li>
       <li class="tag">${escapeHtml(method.course)}</li>

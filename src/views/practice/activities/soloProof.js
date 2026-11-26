@@ -7,6 +7,7 @@ import { buildGradeRequest } from '../../../services/aiRequests.js';
 import { requestGrade } from '../../../services/mockProofChecker.js';
 import { saveAttempt } from '../../../state/attemptStore.js';
 import { escapeHtml, nowIso } from '../../../ui/dom.js';
+import { mathText } from '../../../ui/mathText.js';
 import { icons } from '../../../ui/icons.js';
 import { mockAiNote, notice, proofText } from '../../../ui/components.js';
 import { bindFields, handleSymbolInsert, textArea, validateRequired } from '../../../ui/forms.js';
@@ -36,7 +37,7 @@ export default {
         const v = VERDICT[item.verdict];
         return `<tr>
           <th scope="row">${item.stepIndex + 1}</th>
-          <td class="wrap">${escapeHtml(stepText(problem.steps[item.stepIndex]))}</td>
+          <td class="wrap">${mathText(stepText(problem.steps[item.stepIndex]))}</td>
           <td><span class="verdict is-${item.verdict}">${v.icon}<span>${v.text}</span></span></td>
           <td class="wrap">${item.verdict === 'pass' ? '—' : feedbackDetails({ where: item.where, fixes: item.fixes ?? [], how: item.how ?? problem.steps[item.stepIndex].hint })}</td>
         </tr>`;

@@ -51,6 +51,28 @@ export function renderActivity(root, [methodId, levelId, problemId]) {
   let attempt = getOrCreateAttempt(level.id, problem, () => activity.createData(problem));
   let cleanupActivity = null;
   let justCertified = false;
+  let confetti = null;
+
+  /** 통과 축하: 종이 꽃가루가 화면 위에서 흩날린다(장식, 화면 읽기 프로그램에는 숨김). 동작 줄이기 설정이면 생략한다. */
+  function celebrate() {
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    confetti?.remove();
+    const pieces = Array.from({ length: 42 }, (_, i) => {
+      const x = (i * 23.7) % 100;
+      const drift = Math.round((Math.random() - 0.5) * 160);
+      const spin = Math.round(360 + Math.random() * 540) * (i % 2 ? 1 : -1);
+      const delay = Math.round(Math.random() * 380);
+      const duration = Math.round(1500 + Math.random() * 900);
+      return `<i class="confetti__piece is-${(i % 4) + 1}${i % 3 === 0 ? ' is-round' : ''}" style="--x: ${x.toFixed(1)}%; --drift: ${drift}px; --spin: ${spin}deg; --delay: ${delay}ms; --dur: ${duration}ms"></i>`;
+    }).join('');
+    confetti = document.createElement('div');
+    confetti.className = 'confetti';
+    confetti.setAttribute('aria-hidden', 'true');
+    confetti.innerHTML = pieces;
+    document.body.append(confetti);
+    const layer = confetti;
+    window.setTimeout(() => layer.remove(), 3200);
+  }
 
   const ctx = {
     problem,
@@ -66,7 +88,7 @@ export function renderActivity(root, [methodId, levelId, problemId]) {
       const before = isCertified(method.id, level.id);
       finishAttempt(attempt, { passed, score });
       justCertified = !before && isCertified(method.id, level.id);
-      draw({ focusResult: true });
+      draw({ focusResult: true, celebrateNow: passed });
     },
   };
 
@@ -79,7 +101,7 @@ export function renderActivity(root, [methodId, levelId, problemId]) {
       : '';
     const passed = attempt.status === 'passed';
     const banner = `<p class="result-box__body">${escapeHtml(passed
-      ? certText.trim() || '잘했어요. 아래에서 결과를 다시 확인할 수 있습니다.'
+      ? certText.trim() || '잘했어요! 내 풀이는 아래에서 열어 볼 수 있습니다.'
       : failReason())}</p>`;
     const medal = passed && justCertified
       ? `<div class="medal" role="img" aria-label="인증 배지: ${escapeHtml(level.title)}">
@@ -93,7 +115,10 @@ export function renderActivity(root, [methodId, levelId, problemId]) {
       ? `<a class="button button--primary" href="${practiceHref(method.id, nextLevel.id)}">다음 단계로: ${escapeHtml(nextLevel.title)}</a>`
       : '';
     return `<section class="result-box ${passed ? 'is-passed' : 'is-ended'}" aria-labelledby="result-heading">
-      <h2 id="result-heading" class="result-box__title" tabindex="-1">${passed ? `통과했습니다${scoreText}` : `이번에는 통과하지 못했습니다${scoreText}`}</h2>
+      <div class="result-box__head">
+        <span class="result-box__stamp" aria-hidden="true">${passed ? icons.check : icons.alert}</span>
+        <h2 id="result-heading" class="result-box__title" tabindex="-1">${passed ? `통과했습니다${scoreText}` : `이번에는 통과하지 못했습니다${scoreText}`}</h2>
+      </div>
       ${banner}
       ${medal}
       <div class="result-actions">
@@ -129,8 +154,11 @@ export function renderActivity(root, [methodId, levelId, problemId]) {
     return `<nav class="level-switch" aria-label="같은 명제로 다른 활동 단계 하기"><ul>${links}</ul></nav>`;
   }
 
-  function draw({ focusResult = false } = {}) {
+  function draw({ focusResult = false, celebrateNow = false } = {}) {
     cleanupActivity?.();
+    const finished = attempt.status !== 'in-progress';
+    const work = `${propositionBlock(problem)}
+      <section class="step-panel" data-activity aria-label="${escapeHtml(level.title)} 활동"></section>`;
     root.innerHTML = `<div class="page page--solve">
       <div class="lesson-top">
         ${breadcrumb(crumbs)}
@@ -144,8 +172,12 @@ export function renderActivity(root, [methodId, levelId, problemId]) {
         </details>
       </header>
       ${resultBanner()}
-      ${propositionBlock(problem)}
-      <section class="step-panel" data-activity aria-label="${escapeHtml(level.title)} 활동"></section>
+      ${finished
+        ? `<details class="review-fold"${attempt.status === 'passed' ? '' : ' open'}>
+            <summary>문제와 내 풀이 보기</summary>
+            <div class="review-fold__body">${work}</div>
+          </details>`
+        : work}
     </div>`;
     cleanupActivity = activity.mount(root.querySelector('[data-activity]'), ctx) ?? null;
     const current = root.querySelector('.level-switch .is-current');
@@ -154,6 +186,7 @@ export function renderActivity(root, [methodId, levelId, problemId]) {
       window.scrollTo(0, 0);
       root.querySelector('#result-heading')?.focus({ preventScroll: true });
     }
+    if (celebrateNow) celebrate();
   }
 
   const onShellClick = (event) => {
@@ -168,6 +201,7 @@ export function renderActivity(root, [methodId, levelId, problemId]) {
   draw();
   root.addEventListener('click', onShellClick);
   return () => {
+    confetti?.remove();
     cleanupActivity?.();
     root.removeEventListener('click', onShellClick);
   };

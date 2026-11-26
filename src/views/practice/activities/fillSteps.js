@@ -6,6 +6,7 @@ import { buildStepCheckRequest } from '../../../services/aiRequests.js';
 import { requestStepCheck } from '../../../services/mockProofChecker.js';
 import { saveAttempt } from '../../../state/attemptStore.js';
 import { escapeHtml } from '../../../ui/dom.js';
+import { mathText } from '../../../ui/mathText.js';
 import { mockAiNote, proofText } from '../../../ui/components.js';
 import { bindFields, handleSymbolInsert, textArea, validateRequired } from '../../../ui/forms.js';
 import { aiFeedback, pickMiddleSteps, setBusy, triesNote } from './kit.js';
@@ -29,11 +30,11 @@ export default {
 
     function stepItem(step, index) {
       if (!data.missing.includes(index)) {
-        return `<li class="proof-steps__item"><span class="proof-steps__num" aria-hidden="true">${index + 1}</span><p class="proof-steps__text">${escapeHtml(stepText(step))}</p></li>`;
+        return `<li class="proof-steps__item"><span class="proof-steps__num" aria-hidden="true">${index + 1}</span><p class="proof-steps__text">${mathText(stepText(step))}</p></li>`;
       }
       const body = done
         ? `${proofText(data.answers[index], { emptyText: '쓰지 않았습니다.' })}
-           <p class="model-step"><span class="model-step__label">예시 단계</span> ${escapeHtml(stepText(step))}</p>`
+           <p class="model-step"><span class="model-step__label">예시 단계</span> ${mathText(stepText(step))}</p>`
         : textArea({
             id: `missing-${index}`,
             field: `data.answers.${index}`,
