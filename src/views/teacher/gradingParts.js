@@ -65,7 +65,7 @@ export function pendingChecks(target, score) {
 }
 
 /** 하나를 고르는 선택 줄 (fieldset + .check 라디오) */
-export function radioLines({ name, legend, options, value, help = '', required = false }) {
+export function radioLines({ name, legend, options, value, help = '', required = false, aiSlot = false }) {
   const lines = options.map((o) => `<label class="check">
       <input type="radio" name="${escapeHtml(name)}" value="${escapeHtml(o.id)}"${String(value ?? '') === String(o.id) ? ' checked' : ''}>
       <span>${o.html ?? escapeHtml(o.label)}</span>
@@ -73,6 +73,7 @@ export function radioLines({ name, legend, options, value, help = '', required =
   return `<fieldset class="choice-group grade-field" id="g-${escapeHtml(name)}">
     <legend>${escapeHtml(legend)}${required ? ' <span class="field__req">(필수)</span>' : ''}</legend>
     ${help ? `<p class="field__help">${escapeHtml(help)}</p>` : ''}
+    ${aiSlot ? `<div class="ai-suggest" data-ai-for="${escapeHtml(name)}" hidden></div>` : ''}
     ${lines}
     <p class="field__error" data-error-for="${escapeHtml(name)}" hidden></p>
   </fieldset>`;

@@ -4,17 +4,21 @@
 // 블라인드 채점에서는 학생 이름과 단계를 가린다. 단계가 드러나는 추가 확인
 // (2단계: 대화의 원래 AI 답과 비교해 옮겨 적기 확인, 4단계: 3단계에서 체크한 보완할 점의 보완 여부와 1단계 막힌 점 극복)은
 // 점수를 저장한 뒤에 연다.
+// AI 채점 도우미: "AI로 채점해 보기"를 누르면 AI가 루브릭 기준마다 점수와 근거를 제안한다(참고용, 점수는 채점자가 고른다).
+// AI 결과는 누른 채점자에게만 보이고, AI를 본 상태에서 저장했는지(aiSeen)와 AI를 보기 전 점수(criteriaBeforeAi)를 남긴다.
 
 import { methodOptionLabel } from '../../data/research.js';
 import {
   ACTUAL_METHOD_OPTIONS, COMPLETENESS_OPTIONS, REVISION_OPTIONS, RUBRIC_TOTAL, STUCK_OVERCOME_OPTIONS, TRANSCRIPT_OPTIONS,
 } from '../../data/rubric.js';
+import { buildGradeAssistRequest } from '../../services/aiRequests.js';
+import { requestGradeAssist } from '../../services/mockGradeAssist.js';
 import { PROOF_HELP_MIN } from '../../services/proofHelp.js';
-import { activeRubric, currentRater, saveScore, scoreOf, updateScore } from '../../state/gradingStore.js';
+import { activeRubric, aiGradeOf, currentRater, getGrading, saveAiGrade, saveScore, scoreOf, updateScore } from '../../state/gradingStore.js';
 import { inkStats } from '../../state/inkModel.js';
 import { itemAt } from '../../state/researchRoster.js';
 import { escapeHtml } from '../../ui/dom.js';
-import { breadcrumb, chatMessages, notice, renderNotFound } from '../../ui/components.js';
+import { breadcrumb, chatMessages, mockAiNote, notice, renderNotFound } from '../../ui/components.js';
 import { inkViewHtml, mountInkViews } from '../../ui/inkCanvas.js';
 import { statementHtml } from '../../ui/mathText.js';
 import { checkedRevisions, gradingQueue, groupPosition, hasExtras, pendingChecks, radioLines, revisionLabel } from './gradingParts.js';
@@ -32,6 +36,16 @@ export function renderGrade(root, [key]) {
   }
   const rubric = activeRubric();
   let disposeInk = () => {};
+  let aiPending = false;
+  let aiError = '';
+
+  /** AI가 채점할 글: 키보드로 쓴 글 + (필기면) AI가 읽은 글 */
+  const aiInput = () => {
+    const parts = [];
+    if (String(target.text).trim()) parts.push(['text', target.text]);
+    if (inkStats(target.ink).strokes && target.reading?.text) parts.push(['inkReading', target.reading.text]);
+    return { text: parts.map(([, t]) => t).join('\n'), source: parts.map(([s]) => s).join('+') };
+  };
 
   const nextKey = () => {
     const after = [...targets.slice(index + 1), ...targets.slice(0, index)];
@@ -72,6 +86,7 @@ export function renderGrade(root, [key]) {
       help: c.desc,
       required: true,
       value: score?.criteria?.[c.id],
+      aiSlot: true,
       options: Object.keys(c.levels).map(Number).sort((a, b) => b - a).map((n) => ({ id: n, html: `<strong class="num">${n}점</strong> ${escapeHtml(c.levels[n])}` })),
     })).join('');
     const total = score ? totalOf(score) : null;
@@ -81,8 +96,8 @@ export function renderGrade(root, [key]) {
         <p class="grade-total" data-grade-total aria-live="polite">합계 <strong class="num">${total ?? '–'}</strong> / ${RUBRIC_TOTAL}</p>
       </div>
       ${criteria}
-      ${radioLines({ name: 'completeness', legend: '완성도 (점수에 넣지 않음)', required: true, value: score?.completeness, options: COMPLETENESS_OPTIONS })}
-      ${radioLines({ name: 'actualMethod', legend: '실제로 쓴 증명법', help: '증명법 일치(3번 기준)를 판단한 근거로 남깁니다.', required: true, value: score?.actualMethod, options: ACTUAL_METHOD_OPTIONS })}
+      ${radioLines({ name: 'completeness', legend: '완성도 (점수에 넣지 않음)', required: true, value: score?.completeness, options: COMPLETENESS_OPTIONS, aiSlot: true })}
+      ${radioLines({ name: 'actualMethod', legend: '실제로 쓴 증명법', help: '증명법 일치(3번 기준)를 판단한 근거로 남깁니다.', required: true, value: score?.actualMethod, options: ACTUAL_METHOD_OPTIONS, aiSlot: true })}
       <div class="field">
         <label class="field__label" for="grade-note">채점 메모 <span class="field__req">(선택)</span></label>
         <textarea id="grade-note" class="field__input" name="note" rows="3">${escapeHtml(score?.note ?? '')}</textarea>
@@ -154,6 +169,7 @@ export function renderGrade(root, [key]) {
         <div class="split__main grade-read" data-grade-read>${proofBlock()}${extrasRead(score)}</div>
         <div class="split__side">
           ${score ? notice('success', '채점함', `합계 ${totalOf(score)}점을 저장했습니다. 고친 뒤 다시 저장하면 바뀝니다.${pendingChecks(target, score).length ? ` 남은 추가 확인: ${pendingChecks(target, score).join(', ')}` : ''}`) : ''}
+          <section class="ai-assist" data-ai-panel aria-labelledby="ai-assist-heading"></section>
           ${rubricForm(score)}${extrasBlock(score)}
         </div>
       </div>
@@ -165,7 +181,73 @@ export function renderGrade(root, [key]) {
       </div>
     </div>`;
     disposeInk = mountInkViews(root, () => target.ink);
+    renderAi();
     if (focus) root.querySelector(focus)?.focus();
+  }
+
+  // ── AI 채점 도우미 ─────────────────────
+  const optionLabel = (options, id) => options.find((o) => o.id === id)?.label ?? id;
+
+  /** AI 패널과 기준별 제안(점수·근거, AI가 고른 줄 표시)을 그린다. 채점자가 고른 점수는 건드리지 않는다. */
+  function renderAi() {
+    const panel = root.querySelector('[data-ai-panel]');
+    if (!panel) return;
+    const ai = aiGradeOf(rater.id, target.key);
+    const input = aiInput();
+    const canGrade = input.text.trim().length > 0;
+    const stale = ai && ai.rubricEditedAt !== getGrading().rubricEditedAt;
+    panel.innerHTML = `<div class="section-head">
+        <h2 id="ai-assist-heading" class="section-title">AI 채점 도우미</h2>
+        <button type="button" class="button button--secondary button--small" data-action="ai-grade"${aiPending || !canGrade ? ' disabled' : ''}>${aiPending ? 'AI가 채점하는 중…' : ai ? 'AI로 다시 채점해 보기' : 'AI로 채점해 보기'}</button>
+      </div>
+      ${!canGrade ? `<p class="meta">${inkStats(target.ink).strokes ? '필기만 있고 AI가 읽은 글이 없어 AI가 채점할 수 없습니다.' : '쓴 내용이 없어 AI가 채점할 수 없습니다.'}</p>` : ''}
+      ${ai
+        ? `<p class="ai-assist__total">AI 제안 합계 <strong class="num">${ai.total}</strong> / ${RUBRIC_TOTAL}</p>
+           <p>${escapeHtml(ai.summary)}</p>
+           <p class="meta">기준마다 아래에 AI가 고른 점수와 근거가 보입니다. 참고용이며, 점수는 직접 골라 주세요.${ai.source.includes('inkReading') ? ' 필기는 AI가 읽은 글로 채점했으니 읽기 오류가 있을 수 있습니다.' : ''}</p>
+           ${stale ? '<p class="meta">AI로 채점한 뒤 루브릭을 고쳤습니다. 다시 채점해 보세요.</p>' : ''}`
+        : canGrade ? '<p class="meta">누르면 AI가 이 증명을 루브릭 기준마다 판단해 점수와 근거를 보여 줍니다. 참고용이며 점수는 직접 골라 주세요. AI를 본 뒤 저장한 점수는 따로 표시됩니다.</p>' : ''}
+      ${aiError ? `<p class="field__error" role="alert">${escapeHtml(aiError)}</p>` : ''}
+      ${mockAiNote('프로토타입: 실제 AI가 아니라 예시 규칙으로 판단합니다. 명제의 예시 증명 단계와 핵심 표현에 비추어 보므로, 예시와 아주 다른 방식의 올바른 증명은 낮게 판단할 수 있습니다.')}`;
+
+    const marks = ai ? {
+      ...Object.fromEntries(rubric.map((c) => [`c-${c.id}`, { value: ai.criteria[c.id], text: `AI ${ai.criteria[c.id]}점`, reason: ai.reasons[c.id] }])),
+      completeness: { value: ai.completeness, text: `AI: ${optionLabel(COMPLETENESS_OPTIONS, ai.completeness)}`, reason: '' },
+      actualMethod: { value: ai.actualMethod, text: `AI: ${optionLabel(ACTUAL_METHOD_OPTIONS, ai.actualMethod)}`, reason: '' },
+    } : {};
+    root.querySelectorAll('[data-ai-for]').forEach((slot) => {
+      const name = slot.dataset.aiFor;
+      const mark = marks[name];
+      const group = root.querySelector(`#g-${name}`);
+      group?.querySelectorAll('.tag--ai').forEach((tag) => tag.remove());
+      slot.hidden = !mark;
+      slot.innerHTML = mark ? `<span class="tag tag--ai">${escapeHtml(mark.text)}</span>${mark.reason ? `<span>${escapeHtml(mark.reason)}</span>` : ''}` : '';
+      if (mark) {
+        const label = group?.querySelector(`input[value="${mark.value}"]`)?.closest('label')?.querySelector('span');
+        label?.insertAdjacentHTML('beforeend', ' <span class="tag tag--ai" aria-label="AI가 고른 점수">AI</span>');
+      }
+    });
+  }
+
+  async function runAi() {
+    const input = aiInput();
+    if (!input.text.trim() || aiPending) return;
+    aiPending = true;
+    aiError = '';
+    renderAi();
+    const { item, stageDef } = target;
+    const request = buildGradeAssistRequest({ problem: target.problem, proofText: input.text, chosenMethod: item[stageDef.methodField], rubric, source: input.source });
+    try {
+      const result = await requestGradeAssist(request);
+      const total = Object.values(result.criteria).reduce((s, v) => s + v, 0);
+      saveAiGrade(rater.id, target.key, {
+        ...result, total, source: input.source, requestId: request.requestId, model: request.model, promptVersion: request.promptVersion, at: new Date().toISOString(),
+      });
+    } catch {
+      aiError = 'AI 채점을 받지 못했습니다. 잠시 뒤 다시 눌러 주세요.';
+    }
+    aiPending = false;
+    if (root.isConnected) renderAi();
   }
 
   function totalOf(score) {
@@ -221,7 +303,10 @@ export function renderGrade(root, [key]) {
     }
     const before = scoreOf(rater.id, target.key);
     const extras = hasExtras(target) && (!blind || before) ? readExtras() : {};
-    const ok = saveScore(rater.id, target.key, { ...(before ?? {}), ...form, ...extras });
+    // AI 제안을 본 상태에서 저장하면 표시하고, AI를 보기 전에 저장했던 점수는 따로 남긴다.
+    const ai = aiGradeOf(rater.id, target.key);
+    const aiFields = ai ? { aiSeen: true, ...(before && !before.aiSeen ? { criteriaBeforeAi: before.criteria } : {}) } : { aiSeen: before?.aiSeen ?? false };
+    const ok = saveScore(rater.id, target.key, { ...(before ?? {}), ...form, ...extras, ...aiFields });
     if (!ok) {
       root.querySelector('[data-grade-status]').textContent = '이 브라우저에 저장하지 못했습니다.';
       return;
@@ -252,6 +337,10 @@ export function renderGrade(root, [key]) {
     root.querySelector('[data-grade-status]').textContent = '추가 확인을 저장했습니다.';
   };
   const onClick = (event) => {
+    if (event.target.closest('[data-action="ai-grade"]')) {
+      runAi();
+      return;
+    }
     if (event.target.closest('[data-action="save"]')) save();
   };
 

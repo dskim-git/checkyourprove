@@ -1012,6 +1012,14 @@ a.prop-tabs__item:active { translate: 0 2px; }
 .check.is-unavailable input { cursor: not-allowed; opacity: 0.5; }
 .grade-extras--read { padding-top: 0; border-top: 0; }
 .grade-sub { display: grid; gap: var(--space-xs); }
+.ai-assist { display: grid; gap: var(--space-xs); padding: var(--space-md); border-radius: var(--radius-card); background: var(--grain), var(--color-sugar-soft); }
+.ai-assist .section-head { align-items: center; }
+.ai-assist__total { font-size: var(--text-lg); }
+.ai-assist__total strong { font-size: var(--text-xl); }
+.ai-assist .proto-note { background: var(--color-card); }
+.tag--ai { background: var(--color-sugar-soft); color: var(--color-accent-2); }
+.ai-suggest { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2xs) var(--space-xs); padding: var(--space-xs) var(--space-sm); border-radius: var(--radius-input); background: var(--color-sugar-soft); color: var(--color-ink-2); font-size: var(--text-sm); }
+.ai-suggest .tag--ai { background: var(--color-card); }
 .grade-sub__title { font-size: var(--text-md); }
 .grade-reading { padding: var(--space-sm); border-radius: var(--radius-card); background: var(--color-sugar-soft); }
 .grade-reading .proof-text { background: var(--color-card); }

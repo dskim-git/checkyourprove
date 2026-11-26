@@ -6,6 +6,11 @@
 //   score = { criteria: { [기준 id]: 점수 }, completeness, actualMethod, note,
 //             transcript('ok'|'error', 2단계), revisions: { [체크리스트 id]: 'fixed'|'not' }(4단계), stuckOvercome(4단계),
 //             gradedAt, rubricEditedAt, blind }
+//   aiGrades: { [채점자 id]: { [채점 대상 key]: AI 채점 도우미 결과 } } — 채점자가 직접 눌러야 생기고 그 채점자에게만 보인다
+//     (다른 채점자의 AI 결과를 보면 독립 채점이 깨지므로) = { criteria, reasons, completeness, actualMethod, summary, total,
+//     source, requestId, model, promptVersion, at, rubricEditedAt }
+//   score.aiSeen: AI 제안을 본 상태에서 점수를 저장했는가, score.criteriaBeforeAi: AI를 보기 전에 저장했던 기준별 점수
+//     (AI가 채점자의 판단을 바꾸었는지 분석할 때 쓴다)
 //   채점 대상 key = '학생 id~단계~명제 id' (state/researchRoster.js)
 // 채점자는 서로의 점수를 채점 화면에서 보지 않는다. 두 채점자가 모두 채점한 증명으로 일치도를 계산한다(services/agreement.js).
 // TODO: 로그인 연결 뒤 채점자를 교사 계정으로 바꾸고, 채점 기록은 교사만 읽고 쓰도록 서버 규칙으로 막는다.
@@ -25,6 +30,7 @@ const DEFAULTS = () => ({
   rubricEditedAt: null,
   seeds: {},
   scores: { r1: {}, r2: {} },
+  aiGrades: {},
 });
 
 let cache = null;
@@ -99,6 +105,18 @@ export function updateScore(raterId, key, patch) {
   const current = scoreOf(raterId, key);
   if (!current) return false;
   Object.assign(current, patch);
+  return saveGrading();
+}
+
+// ── AI 채점 도우미 결과 ──
+
+export const aiGradeOf = (raterId, key) => getGrading().aiGrades?.[raterId]?.[key] ?? null;
+
+export function saveAiGrade(raterId, key, result) {
+  const g = getGrading();
+  g.aiGrades ??= {};
+  g.aiGrades[raterId] ??= {};
+  g.aiGrades[raterId][key] = { ...result, rubricEditedAt: g.rubricEditedAt };
   return saveGrading();
 }
 

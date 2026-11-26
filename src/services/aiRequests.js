@@ -9,6 +9,7 @@ export const PROMPT_VERSIONS = {
   coach: 'coach-proto-0',
   grade: 'grade-proto-0',
   research: 'research-proto-1',
+  gradeAssist: 'grade-assist-proto-0',
 };
 
 // TODO: 사용할 모델이 정해지면 서버에서 실제 모델 식별자를 기록한다.
@@ -76,4 +77,41 @@ export function buildResearchRequest({ problem, messages }) {
     guardrail: 'research-guard-1',
     input: { ...propositionOf(problem), messages: toTranscript(messages) },
   };
+}
+
+// ── 교사 화면: AI 채점 도우미 ───────────────────────
+
+/**
+ * 교사가 채점할 때 참고하는 AI 채점 요청. 학생 화면의 AI(연구 모드 2단계)와는 별개이며 교사만 부른다.
+ * 입력: 명제, 채점할 증명 글(필기는 AI가 읽은 글), 학생이 고른 증명법, 지금 루브릭(기준 이름·점수 설명).
+ * 학생 이름·단계는 넣지 않는다(블라인드 채점과 같은 조건). 예시 증명은 서버가 명제 식별자로 찾아 쓴다.
+ * TODO(서버 연결 시): 교사 권한을 확인한 뒤에만 받는다.
+ */
+export function buildGradeAssistRequest({ problem, proofText, chosenMethod, rubric, source }) {
+  return {
+    ...baseRequest('gas', 'grade-assist', PROMPT_VERSIONS.gradeAssist),
+    mode: 'teacher',
+    input: {
+      propositionId: problem.id,
+      statement: problem.statement,
+      proofText,
+      proofSource: source,
+      chosenMethod,
+      rubric: rubric.map((c) => ({ id: c.id, title: c.title, desc: c.desc, max: c.max, levels: c.levels })),
+    },
+  };
+}
+
+/** 실제 AI용 시스템 지침 (서버에서 조립한다. 지금은 더미 규칙이 대신 판단한다) */
+export function gradeAssistSystemPrompt(rubric) {
+  const lines = rubric.map((c) => `- ${c.id} "${c.title}" (0~${c.max}점): ${c.desc}\n${Object.entries(c.levels).sort((a, b) => b[0] - a[0]).map(([n, t]) => `    ${n}점: ${t}`).join('\n')}`);
+  return [
+    '너는 고등학교 수학 증명을 채점하는 교사를 돕는 보조 채점자다. 점수는 참고용이며 최종 판단은 교사가 한다.',
+    '학생의 증명을 아래 루브릭의 기준마다 따로 판단해 가장 알맞은 점수 하나와 근거를 쓴다.',
+    '근거는 학생 글의 어느 부분 때문에 그 점수인지 짧게 인용해 1~2문장으로 쓴다. 학생 글에 없는 내용을 지어내지 않는다.',
+    '문자 이름이나 표현이 예시와 달라도 논리가 맞으면 인정한다. 필기를 AI가 읽은 글이면 읽기 오류가 있을 수 있음을 고려한다.',
+    '루브릭:',
+    ...lines,
+    '출력은 JSON 하나: {"criteria": {"<기준 id>": {"score": 정수, "reason": "근거"}}, "completeness": "complete|partial|none", "actualMethod": "direct|contrapositive|contradiction|cases|other|unclear", "summary": "한 문장"}',
+  ].join('\n');
 }
