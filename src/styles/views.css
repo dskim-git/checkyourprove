@@ -1005,6 +1005,20 @@ a.prop-tabs__item:active { translate: 0 2px; }
 .rubric-edit { padding-top: var(--space-md); border-top: var(--rule-hair) solid var(--color-rule); gap: var(--space-sm); }
 .rubric-level { grid-template-columns: 3.5rem minmax(0, 1fr); align-items: center; }
 .grade-table tbody th { white-space: nowrap; }
+.grade-extras--read { padding-top: 0; border-top: 0; }
+
+/* 넓은 화면: 왼쪽(증명)은 고정하고 오른쪽(채점)만 내려간다. 왼쪽이 화면보다 길면 왼쪽 안에서 스크롤한다. */
+@media (min-width: 56rem) {
+  body[data-view='wide'] .grade-read {
+    position: sticky;
+    top: calc(var(--appbar-h) + var(--space-sm));
+    max-height: calc(100vh - var(--appbar-h) - 7.5rem);
+    max-height: calc(100dvh - var(--appbar-h) - 7.5rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-inline-end: var(--space-xs);
+  }
+}
 .grade-filter { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2xs) var(--space-md); }
 .grade-filter legend { float: left; margin-inline-end: var(--space-xs); }
 .grade-filter .check { min-height: 40px; }

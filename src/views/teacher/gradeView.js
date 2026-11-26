@@ -1,5 +1,6 @@
 // 교사 화면: 증명 하나 채점하기
-// 왼쪽(넓은 화면) 채점할 증명(글·필기와 작성 과정 다시 보기), 오른쪽 루브릭 점수.
+// 왼쪽(넓은 화면) 읽을 것: 채점할 증명(글·필기와 작성 과정 다시 보기), 2단계면 대화창의 원래 AI 답 — 화면에 고정
+// 오른쪽 고를 것: 루브릭 점수, 단계별 추가 확인 — 이쪽만 내려간다.
 // 블라인드 채점에서는 학생 이름과 단계를 가린다. 단계가 드러나는 추가 확인
 // (2단계: 대화의 원래 AI 답과 비교해 옮겨 적기 확인, 4단계: 3단계에서 체크한 보완할 점의 보완 여부와 1단계 막힌 점 극복)은
 // 점수를 저장한 뒤에 연다.
@@ -79,6 +80,22 @@ export function renderGrade(root, [key]) {
     </form>`;
   }
 
+  /** 왼쪽(읽을 것): 2단계면 대화창의 원래 AI 답. 블라인드에서는 점수 저장 뒤에 보여 준다(단계가 드러남). */
+  function extrasRead(score) {
+    if (target.stage !== 2 || (blind && !score)) return '';
+    const help = target.item.chat?.messages.filter((m) => m.role === 'ai' && (m.coverage ?? 0) >= PROOF_HELP_MIN) ?? [];
+    const byPen = target.item.transcriptCheck === 'teacher';
+    return `<section class="grade-extras grade-extras--read" aria-labelledby="ai-answer-heading">
+      <h2 id="ai-answer-heading" class="section-title">대화창의 원래 AI 답</h2>
+      ${byPen ? notice('eye', '필기로 옮겨 적은 증명입니다', '글자 비교를 할 수 없어 학생 화면에서는 필기 양만 확인했습니다. 아래 대화의 AI 답과 비교해 확인해 주세요.') : `<p class="meta">학생 화면의 글자 비교 일치도: ${target.item.transcriptMatch == null ? '–' : `${Math.round(target.item.transcriptMatch * 100)}%`}</p>`}
+      <div class="chat-ref">
+        <p class="chat-ref__head">증명 도움으로 인정된 답 ${help.length}개</p>
+        <ol class="chat__log chat__log--ref">${chatMessages(help)}</ol>
+      </div>
+    </section>`;
+  }
+
+  /** 오른쪽(고를 것): 단계별 추가 확인 */
   function extrasBlock(score) {
     if (!hasExtras(target)) return '';
     if (blind && !score) {
@@ -88,16 +105,9 @@ export function renderGrade(root, [key]) {
       </section>`;
     }
     if (target.stage === 2) {
-      const help = target.item.chat?.messages.filter((m) => m.role === 'ai' && (m.coverage ?? 0) >= PROOF_HELP_MIN) ?? [];
-      const byPen = target.item.transcriptCheck === 'teacher';
       return `<section class="grade-extras" aria-labelledby="extras-heading">
         <h2 id="extras-heading" class="section-title">옮겨 적기 확인 (2단계)</h2>
-        ${byPen ? notice('eye', '필기로 옮겨 적은 증명입니다', '글자 비교를 할 수 없어 학생 화면에서는 필기 양만 확인했습니다. 아래 대화의 AI 답과 비교해 확인해 주세요.') : `<p class="meta">학생 화면의 글자 비교 일치도: ${target.item.transcriptMatch == null ? '–' : `${Math.round(target.item.transcriptMatch * 100)}%`}</p>`}
-        <div class="chat-ref">
-          <p class="chat-ref__head">대화창의 원래 AI 답 (증명 도움으로 인정된 답 ${help.length}개)</p>
-          <ol class="chat__log chat__log--ref">${chatMessages(help)}</ol>
-        </div>
-        ${radioLines({ name: 'transcript', legend: '옮겨 적은 증명이 원래 AI 답과 같은가요?', value: score?.transcript, options: TRANSCRIPT_OPTIONS })}
+        ${radioLines({ name: 'transcript', legend: '옮겨 적은 증명이 왼쪽의 원래 AI 답과 같은가요?', value: score?.transcript, options: TRANSCRIPT_OPTIONS })}
       </section>`;
     }
     const revisions = checkedRevisions(target);
@@ -130,10 +140,12 @@ export function renderGrade(root, [key]) {
         <p class="proposition__statement">${statementHtml(target.problem?.statement ?? '')}</p>
       </section>
       <div class="split grade-layout">
-        <div class="split__main">${proofBlock()}${extrasBlock(score)}</div>
-        <div class="split__side">${rubricForm(score)}</div>
+        <div class="split__main grade-read" data-grade-read>${proofBlock()}${extrasRead(score)}</div>
+        <div class="split__side">
+          ${score ? notice('success', '채점함', `합계 ${totalOf(score)}점을 저장했습니다. 고친 뒤 다시 저장하면 바뀝니다.${pendingChecks(target, score).length ? ` 남은 추가 확인: ${pendingChecks(target, score).join(', ')}` : ''}`) : ''}
+          ${rubricForm(score)}${extrasBlock(score)}
+        </div>
       </div>
-      ${score ? notice('success', '채점함', `합계 ${totalOf(score)}점을 저장했습니다. 고친 뒤 다시 저장하면 바뀝니다.${pendingChecks(target, score).length ? ` 남은 추가 확인: ${pendingChecks(target, score).join(', ')}` : ''}`) : ''}
       <div class="actions grade-actions">
         <p class="save-status" data-grade-status aria-live="polite"></p>
         ${prev ? `<a class="button button--ghost" href="#/teacher/grading/${prev.key}">이전 증명</a>` : ''}
