@@ -4,7 +4,7 @@
 //   w, h       논리 좌표계의 폭(항상 INK_WIDTH)과 현재 높이. 화면 폭이 달라도 같은 좌표로 저장한다.
 //   startedAt  필기를 처음 만든 시각(ISO). 획과 동작의 시각 t는 여기서부터 흐른 밀리초다.
 //   strokes    그린 획 전부(지운 획도 남긴다). { id, t, p, lw, d }
-//              p 입력 도구('pen' | 'touch' | 'mouse'), lw 선 굵기(논리 단위),
+//              p 입력 도구('pen' | 'touch' | 'mouse'), lw 선 굵기(논리 단위), c 1이면 기기가 획을 끊음(pointercancel),
 //              d 점 목록 [x0, y0, 0, dx, dy, dt, ...] (첫 점은 절댓값, 다음 점은 앞 점과의 차이, 정수)
 //   ops        그리기 외의 동작을 일어난 순서대로 { t, k, op, ... } (k: 그 동작 때까지 그린 획 수 = 획과 동작의 순서)
 //              erase(지우개로 지운 획 ids), undo(되돌리기로 없앤 획 ids), restore(되돌리기로 살린 획 ids),
@@ -104,8 +104,9 @@ export function inkEnough(ink) {
 }
 
 /** 새 획을 덧붙인다. points는 [{x, y, t}] (t는 획 시작부터 ms) */
-export function addStroke(ink, { t, p, lw, points }) {
+export function addStroke(ink, { t, p, lw, points, cancelled = false }) {
   const stroke = { id: ink.strokes.length, t: Math.round(t), p, lw: Math.round(lw * 10) / 10, d: encodePoints(points) };
+  if (cancelled) stroke.c = 1;
   ink.strokes.push(stroke);
   return stroke;
 }

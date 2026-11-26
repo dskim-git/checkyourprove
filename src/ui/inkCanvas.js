@@ -35,16 +35,32 @@ export function fitCanvas(canvas, cssWidth, logicalHeight) {
   return { ctx, scale };
 }
 
-function strokeLine(ctx, pts, lw, color) {
-  if (!pts.length) return;
+const mid = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+
+function setPen(ctx, lw, color) {
   ctx.strokeStyle = color;
   ctx.lineWidth = lw;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
+}
+
+/** 점들을 부드러운 곡선으로 잇는다(이웃한 두 점의 가운데를 지나는 2차 곡선). */
+function strokeLine(ctx, pts, lw, color) {
+  if (!pts.length) return;
+  setPen(ctx, lw, color);
   ctx.beginPath();
   ctx.moveTo(pts[0].x, pts[0].y);
   if (pts.length === 1) ctx.lineTo(pts[0].x + 0.1, pts[0].y);
-  for (let i = 1; i < pts.length; i += 1) ctx.lineTo(pts[i].x, pts[i].y);
+  else if (pts.length === 2) ctx.lineTo(pts[1].x, pts[1].y);
+  else {
+    const first = mid(pts[0], pts[1]);
+    ctx.lineTo(first.x, first.y);
+    for (let i = 1; i < pts.length - 1; i += 1) {
+      const end = mid(pts[i], pts[i + 1]);
+      ctx.quadraticCurveTo(pts[i].x, pts[i].y, end.x, end.y);
+    }
+    ctx.lineTo(pts.at(-1).x, pts.at(-1).y);
+  }
   ctx.stroke();
 }
 
@@ -65,9 +81,26 @@ export function renderInk(ctx, ink, { color, until = Infinity, hide = null, clea
   });
 }
 
-/** 그리는 중인 획의 마지막 구간만 덧그린다. */
-export function drawSegment(ctx, a, b, lw, color) {
-  if (ctx) strokeLine(ctx, a ? [a, b] : [b], lw, color);
+/** 그리는 중인 획의 새 구간만 덧그린다(strokeLine과 같은 곡선). 끝 구간은 획을 마친 뒤 다시 그릴 때 채워진다. */
+export function drawLive(ctx, pts, lw, color) {
+  if (!ctx || !pts.length) return;
+  const n = pts.length;
+  setPen(ctx, lw, color);
+  ctx.beginPath();
+  if (n === 1) {
+    ctx.moveTo(pts[0].x, pts[0].y);
+    ctx.lineTo(pts[0].x + 0.1, pts[0].y);
+  } else if (n === 2) {
+    const m = mid(pts[0], pts[1]);
+    ctx.moveTo(pts[0].x, pts[0].y);
+    ctx.lineTo(m.x, m.y);
+  } else {
+    const from = mid(pts[n - 3], pts[n - 2]);
+    const to = mid(pts[n - 2], pts[n - 1]);
+    ctx.moveTo(from.x, from.y);
+    ctx.quadraticCurveTo(pts[n - 2].x, pts[n - 2].y, to.x, to.y);
+  }
+  ctx.stroke();
 }
 
 /** 필기 이미지(PNG data URL)를 만든다. 저장하지 않고 필요할 때만 만든다. */

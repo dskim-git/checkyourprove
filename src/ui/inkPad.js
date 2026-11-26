@@ -1,6 +1,8 @@
 // 펜 필기 입력 칸 (그림판): 펜, 획 지우개, 되돌리기, 칸 늘리기
-// 손바닥 오입력을 막기 위해 기본으로 펜(애플펜슬 등)과 마우스만 그린다. 손가락으로 밀면 화면이 움직인다.
+// 손바닥 오입력을 막기 위해 기본으로 펜(애플펜슬 등)과 마우스만 그린다. 펜을 쓰기 전에는 손가락으로 밀면 화면이 움직이고,
+// 펜을 한 번 쓰면 그때부터 필기 칸 위의 손가락·손바닥 터치는 모두 무시한다(화면은 칸 밖을 밀어 움직인다).
 // 펜이 없는 기기는 "손가락으로도 쓰기"를 켜면 손가락으로 그릴 수 있다(켠 기록이 남는다).
+// iPad Safari: 터치 이벤트를 막지 않으면 Scribble(손글씨 인식)·확대경 같은 시스템 동작이 펜 획을 가로채므로 칸 위의 터치 기본 동작을 막는다.
 
 import {
   addStroke, canUndo, eraseStrokes, growInk, INK_MAX_HEIGHT, INK_START_HEIGHT, inkClock, inkStats,
@@ -8,12 +10,16 @@ import {
 } from '../state/inkModel.js';
 import { escapeHtml } from './dom.js';
 import { icons } from './icons.js';
-import { drawSegment, fitCanvas, inkColor, renderInk } from './inkCanvas.js';
+import { drawLive, fitCanvas, inkColor, renderInk } from './inkCanvas.js';
 
 const LINE_PX = 2.6; // 화면에서 보이는 선 굵기(px)
 const ERASER_PX = 12; // 지우개 반지름(px)
 const MIN_STEP_PX = 0.8; // 이보다 가까운 점은 저장하지 않는다
-const PALM_MS = 700; // 펜을 뗀 뒤 이 시간 안의 손가락 입력은 손바닥으로 보고 무시한다
+const PALM_MS = 1500; // 펜을 뗀 뒤 이 시간 안의 손가락 입력은 손바닥으로 보고 무시한다
+const PEN_HINT = '펜으로 쓰는 동안 손바닥이 닿아도 괜찮아요. 화면을 움직이려면 필기 칸 밖을 미세요.';
+
+// 이 화면에서 펜 입력을 본 적이 있는가 (있으면 필기 칸 위의 손가락 터치를 손바닥으로 본다)
+let penSeen = false;
 
 const hasTouchScreen = () => (navigator.maxTouchPoints ?? 0) > 0;
 
@@ -58,7 +64,11 @@ export function mountInkPad(el, { getInk, ensureInk, onInput, onChange }) {
   const fingerBox = el.querySelector('[data-ink-finger]');
   const undoBtn = el.querySelector('[data-ink-action="undo"]');
   const growBtn = el.querySelector('[data-ink-action="grow"]');
-  const baseHint = hintEl.textContent;
+  let baseHint = hintEl.textContent;
+  if (penSeen) {
+    baseHint = PEN_HINT;
+    hintEl.textContent = PEN_HINT;
+  }
 
   let ctx = null;
   let scale = 1;
@@ -117,17 +127,28 @@ export function mountInkPad(el, { getInk, ensureInk, onInput, onChange }) {
     const type = event.pointerType || 'mouse';
     if (type === 'mouse' && event.button !== 0) return;
     if (type === 'touch' && !finger) {
-      // 손바닥(펜을 쓰는 중이거나 방금 뗀 직후)은 무시하고, 아니면 화면을 움직인다.
-      if (active || Date.now() - lastPenAt < PALM_MS) return;
+      // 손바닥(펜을 쓰는 중, 방금 뗀 직후, 펜을 써 본 기기)은 무시하고, 아니면 화면을 움직인다.
+      if (active || penSeen || Date.now() - lastPenAt < PALM_MS) return;
       scrolling = { id: event.pointerId, y: event.clientY, moved: 0 };
       capture(event);
       return;
     }
-    if (active) return;
+    if (active) {
+      // 펜으로 쓰는 중에 닿은 손가락·손바닥, 같은 획의 중복 신호는 무시한다.
+      if (active.id === event.pointerId || type === 'touch') return;
+      // 앞 획의 "뗌" 신호를 놓친 경우: 앞 획을 마무리하고 새 획을 받는다(이후 획이 모두 막히지 않게).
+      endActive(false);
+    }
     scrolling = null;
     event.preventDefault();
     capture(event);
-    if (type === 'pen') lastPenAt = Date.now();
+    if (type === 'pen') {
+      lastPenAt = Date.now();
+      if (!penSeen) {
+        penSeen = true;
+        baseHint = PEN_HINT;
+      }
+    }
     if (tool === 'eraser') {
       active = { id: event.pointerId, kind: 'erase', hits: new Set(), last: null };
       const point = toPoint(event, 0);
@@ -139,7 +160,7 @@ export function mountInkPad(el, { getInk, ensureInk, onInput, onChange }) {
     active = { id: event.pointerId, kind: 'draw', t0: inkClock(ink), stamp: event.timeStamp, points: [], lw: LINE_PX / scale, pointerType: type };
     const point = toPoint(event, active.stamp);
     active.points.push(point);
-    drawSegment(ctx, null, point, active.lw, color());
+    drawLive(ctx, active.points, active.lw, color());
     if (hintEl.textContent !== baseHint) setHint(baseHint);
   };
 
@@ -171,7 +192,7 @@ export function mountInkPad(el, { getInk, ensureInk, onInput, onChange }) {
       const prev = active.points.at(-1);
       if (Math.hypot(point.x - prev.x, point.y - prev.y) * scale < MIN_STEP_PX) return;
       active.points.push(point);
-      drawSegment(ctx, prev, point, active.lw, color());
+      drawLive(ctx, active.points, active.lw, color());
     });
   };
 
@@ -184,6 +205,16 @@ export function mountInkPad(el, { getInk, ensureInk, onInput, onChange }) {
       return;
     }
     if (!active || event.pointerId !== active.id) return;
+    // 마지막 위치가 아직 반영되지 않았으면 더한다(빠르게 긋고 뗀 획의 끝이 잘리지 않게)
+    if (active.kind === 'draw' && event.type === 'pointerup') {
+      const point = toPoint(event, active.stamp);
+      const prev = active.points.at(-1);
+      if (Math.hypot(point.x - prev.x, point.y - prev.y) * scale >= MIN_STEP_PX) active.points.push(point);
+    }
+    endActive(event.type === 'pointercancel');
+  };
+
+  function endActive(cancelled) {
     const done = active;
     active = null;
     if (done.pointerType === 'pen') lastPenAt = Date.now();
@@ -194,12 +225,21 @@ export function mountInkPad(el, { getInk, ensureInk, onInput, onChange }) {
         onChange();
       }
     } else {
-      addStroke(getInk(), { t: done.t0, p: done.pointerType, lw: done.lw, points: done.points });
+      addStroke(getInk(), { t: done.t0, p: done.pointerType, lw: done.lw, points: done.points, cancelled });
       onInput('ink');
       onChange();
     }
     paint();
     refreshUi();
+  }
+
+  // 놓친 "뗌" 신호를 대신해 포인터 잡기가 풀리면 획을 마무리한다.
+  const onLostCapture = (event) => {
+    if (active && event.pointerId === active.id) endActive(false);
+  };
+  // 필기 칸 위의 터치 기본 동작(시스템 손글씨 인식, 확대경, 두 번 눌러 확대)을 막는다. 포인터 이벤트는 그대로 온다.
+  const blockTouch = (event) => {
+    if (event.cancelable) event.preventDefault();
   };
 
   const onClick = (event) => {
@@ -245,6 +285,8 @@ export function mountInkPad(el, { getInk, ensureInk, onInput, onChange }) {
   canvas.addEventListener('pointerup', finish);
   canvas.addEventListener('pointercancel', finish);
   canvas.addEventListener('contextmenu', noMenu);
+  canvas.addEventListener('lostpointercapture', onLostCapture);
+  ['touchstart', 'touchmove', 'touchend'].forEach((type) => canvas.addEventListener(type, blockTouch, { passive: false }));
   el.addEventListener('click', onClick);
   fingerBox?.addEventListener('change', onFinger);
   const observer = window.ResizeObserver ? new window.ResizeObserver(() => layout()) : null;
@@ -260,6 +302,8 @@ export function mountInkPad(el, { getInk, ensureInk, onInput, onChange }) {
       canvas.removeEventListener('pointerup', finish);
       canvas.removeEventListener('pointercancel', finish);
       canvas.removeEventListener('contextmenu', noMenu);
+      canvas.removeEventListener('lostpointercapture', onLostCapture);
+      ['touchstart', 'touchmove', 'touchend'].forEach((type) => canvas.removeEventListener(type, blockTouch));
       el.removeEventListener('click', onClick);
       fingerBox?.removeEventListener('change', onFinger);
     },
