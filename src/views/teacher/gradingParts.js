@@ -15,6 +15,8 @@ const propositionRank = (problemId) => {
 /**
  * 지금 설정(예시 학생 포함, 블라인드, 채점 순서)에 따른 채점 대상과 채점 순서
  * 채점 순서 'proposition'은 같은 명제끼리 모은다(일관된 채점). 묶음 안의 순서는 블라인드면 무작위, 아니면 학생 순이다.
+ * 'propositionStage'는 명제 안에서 다시 단계(1 → 2 → 4)끼리 모은다. 순서만으로 단계가 드러나므로 블라인드가 아닐 때만 쓰고,
+ * 블라인드에서는 'proposition'으로 채점한다.
  */
 export function gradingQueue(raterId) {
   const g = getGrading();
@@ -22,19 +24,23 @@ export function gradingQueue(raterId) {
   const targets = gradingTargets(students);
   const byKey = new Map(targets.map((t) => [t.key, t]));
   let ordered = (g.blind ? blindOrder(raterId, targets.map((t) => t.key)) : targets.map((t) => t.key)).map((key) => byKey.get(key));
-  const byProposition = g.sortBy === 'proposition';
+  const byStage = g.sortBy === 'propositionStage' && !g.blind;
+  const byProposition = g.sortBy === 'proposition' || g.sortBy === 'propositionStage';
   if (byProposition) {
     ordered = ordered
       .map((t, i) => ({ t, i }))
-      .sort((a, b) => propositionRank(a.t.problemId) - propositionRank(b.t.problemId) || a.t.problemId.localeCompare(b.t.problemId) || a.i - b.i)
+      .sort((a, b) => propositionRank(a.t.problemId) - propositionRank(b.t.problemId)
+        || a.t.problemId.localeCompare(b.t.problemId)
+        || (byStage ? a.t.stage - b.t.stage : 0)
+        || a.i - b.i)
       .map(({ t }) => t);
   }
-  return { students, targets: ordered, blind: g.blind, byProposition };
+  return { students, targets: ordered, blind: g.blind, byProposition, byStage };
 }
 
-/** 같은 명제 묶음 안에서의 위치 { n, total } */
-export function groupPosition(targets, target) {
-  const group = targets.filter((t) => t.problemId === target.problemId);
+/** 같은 묶음(명제, 단계별로 모으면 명제·단계) 안에서의 위치 { n, total } */
+export function groupPosition(targets, target, byStage = false) {
+  const group = targets.filter((t) => t.problemId === target.problemId && (!byStage || t.stage === target.stage));
   return { n: group.indexOf(target) + 1, total: group.length };
 }
 

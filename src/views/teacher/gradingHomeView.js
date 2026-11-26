@@ -26,7 +26,7 @@ export function renderGradingHome(root) {
   const draw = () => {
     const g = getGrading();
     const rater = currentRater();
-    const { targets, blind, byProposition } = gradingQueue(rater.id);
+    const { targets, blind, byProposition, byStage } = gradingQueue(rater.id);
     const graded = targets.filter((t) => scoreOf(rater.id, t.key)).length;
     const next = targets.find((t) => !scoreOf(rater.id, t.key)) ?? targets.find((t) => pendingChecks(t, scoreOf(rater.id, t.key)).length);
 
@@ -74,8 +74,12 @@ export function renderGradingHome(root) {
               <span>${g.blind ? '섞어서' : '학생 순'} <span class="meta">${g.blind ? '모든 증명을 채점자마다 정해진 무작위 순서로 채점합니다.' : '학생마다 명제·단계 순서로 채점합니다.'}</span></span>
             </label>
             <label class="check">
-              <input type="radio" name="sortBy" value="proposition"${g.sortBy === 'proposition' ? ' checked' : ''}>
-              <span>같은 명제끼리 <span class="meta">한 명제의 증명을 모두 채점한 뒤 다음 명제로 넘어갑니다. 같은 기준으로 일관되게 채점하기 좋습니다.${g.blind ? ' 명제 안에서는 학생과 단계가 섞인 순서입니다.' : ''}</span></span>
+              <input type="radio" name="sortBy" value="proposition"${g.sortBy === 'proposition' || (g.blind && g.sortBy === 'propositionStage') ? ' checked' : ''}>
+              <span>같은 명제끼리 <span class="meta">한 명제의 증명을 모두 채점한 뒤 다음 명제로 넘어갑니다. 같은 기준으로 일관되게 채점하기 좋습니다.${g.blind ? ' 명제 안에서는 학생과 단계가 섞인 순서입니다.' : ' 명제 안에서는 학생 순입니다.'}</span></span>
+            </label>
+            <label class="check${g.blind ? ' is-unavailable' : ''}">
+              <input type="radio" name="sortBy" value="propositionStage"${!g.blind && g.sortBy === 'propositionStage' ? ' checked' : ''}${g.blind ? ' disabled aria-describedby="stage-sort-note"' : ''}>
+              <span>같은 명제·같은 단계끼리 <span class="meta" id="stage-sort-note">명제 안에서 1단계 나의 증명, 2단계 AI 증명, 4단계 최종 증명을 차례로 모아 채점합니다.${g.blind ? ' 순서만으로 단계가 드러나서 블라인드 채점을 끄면 쓸 수 있어요.' : ''}</span></span>
             </label>
           </fieldset>
           <p class="save-status" data-grading-status aria-live="polite"></p>
@@ -93,7 +97,7 @@ export function renderGradingHome(root) {
               ${next ? `<a class="button button--primary" href="#/teacher/grading/${next.key}" data-start>${graded ? '이어서 채점하기' : '채점 시작하기'}</a>` : '<p class="meta">모든 증명을 채점했습니다.</p>'}
             </div>
             ${filterBar()}
-            ${targetTable(targets, rater, blind, byProposition)}`
+            ${targetTable(targets, rater, blind, byProposition, byStage)}`
           : '<p class="empty-text">채점할 증명이 없습니다. 학생이 1·2·4단계를 제출하면 여기에 나타납니다.</p>'}
       </section>
 
@@ -116,9 +120,10 @@ export function renderGradingHome(root) {
       : filter === 'done' ? Boolean(score) && !left.length
         : true);
 
-  function targetTable(targets, rater, blind, byProposition) {
+  function targetTable(targets, rater, blind, byProposition, byStage) {
     const cols = blind ? 5 : 6;
     let lastGroup = null;
+    let lastStage = null;
     const rows = targets.map((t, i) => {
       const score = scoreOf(rater.id, t.key);
       const left = pendingChecks(t, score);
@@ -129,6 +134,13 @@ export function renderGradingHome(root) {
         const group = targets.filter((x) => x.problemId === t.problemId);
         const done = group.filter((x) => scoreOf(rater.id, x.key)).length;
         groupRow = `<tr class="grade-group"><th scope="colgroup" colspan="${cols}">명제 ${t.propIndex + 1} ${escapeHtml(t.problem?.title ?? '')} <span class="meta">${group.length}개 중 ${done}개 채점함</span></th></tr>`;
+        lastStage = null;
+      }
+      if (byStage && t.stage !== lastStage) {
+        lastStage = t.stage;
+        const group = targets.filter((x) => x.problemId === t.problemId && x.stage === t.stage);
+        const done = group.filter((x) => scoreOf(rater.id, x.key)).length;
+        groupRow += `<tr class="grade-group grade-group--stage"><th scope="colgroup" colspan="${cols}">${escapeHtml(t.stageDef.label)} <span class="meta">${group.length}개 중 ${done}개 채점함</span></th></tr>`;
       }
       const status = score
         ? `채점함${left.length ? ` <span class="tag tag--warn">${escapeHtml(left.join(', '))} 남음</span>` : ''}`

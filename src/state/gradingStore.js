@@ -1,7 +1,7 @@
 // 교사 채점 기록 (프로토타입: 이 브라우저에만 임시 보관)
 //
 // 기록 구조
-//   { raters: [{ id, name }], currentRater, blind, includeSamples, sortBy('mixed' | 'proposition'), rubric: { [기준 id]: { title, desc, levels } } | null,
+//   { raters: [{ id, name }], currentRater, blind, includeSamples, sortBy('mixed' | 'proposition' | 'propositionStage'), rubric: { [기준 id]: { title, desc, levels } } | null,
 //     rubricEditedAt, seeds: { [채점자 id]: 숫자 }, scores: { [채점자 id]: { [채점 대상 key]: score } } }
 //   score = { criteria: { [기준 id]: 점수 }, completeness, actualMethod, note,
 //             transcript('ok'|'error', 2단계), revisions: { [체크리스트 id]: 'fixed'|'not' }(4단계), stuckOvercome(4단계),
