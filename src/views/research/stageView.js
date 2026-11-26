@@ -543,10 +543,8 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
     if (event.target.closest('[data-action="submit"]')) trySubmit();
   };
   // 글 칸(의견, 키보드 모드의 증명, 대화 입력)은 키보드로만 쓴다: 펜 손글씨(Scribble)를 막고 안내·기록한다.
-  const onPenOnText = (el) => {
-    if (locked) return;
-    item.track.penOnText = (item.track.penOnText ?? 0) + 1;
-    save();
+  const FINGER_FOR_KEYBOARD = '키보드로 쓰려면 손가락으로 칸을 눌러 주세요. 펜으로 누르면 보통 자판이 나오지 않아요.';
+  const keyboardNote = (el, text) => {
     let note = el.parentElement.querySelector(':scope > [data-keyboard-note]');
     if (!note) {
       note = document.createElement('p');
@@ -555,11 +553,20 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
       note.setAttribute('role', 'status');
       el.insertAdjacentElement('afterend', note);
     }
-    note.textContent = el.closest('[data-proof-input]')
-      ? '이 칸은 키보드로 써요. 펜으로 쓰려면 위의 "펜"을 누르세요. 펜으로 칸을 톡 누르면 키보드가 나와요.'
-      : '이 칸은 키보드로 써 주세요. 펜으로 칸을 톡 누르면 키보드가 나와요.';
+    note.textContent = text;
   };
-  const releaseKeyboardOnly = keyboardOnlyText(root, { onBlocked: onPenOnText });
+  const onPenOnText = (el) => {
+    if (locked) return;
+    item.track.penOnText = (item.track.penOnText ?? 0) + 1;
+    save();
+    keyboardNote(el, el.closest('[data-proof-input]')
+      ? '이 칸은 키보드로 써요. 펜으로 쓰려면 위의 "펜"을 누르세요. 키보드는 손가락으로 칸을 누르면 나와요.'
+      : '이 칸은 키보드로 써 주세요. 손가락으로 칸을 누르면 키보드가 나와요.');
+  };
+  const onPenTap = (el) => {
+    if (!locked) keyboardNote(el, FINGER_FOR_KEYBOARD);
+  };
+  const releaseKeyboardOnly = keyboardOnlyText(root, { onBlocked: onPenOnText, onTap: onPenTap });
 
   const onSubmitForm = (event) => {
     const form = event.target.closest('[data-chat-form]');

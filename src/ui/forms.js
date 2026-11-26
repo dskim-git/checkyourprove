@@ -187,7 +187,9 @@ export function handleChatShortcut(event) {
 
 // ── 글 입력 칸은 키보드로만 (펜 손글씨 막기) ─────────────
 // iPad의 Scribble(애플펜슬 손글씨 → 글자)이나 Android의 스타일러스 손글씨 입력은 펜으로 글 칸에 바로 쓰게 한다.
-// 연구 모드에서는 글 칸을 키보드로만 쓰게 하려고, 펜 터치의 기본 동작을 막고 펜으로 톡 누르면 칸에 초점만 준다(키보드가 뜸).
+// 연구 모드에서는 글 칸을 키보드로만 쓰게 하려고 펜 터치의 기본 동작을 막는다.
+// 펜으로 칸을 누르면 iPadOS가 보통 자판 대신 작은 키보드·펜 도구 막대를 띄우므로(웹에서 바꿀 수 없음) 칸을 선택하지 않고
+// 손가락으로 누르라고 안내한다(onTap). 손가락으로 누르면 보통 자판이 나온다.
 // 펜 필기는 증명 칸의 "펜" 모드(ui/inkPad.js)에서만 쓴다. 화면의 막기는 기록용 안내이며 보안 경계가 아니다.
 
 const TEXT_SELECTOR = 'textarea, input[type="text"]';
@@ -198,9 +200,10 @@ const stylusTouches = (event) => [...(event.changedTouches ?? [])].filter((t) =>
 /**
  * root 안의 글 입력 칸에서 펜 손글씨를 막는다.
  * onBlocked(el): 펜으로 쓰려다 막힌 순간(한 번 긋기마다 한 번) — 안내 표시·기록용
+ * onTap(el): 펜으로 칸을 톡 누른 순간 — 손가락으로 누르라는 안내용
  * @returns {() => void} 해제 함수
  */
-export function keyboardOnlyText(root, { onBlocked, exclude = '[data-ink-pad]' } = {}) {
+export function keyboardOnlyText(root, { onBlocked, onTap, exclude = '[data-ink-pad]' } = {}) {
   let start = null; // { el, x, y, moved }
 
   const target = (event) => {
@@ -227,8 +230,7 @@ export function keyboardOnlyText(root, { onBlocked, exclude = '[data-ink-pad]' }
   const onTouchEnd = (event) => {
     if (!start || !stylusTouches(event).length) return;
     if (event.cancelable) event.preventDefault();
-    // 펜으로 톡 누르면 칸에 초점을 주어 키보드로 쓰게 한다.
-    if (!start.moved) start.el.focus();
+    if (!start.moved) onTap?.(start.el);
     start = null;
   };
 
