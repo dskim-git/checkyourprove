@@ -4,12 +4,14 @@
 //   { propositionIds, stages: { '1': stageRecord, ... }, updatedAt }
 //   stageRecord = { startedAt, submittedAt, activeMs, leaves, items: { [명제 id]: item } }
 //   item = 단계별 입력값 + 작성 과정 기록(track)
+//   증명 칸(1·4단계 proof, 2단계 aiProof)은 펜 필기 ink[필드]와 입력 방식 inputMode[필드]를 함께 둔다(state/inkModel.js).
 // 학생이 1단계를 처음 열 때 명제 목록을 고정한다(교사가 나중에 바꿔도 이 학생의 기록은 같은 명제로 이어진다).
 // 제출한 단계는 다시 고칠 수 없다.
 // TODO: Firestore 연동 시 학생별 문서로 옮기고, 제출 뒤 수정 금지와 단계 열림 여부를 보안 규칙·서버에서 확인한다.
 
 import { readJson, writeJson, removeKey } from './storage.js';
-import { PROOF_HELP_MIN, transcriptOk } from '../services/proofHelp.js';
+import { PROOF_HELP_MIN, transcriptMatch, transcriptOk } from '../services/proofHelp.js';
+import { hasInk, inkEnough } from './inkModel.js';
 
 const STORAGE_KEY = 'checkyourprove.prototype.research.v1';
 const SNAPSHOT_LIMIT = 200;
@@ -38,13 +40,16 @@ export function propositionIdsFor(classroom) {
   return getResearch().propositionIds ?? classroom.researchPropositionIds;
 }
 
-const track = () => ({ activeMs: 0, firstInputAt: null, inputCount: 0, deleteCount: 0, snapshots: [], methodChanges: [] });
+const track = () => ({ activeMs: 0, firstInputAt: null, inputCount: 0, deleteCount: 0, snapshots: [], methodChanges: [], modeChanges: [] });
+
+// 증명 칸의 펜 필기: ink[필드] = 필기 기록(state/inkModel.js), inputMode[필드] = 'keyboard' | 'pen'
+const pen = () => ({ ink: {}, inputMode: {} });
 
 const ITEM_FACTORIES = {
-  1: () => ({ method: '', methodOther: '', proof: '', confidence: null, stuck: '', track: track() }),
+  1: () => ({ method: '', methodOther: '', proof: '', confidence: null, stuck: '', ...pen(), track: track() }),
   2: () => ({
     aiMethod: '', aiMethodOther: '', aiProof: '', confidence: null, notable: '',
-    pasteAttempts: 0, tabSwitches: 0, chat: { messages: [], requestLog: [] }, track: track(),
+    pasteAttempts: 0, tabSwitches: 0, chat: { messages: [], requestLog: [] }, ...pen(), track: track(),
   }),
   3: () => ({
     compareNote: '', myAdvantage: '', moreAccurate: '',
@@ -52,7 +57,7 @@ const ITEM_FACTORIES = {
     aiChecklist: [], aiIssues: '', aiHelpful: '',
     plan: '', aiOpinion: '', track: track(),
   }),
-  4: () => ({ method: '', methodOther: '', proof: '', usedFromMine: '', usedFromAi: '', ratioMine: null, confidence: null, track: track() }),
+  4: () => ({ method: '', methodOther: '', proof: '', usedFromMine: '', usedFromAi: '', ratioMine: null, confidence: null, ...pen(), track: track() }),
 };
 
 export function findStage(n) {
@@ -93,6 +98,49 @@ export function noteMethodChange(item, field, from, to) {
   if (from && from !== to) item.track.methodChanges.push({ at: now(), field, from, to });
 }
 
+/** 증명 칸의 필기 기록 (없으면 null) */
+export const inkOf = (item, field) => item.ink?.[field] ?? null;
+
+/** 증명 칸에 글이나 필기가 있는가 (필기도 "작성함"으로 인정) */
+export const proofWritten = (item, field) => String(item[field] ?? '').trim().length > 0 || hasInk(inkOf(item, field));
+
+/** 입력 방식(키보드/펜) 바꾸기를 기록하고, 다음 칸의 기본 입력 방식으로 기억한다. */
+export function noteModeChange(item, field, to) {
+  item.inputMode ??= {};
+  const from = item.inputMode[field] ?? 'keyboard';
+  item.inputMode[field] = to;
+  getResearch().inputPref = to;
+  if (from !== to) (item.track.modeChanges ??= []).push({ at: now(), field, from, to });
+}
+
+/** 증명 칸을 처음 열 때의 입력 방식: 고른 적이 있으면 그것, 필기만 있으면 펜, 글만 있으면 키보드, 아니면 마지막으로 쓴 방식 */
+export function inputModeFor(item, field) {
+  if (item.inputMode?.[field]) return item.inputMode[field];
+  const text = String(item[field] ?? '').trim().length > 0;
+  const ink = hasInk(inkOf(item, field));
+  if (ink && !text) return 'pen';
+  if (text && !ink) return 'keyboard';
+  return getResearch().inputPref ?? 'keyboard';
+}
+
+/**
+ * 2단계 옮겨 적기 확인 방법: 'text'(옮겨 적은 글이 AI 답과 일치) | 'teacher'(필기로 옮겨 적어 교사가 대화와 비교해 확인)
+ * 필기는 글자 비교를 할 수 없어 양(획 수·길이)만 확인한다.
+ */
+export function transcriptCheckOf(item) {
+  const text = String(item.aiProof ?? '').trim();
+  if (text && transcriptOk(item.aiProof, proofHelpTexts(item))) return 'text';
+  if (inkEnough(inkOf(item, 'aiProof'))) return 'teacher';
+  return null;
+}
+
+/** 2단계 제출 때 교사용으로 남기는 옮겨 적기 기록 */
+export function recordTranscript(item) {
+  const text = String(item.aiProof ?? '').trim();
+  item.transcriptMatch = text ? transcriptMatch(item.aiProof, proofHelpTexts(item)) : null;
+  item.transcriptCheck = transcriptCheckOf(item);
+}
+
 /** 2단계: 증명 도움으로 인정된 AI 답들 (명제 증명 단계의 핵심을 PROOF_HELP_MIN 이상 담은 답) */
 export const proofHelpTexts = (item) => (item.chat?.messages ?? [])
   .filter((m) => m.role === 'ai' && (m.coverage ?? 0) >= PROOF_HELP_MIN)
@@ -114,7 +162,7 @@ export function missingFields(n, item) {
   if (n === 1 || n === 4) {
     need(filled(item.method), 'method', '증명 방법을 고르세요.');
     if (item.method === 'other') text('methodOther', '사용한 증명 방법을 쓰세요.');
-    text('proof', '증명을 쓰세요. 끝까지 못 했다면 쓴 데까지 적으세요.');
+    need(proofWritten(item, 'proof'), 'proof', '증명을 키보드나 펜으로 쓰세요. 끝까지 못 했다면 쓴 데까지 적으세요.');
   }
   if (n === 1) {
     need(item.confidence != null, 'confidence', '확신 정도를 별로 고르세요.');
@@ -122,9 +170,11 @@ export function missingFields(n, item) {
   }
   if (n === 2) {
     need(hasProofHelp(item), 'chat', '먼저 "AI와 대화"에서 AI에게 이 명제의 증명을 물어 증명 도움을 받으세요.');
-    text('aiProof', 'AI의 증명을 옮겨 적으세요.');
-    if (filled(item.aiProof) && hasProofHelp(item)) {
-      need(transcriptOk(item.aiProof, proofHelpTexts(item)), 'aiProof', '옮겨 적은 내용이 AI의 답변과 많이 다르거나 너무 짧아요. 위의 대화에서 AI의 증명을 보고 그대로 옮겨 적으세요.');
+    need(proofWritten(item, 'aiProof'), 'aiProof', 'AI의 증명을 키보드나 펜으로 옮겨 적으세요.');
+    if (proofWritten(item, 'aiProof') && hasProofHelp(item) && !transcriptCheckOf(item)) {
+      need(false, 'aiProof', filled(item.aiProof)
+        ? '옮겨 적은 내용이 AI의 답변과 많이 다르거나 너무 짧아요. 위의 대화에서 AI의 증명을 보고 그대로 옮겨 적으세요.'
+        : '펜으로 옮겨 적은 양이 너무 적어요. 위의 대화에서 AI의 증명을 보고 그대로 옮겨 적으세요.');
     }
     need(filled(item.aiMethod), 'aiMethod', 'AI가 사용한 증명 방법을 고르세요.');
     if (item.aiMethod === 'other') text('aiMethodOther', 'AI가 사용한 증명 방법을 쓰세요.');

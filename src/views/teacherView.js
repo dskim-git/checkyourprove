@@ -9,7 +9,8 @@ import { RESEARCH_PROPOSITIONS } from '../data/researchPropositions.js';
 import { RESEARCH_STAGES } from '../data/research.js';
 import { SAMPLE_ACTIVITY } from '../data/sampleRecords.js';
 import { getClassroom, saveClassroom } from '../state/classroomStore.js';
-import { findStage, getResearch, propositionIdsFor, resetResearch, stageStatus } from '../state/researchStore.js';
+import { findStage, getResearch, inkOf, propositionIdsFor, resetResearch, stageStatus } from '../state/researchStore.js';
+import { hasInk } from '../state/inkModel.js';
 import { escapeHtml, formatDateTime, formatTime } from '../ui/dom.js';
 import { breadcrumb, notice } from '../ui/components.js';
 import { formatActive } from './research/stageView.js';
@@ -208,7 +209,11 @@ function researchProgress(classroom) {
     const matches = items.map((it) => it.transcriptMatch).filter((v) => v != null);
     const matchText = matches.length ? `, 옮겨 적기 일치 ${Math.round((matches.reduce((a, b) => a + b, 0) / matches.length) * 100)}%` : '';
     const offTopic = items.reduce((sum, it) => sum + (it.chat?.messages.filter((m) => m.role === 'student' && m.topic && m.topic !== 'proof').length ?? 0), 0);
-    const extra = stage.n === 2 && st ? `질문 ${chats}회(증명과 무관 ${offTopic}회), 증명 도움 ${helped}/${items.length}, 붙여넣기 시도 ${pastes}회${matchText}` : '–';
+    const byTeacher = items.filter((it) => it.transcriptCheck === 'teacher').length;
+    const teacherText = byTeacher ? `, 필기로 옮겨 적음 ${byTeacher}개(교사 확인 필요)` : '';
+    const extra = stage.n === 2 && st ? `질문 ${chats}회(증명과 무관 ${offTopic}회), 증명 도움 ${helped}/${items.length}, 붙여넣기 시도 ${pastes}회${matchText}${teacherText}` : '–';
+    const proofField = { 1: 'proof', 2: 'aiProof', 4: 'proof' }[stage.n];
+    const inked = proofField && st ? `${items.filter((it) => hasInk(inkOf(it, proofField))).length}/${items.length}` : '–';
     return `<tr>
       <th scope="row">${stage.n}단계 ${escapeHtml(stage.short)}</th>
       <td>${escapeHtml(status.label)}</td>
@@ -216,6 +221,7 @@ function researchProgress(classroom) {
       <td>${st?.submittedAt ? escapeHtml(formatDateTime(st.submittedAt)) : '–'}</td>
       <td>${st ? formatActive(st.activeMs) : '–'}</td>
       <td>${st ? `${st.leaves}회` : '–'}</td>
+      <td>${inked}</td>
       <td>${extra}</td>
     </tr>`;
   }).join('');
@@ -225,7 +231,7 @@ function researchProgress(classroom) {
   return `${fixed}
     <div class="table-wrap" role="region" aria-labelledby="research-progress-heading" tabindex="0">
       <table class="data-table">
-        <thead><tr><th scope="col">단계</th><th scope="col">상태</th><th scope="col">시작</th><th scope="col">제출</th><th scope="col">작업 시간</th><th scope="col">화면 이탈</th><th scope="col">AI 대화</th></tr></thead>
+        <thead><tr><th scope="col">단계</th><th scope="col">상태</th><th scope="col">시작</th><th scope="col">제출</th><th scope="col">작업 시간</th><th scope="col">화면 이탈</th><th scope="col">펜 필기</th><th scope="col">AI 대화</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>`;

@@ -14,7 +14,7 @@ const SYMBOLS = [
   ['∴', '따라서'],
 ];
 
-function symbolBar(targetId) {
+export function symbolBar(targetId) {
   const buttons = SYMBOLS.map(
     ([symbol, name]) =>
       `<button type="button" class="symbol-bar__btn" data-insert="${symbol}" data-target="${targetId}" aria-label="${name} 기호 넣기">${symbol}</button>`,

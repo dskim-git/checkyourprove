@@ -6,26 +6,27 @@ import { getProblem } from '../../data/problems/index.js';
 import { getStage, MORE_ACCURATE_OPTIONS, optionLabel, RESEARCH_STAGES, STUCK_RESOLVED_OPTIONS } from '../../data/research.js';
 import { buildResearchRequest } from '../../services/aiRequests.js';
 import { requestResearchChat } from '../../services/mockAiService.js';
-import { PROOF_HELP_MIN, proofCoverage, transcriptMatch } from '../../services/proofHelp.js';
+import { PROOF_HELP_MIN, proofCoverage } from '../../services/proofHelp.js';
 import { beyondCurriculum, classifyStudentMessage, GUARDRAIL_VERSION } from '../../services/researchGuardrails.js';
 import { getClassroom } from '../../state/classroomStore.js';
 import {
-  canEnterStage, ensureStage, findStage, hasProofHelp, isItemComplete, missingFields, noteInput, noteMethodChange,
-  proofHelpTexts,
-  propositionIdsFor, saveResearch, snapshot, stageStatus, submitStage,
+  canEnterStage, ensureStage, findStage, hasProofHelp, inkOf, isItemComplete, missingFields, noteInput, noteMethodChange,
+  propositionIdsFor, recordTranscript, saveResearch, snapshot, stageStatus, submitStage,
 } from '../../state/researchStore.js';
 import { escapeHtml, formatDateTime, nowIso } from '../../ui/dom.js';
 import { icons } from '../../ui/icons.js';
 import { breadcrumb, chatMessages, mockAiNote, notice, renderNotFound } from '../../ui/components.js';
 import { bindFields, handleChatShortcut, handleSymbolInsert } from '../../ui/forms.js';
+import { mountInkViews } from '../../ui/inkCanvas.js';
 import { statementHtml } from '../../ui/mathText.js';
 import {
-  checklistField, checklistText, choiceField, methodField, methodText, noteField, proofField, ratioField, readList, readProof,
-  showErrors, starField, starsText, syncRatio, syncStars,
+  checklistField, checklistText, choiceField, handleModeSwitch, methodField, methodText, mountProofPads, noteField, proofField,
+  ratioField, readList, readProofInk, showErrors, starField, starsText, syncRatio, syncStars,
 } from './researchParts.js';
 
 const TICK_MS = 5000;
 const SNAPSHOT_MS = 30000;
+const INK_SAVE_MS = 600;
 const PROOF_FIELDS = { 1: ['proof'], 2: ['aiProof'], 3: [], 4: ['proof'] };
 
 export function renderResearchStage(root, [stageParam, indexParam = '0']) {
@@ -68,6 +69,9 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
   }
 
   let fields = null;
+  let pads = [];
+  let disposeViews = () => {};
+  let inkTimer = null;
   // 2단계: AI 답마다 증명 도움 정도를 매긴다(예전 기록도 채운다).
   if (n === 2) item.chat.messages.forEach((m) => { if (m.role === 'ai' && m.coverage == null) m.coverage = proofCoverage(m.text, problem); });
   const hasAiReply = (it) => hasProofHelp(it);
@@ -76,6 +80,25 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
   const CHAT_FIRST = 'AI에게 이 명제의 증명이나 증명 방법을 물어보세요. AI에게서 증명에 대한 도움을 받아야 기록할 수 있습니다.';
   let pending = false;
   const save = () => saveResearch();
+  // 필기는 획마다 바로 저장하지 않고 잠시 모아서 저장한다(기록이 커질 수 있다).
+  const flushInk = () => {
+    if (!inkTimer) return;
+    window.clearTimeout(inkTimer);
+    inkTimer = null;
+    const ok = save();
+    const status = root.querySelector('[data-save-status]');
+    if (status) status.textContent = ok ? '' : '이 브라우저의 저장 공간이 부족해 필기를 저장하지 못했습니다. 선생님께 알려 주세요.';
+  };
+  const saveInk = () => {
+    window.clearTimeout(inkTimer);
+    inkTimer = window.setTimeout(flushInk, INK_SAVE_MS);
+  };
+  /** 읽기 전용 필기 칸이 기록을 찾는 열쇠: '단계|명제 id|필드' */
+  const inkKey = (k, field) => `${k}|${problemId}|${field}`;
+  const resolveInk = (key) => {
+    const [k, id, field] = key.split('|');
+    return inkOf(findStage(Number(k))?.items?.[id] ?? {}, field);
+  };
   const hrefFor = (i) => `#/research/${n}/${i}`;
 
   // ── 머리말과 명제 탭 ─────────────────────
@@ -117,7 +140,7 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
     return `<details class="ref-card"${open ? ' open' : ''}>
       <summary>나의 증명 (${k}단계)</summary>
       ${readList([['증명 방법', escapeHtml(methodText(it.method, it.methodOther))], ['확신 정도', starsText(it.confidence)]])}
-      ${readProof(it.proof)}
+      ${readProofInk(it.proof, inkOf(it, 'proof'), inkKey(k, 'proof'))}
       ${k === 1 ? readList([['어려웠던 점·막힌 점', escapeHtml(it.stuck || '쓰지 않음')]]) : ''}
     </details>`;
   }
@@ -128,7 +151,7 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
     return `<details class="ref-card ref-card--ai"${open ? ' open' : ''}>
       <summary>AI의 증명 (2단계에 옮겨 적은 것)</summary>
       ${readList([['AI가 쓴 증명 방법', escapeHtml(methodText(it.aiMethod, it.aiMethodOther))], ['AI 증명 확신 정도', starsText(it.confidence)]])}
-      ${readProof(it.aiProof)}
+      ${readProofInk(it.aiProof, inkOf(it, 'aiProof'), inkKey(2, 'aiProof'))}
       ${readList([['AI 답변에서 특징적인 점', escapeHtml(it.notable || '쓰지 않음')]])}
     </details>`;
   }
@@ -136,7 +159,7 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
   function editBody() {
     if (n === 1) {
       return `${methodField({ field: 'method', otherField: 'methodOther', legend: '사용할 증명 방법', value: item.method, otherValue: item.methodOther })}
-        ${proofField({ field: 'proof', label: '나의 증명', help: '내 힘으로 증명을 쓰세요. 끝까지 못 했다면 쓴 데까지 적으세요.', value: item.proof })}
+        ${proofField({ field: 'proof', label: '나의 증명', help: '내 힘으로 증명을 쓰세요. 끝까지 못 했다면 쓴 데까지 적으세요. 키보드나 펜으로 쓸 수 있어요.', item })}
         ${starField({ field: 'confidence', legend: '나의 증명이 옳다고 확신하는 정도', value: item.confidence })}
         ${noteField({ field: 'stuck', label: '증명에서 어려웠던 점이나 막힌 점', help: '어디에서 막혔는지, 무엇이 어려웠는지 쓰세요. 없으면 "없음"이라고 쓰세요.', value: item.stuck })}`;
     }
@@ -164,7 +187,7 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
         : `<p class="note-chip">${icons.info}<span>아직 AI와 대화하지 않았습니다. "AI와 대화" 탭에서 먼저 AI의 증명을 얻으세요.</span></p>`;
       const recordPane = `<section class="record-pane" aria-label="AI의 증명 기록하기">
           ${chatRef}
-          ${proofField({ field: 'aiProof', label: 'AI의 증명 옮겨 적기', help: '위의 대화를 보면서 AI가 알려 준 증명을 고치거나 요약하지 말고 그대로 직접 옮겨 적으세요. 붙여넣기는 할 수 없습니다.', value: item.aiProof })}
+          ${proofField({ field: 'aiProof', label: 'AI의 증명 옮겨 적기', help: '위의 대화를 보면서 AI가 알려 준 증명을 고치거나 요약하지 말고 그대로 직접 옮겨 적으세요. 붙여넣기는 할 수 없습니다.', item, penNote: '펜으로 옮겨 적은 필기는 선생님이 대화의 AI 답과 비교해 확인해요.' })}
           <p class="paste-note" data-paste-note role="status" hidden>AI의 증명은 직접 옮겨 적어 주세요. 붙여넣기는 할 수 없습니다.</p>
           ${methodField({ field: 'aiMethod', otherField: 'aiMethodOther', legend: 'AI가 사용한 증명 방법', value: item.aiMethod, otherValue: item.aiMethodOther })}
           ${starField({ field: 'confidence', legend: 'AI의 증명이 옳다고 확신하는 정도', value: item.confidence })}
@@ -207,7 +230,7 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
           ${analysis ? `<details class="ref-card"><summary>비교 분석 (3단계)</summary>${analysisList(analysis)}</details>` : ''}
       </div>
       ${methodField({ field: 'method', otherField: 'methodOther', legend: '최종 증명에 사용할 증명 방법', value: item.method, otherValue: item.methodOther })}
-      ${proofField({ field: 'proof', label: '최종 증명', help: '나의 증명과 AI의 증명을 비교한 결과를 바탕으로 최종 증명을 쓰세요.', value: item.proof, rows: 10 })}
+      ${proofField({ field: 'proof', label: '최종 증명', help: '나의 증명과 AI의 증명을 비교한 결과를 바탕으로 최종 증명을 쓰세요. 키보드나 펜으로 쓸 수 있어요.', item, rows: 10 })}
       ${noteField({ field: 'usedFromMine', label: '나의 증명에서 가져온 부분', help: '1단계 나의 증명에서 그대로 쓰거나 고쳐 쓴 부분을 적으세요. 없으면 "없음"이라고 쓰세요.', value: item.usedFromMine })}
       ${noteField({ field: 'usedFromAi', label: 'AI의 증명에서 가져온 부분', help: '2단계 AI의 증명에서 참고한 부분을 적으세요. 없으면 "없음"이라고 쓰세요.', value: item.usedFromAi })}
       ${ratioField({ field: 'ratioMine', value: item.ratioMine })}
@@ -233,7 +256,7 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
     if (n === 1) {
       return readList([
         ['증명 방법', escapeHtml(methodText(item.method, item.methodOther))],
-        ['나의 증명', readProof(item.proof)],
+        ['나의 증명', readProofInk(item.proof, inkOf(item, 'proof'), inkKey(1, 'proof'))],
         ['확신 정도', starsText(item.confidence)],
         ['어려웠던 점·막힌 점', escapeHtml(item.stuck || '쓰지 않음')],
       ]);
@@ -241,7 +264,7 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
     if (n === 2) {
       return `${readList([
         ['AI가 사용한 증명 방법', escapeHtml(methodText(item.aiMethod, item.aiMethodOther))],
-        ['AI의 증명 (옮겨 적은 것)', readProof(item.aiProof)],
+        ['AI의 증명 (옮겨 적은 것)', readProofInk(item.aiProof, inkOf(item, 'aiProof'), inkKey(2, 'aiProof'))],
         ['AI 증명 확신 정도', starsText(item.confidence)],
         ['AI 답변에서 특징적인 점', escapeHtml(item.notable || '쓰지 않음')],
       ])}
@@ -250,7 +273,7 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
     if (n === 3) return analysisList(item);
     return readList([
       ['증명 방법', escapeHtml(methodText(item.method, item.methodOther))],
-      ['최종 증명', readProof(item.proof)],
+      ['최종 증명', readProofInk(item.proof, inkOf(item, 'proof'), inkKey(4, 'proof'))],
       ['나의 증명에서 가져온 부분', escapeHtml(item.usedFromMine || '쓰지 않음')],
       ['AI의 증명에서 가져온 부분', escapeHtml(item.usedFromAi || '쓰지 않음')],
       ['반영 비율', item.ratioMine == null ? '표시하지 않음' : `나의 답변 ${item.ratioMine * 10}%, AI의 답변 ${100 - item.ratioMine * 10}%`],
@@ -276,8 +299,16 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
     </div>`;
   }
 
+  function unmountInk() {
+    flushInk();
+    pads.forEach(({ pad }) => pad.dispose());
+    pads = [];
+    disposeViews();
+  }
+
   function draw({ focus = null } = {}) {
     fields?.dispose();
+    unmountInk();
     root.innerHTML = `<div class="page page--solve page--research">
       ${header()}
       ${locked ? notice('success', `${n}단계를 제출했습니다`, `${formatDateTime(stage.submittedAt)}에 제출했습니다. 제출한 내용은 고칠 수 없습니다.`) : ''}
@@ -288,6 +319,8 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
       </section>
     </div>`;
     if (!locked) fields = bindFields(root.querySelector('[data-stage-body]'), item, save);
+    if (!locked) pads = mountProofPads(root, item, { onInput: (type) => noteInput(item, type), onChange: saveInk });
+    disposeViews = mountInkViews(root, resolveInk);
     if (focus) root.querySelector(focus)?.focus();
     const log = root.querySelector('[data-chat-log]');
     if (log) log.scrollTop = log.scrollHeight;
@@ -420,6 +453,7 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
 
   function trySubmit() {
     fields?.flush();
+    flushInk();
     PROOF_FIELDS[n].forEach((field) => snapshot(item, field));
     const firstIncomplete = ids.findIndex((id) => !isItemComplete(n, stage.items[id]));
     if (firstIncomplete !== -1) {
@@ -436,7 +470,8 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
     if (!window.confirm(`${n}단계를 제출할까요? 제출하면 이 단계의 내용은 다시 고칠 수 없습니다.`)) return;
     tick();
     // 교사용 기록: 옮겨 적은 글이 AI 답에서 온 정도
-    if (n === 2) ids.forEach((id) => { const it = stage.items[id]; it.transcriptMatch = transcriptMatch(it.aiProof, proofHelpTexts(it)); });
+    // 필기로 옮겨 적은 것은 글자 비교를 할 수 없어 transcriptCheck = 'teacher'(교사 확인)로 남긴다.
+    if (n === 2) ids.forEach((id) => recordTranscript(stage.items[id]));
     submitStage(n);
     window.location.hash = '#/research';
   }
@@ -465,6 +500,10 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
 
   const onClick = (event) => {
     if (handleSymbolInsert(event, root)) return;
+    if (!locked && handleModeSwitch(event, root, item, pads)) {
+      save();
+      return;
+    }
     const go = event.target.closest('[data-go]');
     if (go) {
       guardForward(event, Number(go.dataset.go));
@@ -528,6 +567,7 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
       save();
     }
     fields?.dispose();
+    unmountInk();
     window.clearInterval(tickTimer);
     window.clearInterval(snapTimer);
     root.removeEventListener('input', onInputCapture, true);

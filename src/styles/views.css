@@ -864,6 +864,69 @@ a.prop-tabs__item:active { translate: 0 2px; }
 .chat__log--ref .chat__msg { max-width: 100%; }
 .chat__log--ref .chat__msg--student .chat__body { font-size: var(--text-sm); }
 
+/* 증명 칸: 키보드 / 펜 필기 */
+.proof-input__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-xs); }
+.mode-switch { display: inline-flex; gap: var(--space-3xs); padding: var(--space-3xs); border-radius: var(--radius-stock); background: var(--color-paper-2); }
+.mode-switch__item,
+.ink-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  min-height: var(--control-h-s);
+  padding: 0 var(--space-sm);
+  border: 0;
+  border-radius: var(--radius-input);
+  background: transparent;
+  color: var(--color-ink-2);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--display-weight);
+  cursor: pointer;
+  transition: background-color var(--dur-micro) var(--ease-snap);
+}
+.mode-switch__item:hover, .ink-tool:hover { background: var(--color-paper-3); }
+.mode-switch__item:focus-visible, .ink-tool:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+.mode-switch__item.is-on, .ink-tool.is-on { background: var(--grain), var(--color-card); color: var(--color-ink); box-shadow: 0 3px 0 0 var(--color-edge); }
+.ink-tool:disabled { color: var(--color-muted); cursor: not-allowed; background: transparent; }
+.proof-input__pane { display: grid; gap: var(--space-xs); }
+.proof-input__also { display: flex; align-items: flex-start; gap: var(--space-xs); color: var(--color-ink-2); font-size: var(--text-sm); }
+.proof-input__also .icon { flex: none; color: var(--color-accent-2); }
+
+.ink-pad { display: grid; gap: var(--space-xs); }
+.ink-tools { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-xs); }
+.ink-tools__group { display: inline-flex; gap: var(--space-3xs); padding: var(--space-3xs); border-radius: var(--radius-stock); background: var(--color-paper-2); }
+.ink-surface {
+  --ink-line: 36px;
+  overflow: hidden;
+  border: 1px solid var(--color-muted);
+  border-radius: var(--radius-input);
+  background:
+    repeating-linear-gradient(to bottom, transparent 0 calc(var(--ink-line) - 1px), var(--color-rule) calc(var(--ink-line) - 1px) var(--ink-line)),
+    var(--color-card);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  cursor: crosshair;
+}
+.ink-surface[data-tool='eraser'] { cursor: cell; }
+.ink-surface[data-finger='true'] { border-color: var(--color-accent-2); }
+.proof-input:has([aria-invalid='true'], .field__error:not([hidden])) .ink-surface { border-color: var(--color-coral-deep); }
+.ink-canvas { display: block; width: 100%; color: var(--color-ink); }
+.ink-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-xs); }
+.ink-finger { display: inline-flex; align-items: center; gap: var(--space-xs); min-height: 44px; font-size: var(--text-sm); cursor: pointer; }
+.ink-finger input { width: 20px; height: 20px; accent-color: var(--color-ink); }
+.ink-count { margin-inline-start: auto; color: var(--color-muted); font-size: var(--text-sm); }
+.ink-hint { color: var(--color-muted); font-size: var(--text-sm); }
+
+/* 읽기 전용 필기 + 다시 보기 */
+.ink-view { display: grid; gap: var(--space-xs); margin: 0; white-space: normal; }
+.ink-view + .ink-view, .proof-text + .ink-view { margin-top: var(--space-xs); }
+.ink-view__paper { overflow: hidden; border-radius: var(--radius-stock); background: var(--color-card); box-shadow: inset 0 0 0 1px var(--color-rule); }
+.ink-view__bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-xs); }
+.ink-view__time { color: var(--color-muted); font-size: var(--text-sm); }
+.ink-view__bar [data-ink-save] { margin-inline-start: auto; }
+
 /* 3단계 A~D 묶음 */
 .form-section { display: grid; gap: var(--space-md); padding-top: var(--space-md); border-top: var(--rule-hair) solid var(--color-rule); }
 .form-section__title { display: flex; align-items: center; gap: var(--space-xs); font-size: var(--text-lg); }

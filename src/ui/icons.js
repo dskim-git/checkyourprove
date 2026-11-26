@@ -24,5 +24,11 @@ export const icons = {
   flame: svg('<path d="M12 21c-3.9 0-6.5-2.6-6.5-6.1 0-3.4 2.4-5.2 3.6-8.4.4 2 1.6 3.2 2.8 3.6.1-2.7 1.3-5 3.4-7.1.3 3.3 4.2 6 4.2 11.2 0 3.9-3 6.8-7.5 6.8Z"/>'),
   star: svg('<path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9L12 3.5Z"/>'),
   play: svg('<path d="M8 5.5v13l10.5-6.5L8 5.5Z"/>'),
+  stop: svg('<rect x="6.5" y="6.5" width="11" height="11" rx="1.5"/>'),
+  keyboard: svg('<rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6.5 10h.01M10 10h.01M14 10h.01M17.5 10h.01M8 14h8"/>'),
+  eraser: svg('<path d="m14.5 4.5 5 5-9 9H6l-2.5-2.5a1.4 1.4 0 0 1 0-2l11-9.5Z"/><path d="M9 9.5 14.5 15"/><path d="M11 18.5h9"/>'),
+  undo: svg('<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>'),
+  grow: svg('<rect x="4" y="3.5" width="16" height="10" rx="1.5"/><path d="M12 16.5v5"/><path d="m9 19 3 2.5 3-2.5"/>'),
+  download: svg('<path d="M12 4v11"/><path d="m7 10.5 5 5 5-5"/><path d="M5 20h14"/>'),
   award: svg('<circle cx="12" cy="9" r="5.5"/><path d="m8.5 13.5-1.5 7 5-2.5 5 2.5-1.5-7"/>'),
 };

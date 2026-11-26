@@ -2,9 +2,13 @@
 // 입력 부품은 data-field 경로로 단계 기록의 명제 항목(item)과 연결된다(ui/forms.js bindFields).
 
 import { CHECKLIST_NONE, CONFIDENCE_LABELS, PROOF_METHOD_OPTIONS, REVISION_CHECKLIST, methodOptionLabel } from '../../data/research.js';
+import { createInk, inkStats } from '../../state/inkModel.js';
+import { inkOf, inputModeFor, noteModeChange } from '../../state/researchStore.js';
 import { escapeHtml } from '../../ui/dom.js';
 import { icons } from '../../ui/icons.js';
-import { textArea } from '../../ui/forms.js';
+import { symbolBar, textArea } from '../../ui/forms.js';
+import { inkViewHtml } from '../../ui/inkCanvas.js';
+import { inkPadHtml, mountInkPad } from '../../ui/inkPad.js';
 import { mathText } from '../../ui/mathText.js';
 
 const errorSlot = (field) => `<p class="field__error" id="f-${field}-error" data-error-for="${field}" hidden></p>`;
@@ -107,10 +111,96 @@ export function syncRatio(root, value) {
   if (range) range.setAttribute('aria-valuetext', `나의 답변 ${value * 10}%`);
 }
 
-/** 증명 입력 칸 (수학 기호 버튼 포함) */
-export function proofField({ field, label, help, value, rows = 9 }) {
-  return textArea({ id: `f-${field}`, field, label, help, value, rows, required: true, symbols: true })
-    .replace(`id="f-${field}-error"`, `id="f-${field}-error" data-error-for="${field}"`);
+const alsoText = (mode, item, field) => {
+  if (mode === 'keyboard') {
+    const strokes = inkStats(inkOf(item, field)).strokes;
+    return strokes ? `펜으로 쓴 필기(획 ${strokes}개)도 함께 제출돼요.` : '';
+  }
+  const chars = String(item[field] ?? '').trim().length;
+  return chars ? `키보드로 쓴 글(${chars}자)도 함께 제출돼요.` : '';
+};
+
+/**
+ * 증명 입력 칸: 키보드(수학 기호 버튼 포함)와 펜 필기를 바꿔 쓸 수 있다. 두 내용은 모두 보존·제출된다.
+ * penNote: 펜으로 쓸 때만 보이는 안내
+ */
+export function proofField({ field, label, help, item, rows = 9, penNote = '' }) {
+  const id = `f-${field}`;
+  const mode = inputModeFor(item, field);
+  const pen = mode === 'pen';
+  const switchBtn = (to, icon, text) => `<button type="button" class="mode-switch__item${mode === to ? ' is-on' : ''}" aria-pressed="${mode === to}" data-mode-to="${to}" data-mode-field="${field}">${icon}<span>${text}</span></button>`;
+  const also = (m) => {
+    const text = alsoText(m, item, field);
+    return `<p class="proof-input__also" data-also="${m}"${text ? '' : ' hidden'}>${icons.info}<span>${escapeHtml(text)}</span></p>`;
+  };
+  return `<div class="field proof-input" id="${id}-wrap" data-proof-input="${field}">
+    <div class="proof-input__head">
+      <label class="field__label" id="${id}-label" for="${id}">${escapeHtml(label)} <span class="field__req">(필수)</span></label>
+      <div class="mode-switch" role="group" aria-label="입력 방식">
+        ${switchBtn('keyboard', icons.keyboard, '키보드')}${switchBtn('pen', icons.pencil, '펜')}
+      </div>
+    </div>
+    <p class="field__help" id="${id}-help">${escapeHtml(help)}</p>
+    <div class="proof-input__pane" data-pane="keyboard"${pen ? ' hidden' : ''}>
+      ${symbolBar(id)}
+      <textarea id="${id}" class="field__input" data-field="${field}" rows="${rows}" aria-describedby="${id}-help ${id}-error" aria-required="true">${escapeHtml(item[field] ?? '')}</textarea>
+      ${also('keyboard')}
+    </div>
+    <div class="proof-input__pane" data-pane="pen"${pen ? '' : ' hidden'}>
+      ${penNote ? `<p class="note-chip">${icons.info}<span>${escapeHtml(penNote)}</span></p>` : ''}
+      ${inkPadHtml({ id: `${id}-ink`, labelledBy: `${id}-label` })}
+      ${also('pen')}
+    </div>
+    <p class="field__error" id="${id}-error" data-error-for="${field}" hidden></p>
+  </div>`;
+}
+
+/** 키보드/펜 바꾸기 버튼 처리. 처리했으면 true */
+export function handleModeSwitch(event, root, item, pads) {
+  const btn = event.target.closest('[data-mode-to]');
+  if (!btn || !root.contains(btn)) return false;
+  const field = btn.dataset.modeField;
+  const to = btn.dataset.modeTo;
+  const wrap = root.querySelector(`[data-proof-input="${field}"]`);
+  noteModeChange(item, field, to);
+  wrap.querySelectorAll('[data-mode-to]').forEach((b) => {
+    const on = b.dataset.modeTo === to;
+    b.classList.toggle('is-on', on);
+    b.setAttribute('aria-pressed', String(on));
+  });
+  wrap.querySelectorAll('[data-pane]').forEach((pane) => { pane.hidden = pane.dataset.pane !== to; });
+  ['keyboard', 'pen'].forEach((m) => {
+    const note = wrap.querySelector(`[data-also="${m}"]`);
+    const text = alsoText(m, item, field);
+    note.hidden = !text;
+    note.querySelector('span').textContent = text;
+  });
+  if (to === 'pen') pads.find((p) => p.field === field)?.pad.refresh();
+  else wrap.querySelector('textarea')?.focus();
+  return true;
+}
+
+/** 화면의 필기 칸들을 단계 기록의 명제 항목(item)에 연결한다. */
+export function mountProofPads(root, item, { onInput, onChange }) {
+  return [...root.querySelectorAll('[data-proof-input]')].map((wrap) => {
+    const field = wrap.dataset.proofInput;
+    const el = wrap.querySelector('[data-ink-pad]');
+    const error = wrap.querySelector(`[data-error-for="${field}"]`);
+    const pad = mountInkPad(el, {
+      getInk: () => inkOf(item, field),
+      ensureInk: () => {
+        item.ink ??= {};
+        item.ink[field] ??= createInk();
+        return item.ink[field];
+      },
+      onInput: (type) => {
+        onInput(type);
+        if (error) error.hidden = true;
+      },
+      onChange,
+    });
+    return { field, pad };
+  });
 }
 
 export function noteField({ field, label, help = '', value = '', rows = 3, required = true }) {
@@ -131,8 +221,10 @@ export function showErrors(root, missing) {
       slot.textContent = message;
     }
   });
-  const first = missing[0] && root.querySelector(`#f-${missing[0].field}`);
-  const focusable = first?.matches('fieldset') ? first.querySelector('input') : first;
+  let first = missing[0] && root.querySelector(`#f-${missing[0].field}`);
+  // 펜으로 쓰는 증명 칸은 글 칸이 숨어 있으므로 칸 전체를 보여 준다
+  if (first?.closest('[hidden]')) first = root.querySelector(`#f-${missing[0].field}-wrap`);
+  const focusable = first?.matches('fieldset') ? first.querySelector('input') : first?.matches('[data-proof-input]') ? first.querySelector('[data-mode-to].is-on') : first;
   focusable?.focus();
   first?.scrollIntoView({ block: 'center' });
 }
@@ -162,4 +254,12 @@ export function readList(rows) {
 }
 
 export const readProof = plain;
+
+/** 증명 읽기: 키보드로 쓴 글과 펜 필기를 함께 보여 준다. key = '단계|명제 id|필드' (필기 칸을 다시 찾는 데 쓴다) */
+export function readProofInk(text, ink, key) {
+  const hasText = String(text ?? '').trim().length > 0;
+  const hasPen = inkStats(ink).strokes > 0;
+  if (!hasText && !hasPen) return plain('');
+  return `${hasText ? plain(text) : ''}${hasPen ? inkViewHtml(key, ink) : ''}`;
+}
 export const statementLine = (problem) => `<p class="read-statement">${mathText(problem.statement)}</p>`;
