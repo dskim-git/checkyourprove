@@ -1,11 +1,13 @@
-// Firestore 보안 규칙 (로드맵 4-1: 계정·역할·명단·연결표·설정)
+// Firestore 보안 규칙 (로드맵 4-1 계정, 4-2 학급·세션·학생 기록·연습 기록·관리자 설정)
 // Firebase 콘솔 > Firestore Database > 규칙에 이 파일 내용을 붙여 넣고 [게시]합니다.
 //
 // 원칙(AGENTS.md 4절, docs/data-spec.md)
 //   - 역할은 승인된 사용자에게만 서버가 붙이는 사용자 지정 클레임 role(admin/teacher/student/guest). 학생이 바꿀 수 없다.
-//   - 계정·명단·연결표·설정은 서버 함수(api/account.js, Admin SDK)만 쓴다. 브라우저는 읽기만.
+//   - 계정·명단·연결표·설정·학급 구조·세션 코드는 서버 함수(api/, Admin SDK)만 쓴다.
 //   - 연결표(links: 이름·학번·이메일)는 관리자와 본인만 읽는다. 교사는 users(연구 번호·역할·세션)만 읽는다.
-//   - 여기에 적지 않은 문서는 모두 막는다. 4-2·4-3에서 세션·기록 규칙을 더한다.
+//   - 학급·세션은 담당 교사(teacherUids)와 관리자만 본다. 학생은 세션 코드로 들어간 세션(members)만 읽는다.
+//   - 학생 연구 기록은 본인만 쓰고, 제출한 단계는 바꿀 수 없으며, 교사가 열지 않은 단계에는 쓸 수 없다.
+//   - 여기에 적지 않은 문서는 모두 막는다.
 
 rules_version = '2';
 service cloud.firestore {
@@ -15,10 +17,19 @@ service cloud.firestore {
     function isAdmin() { return role() == 'admin'; }
     function isTeacher() { return role() == 'admin' || role() == 'teacher'; }
     function isSelf(uid) { return signedIn() && request.auth.uid == uid; }
+    function approved() { return role() != ''; }
 
+    function sessionData(sid) { return get(/databases/$(database)/documents/sessions/$(sid)).data; }
+    function teaches(teacherUids) { return isAdmin() || (role() == 'teacher' && request.auth.uid in teacherUids); }
+    function teachesSession(sid) { return isAdmin() || (role() == 'teacher' && request.auth.uid in sessionData(sid).teacherUids); }
+    function memberOf(sid) { return approved() && exists(/databases/$(database)/documents/sessions/$(sid)/members/$(request.auth.uid)); }
+
+    // ── 계정 (4-1) ──
     match /users/{uid} {
       allow read: if isSelf(uid) || isTeacher();
-      allow write: if false;
+      // 본인은 "진행 중 세션"만 바꿀 수 있다(사람마다, 4-2)
+      allow update: if isSelf(uid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['activeSessionId']);
+      allow create, delete: if false;
     }
     match /links/{uid} {
       allow read: if isSelf(uid) || isAdmin();
@@ -28,14 +39,79 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow write: if false;
     }
+    match /staff/{uid} {
+      allow read: if isTeacher();
+      allow write: if false;
+    }
     match /settings/{name} {
-      allow read: if signedIn() && (name == 'ethics' || name == 'signup');
+      allow read: if signedIn() && (name == 'ethics' || name == 'signup' || name == 'admin');
       allow write: if false;
     }
     match /audit/{id} {
       allow read: if isAdmin();
       allow write: if false;
     }
+    match /requests/{id} {
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow write: if false;
+    }
+
+    // ── 학급·세션 (4-2) ──
+    match /classes/{cid} {
+      allow read: if teaches(resource.data.teacherUids);
+      allow write: if false;
+    }
+    match /sessions/{sid} {
+      allow read: if teaches(resource.data.teacherUids) || memberOf(sid);
+      // 담당 교사는 진행 설정만 바꾼다(구조·코드·담당 교사는 서버)
+      allow update: if teaches(resource.data.teacherUids)
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['open', 'propositionIds', 'stagesOpen', 'consentRequired', 'surveyId', 'surveyPreOpen', 'surveyPostOpen', 'principleOpen', 'codeOpen', 'updatedAt']);
+      allow create, delete: if false;
+
+      match /members/{uid} {
+        allow read: if isSelf(uid) || teachesSession(sid);
+        allow write: if false;
+      }
+
+      match /records/{uid} {
+        function before() { return resource == null ? {} : resource.data.get('stages', {}); }
+        function after() { return request.resource.data.get('stages', {}); }
+        // 제출한 단계는 그대로
+        function kept(n) { return before().get(n, null) == null || before()[n].get('submittedAt', null) == null || after().get(n, null) == before()[n]; }
+        // 바뀐 단계는 교사가 연 단계여야 한다
+        function openOrSame(n, num) { return after().get(n, null) == before().get(n, null) || num in sessionData(sid).stagesOpen; }
+        function stagesOk() {
+          return kept('1') && kept('2') && kept('3') && kept('4')
+            && openOrSame('1', 1) && openOrSame('2', 2) && openOrSame('3', 3) && openOrSame('4', 4);
+        }
+        // 학생(세션 코드로 들어온 사람) 또는 미리보기하는 담당 교사 본인
+        function writer() { return isSelf(uid) && (memberOf(sid) || teachesSession(sid)); }
+
+        allow read: if isSelf(uid) || teachesSession(sid);
+        allow create, update: if writer() && stagesOk();
+        allow delete: if false;
+
+        // 펜 필기(단계~명제~칸마다 한 문서). 그 단계를 제출한 뒤에는 바꿀 수 없다.
+        match /ink/{key} {
+          function recordPath() { return /databases/$(database)/documents/sessions/$(sid)/records/$(uid); }
+          function stageOpenForInk() {
+            let stage = string(request.resource.data.stage);
+            return !exists(recordPath())
+              || get(recordPath()).data.get('stages', {}).get(stage, {}).get('submittedAt', null) == null;
+          }
+          allow read: if isSelf(uid) || teachesSession(sid);
+          allow write: if writer() && stageOpenForInk();
+        }
+      }
+    }
+
+    // ── 증명 연습 기록 (4-2): 본인만 쓰고, 교사가 읽는다. 통과·인증의 서버 확인은 5단계 ──
+    match /practice/{uid}/attempts/{id} {
+      allow read: if isSelf(uid) || isTeacher();
+      allow write: if isSelf(uid);
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

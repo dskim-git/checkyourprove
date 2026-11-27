@@ -13,9 +13,37 @@ import { getClassroom, saveClassroom } from '../../state/classroomStore.js';
 import {
   activeSession, activeSessionId, addClass, addSession, classPractice, ensureSessionCode, findSession, formatCode, getSessions, regenerateSessionCode,
   removeClass, removeSession, renameClass, sessionLabel, sessionsByClass, setActiveSession, setClassPractice, setSessionCodeOpen,
+  setClassTeachers, staffList,
 } from '../../state/sessionStore.js';
 import { sessionMembers } from '../../state/accountStore.js';
-import { getResearch, hasResearchRecord, resetResearch } from '../../state/researchStore.js';
+import { getResearch, hasResearchRecord, resetResearch, sessionRecords } from '../../state/researchStore.js';
+import { isFirebase } from '../../state/appMode.js';
+import { currentUser, findUser } from '../../state/accountStore.js';
+
+/** 서버 모드: 세션의 학생 기록 요약 */
+function serverSessionProgress(s) {
+  const records = [...sessionRecords(s.id)].filter(([uid]) => {
+    const u = findUser(uid);
+    return !u || u.role === 'student' || u.role === 'guest';
+  });
+  const done = records.filter(([, r]) => r.stages?.['4']?.submittedAt).length;
+  return records.length ? `탐구 기록 ${records.length}명(4단계 제출 ${done}명)` : '아직 탐구 기록 없음';
+}
+
+/** 서버 모드: 학급 담당 교사 */
+function teachersBlock(c) {
+  if (!isFirebase || c.sample) return '';
+  if (String(c.id).startsWith('pending-')) return '<p class="meta">학급을 만드는 중…</p>';
+  const names = (c.teacherUids ?? []).map((uid) => staffList().find((t) => t.uid === uid)?.name ?? '교사').join(', ');
+  const pick = staffList().map((t) => `<label class="check"><input type="checkbox" name="teacherUid" value="${escapeHtml(t.uid)}"${(c.teacherUids ?? []).includes(t.uid) ? ' checked' : ''}><span>${escapeHtml(t.name)} <span class="meta">${t.role === 'admin' ? '관리자' : '교사'}</span></span></label>`).join('');
+  return `<p class="meta">담당 교사: ${escapeHtml(names || '–')}</p>
+      <details class="disclosure">
+        <summary>담당 교사 바꾸기</summary>
+        <form class="settings-form" data-class-teachers="${c.id}"><fieldset class="choice-group"><legend class="field__label">이 학급을 볼 교사</legend>${pick}</fieldset>
+          <p class="field__help">담당 교사만 이 학급의 세션과 학생 기록(연구 번호)을 봅니다. 관리자는 모든 학급을 봅니다.</p>
+          <button type="submit" class="button button--secondary button--small">저장</button></form>
+      </details>`;
+}
 import { listSurveys } from '../../state/surveyStore.js';
 import { getAdmin, PRACTICE_FIELDS } from '../../state/adminStore.js';
 import { getGrading, renameRater, saveGrading, updateGradingSettings } from '../../state/gradingStore.js';
@@ -37,19 +65,19 @@ function sessionPanel(status) {
   const stageText = (s) => (s.stagesOpen.length ? s.stagesOpen.map((n) => `${n}`).join(', ') + '단계 열림' : '열린 단계 없음');
   const groups = sessionsByClass().map((c) => {
     const rows = c.sessions.map((s) => {
-      const record = getResearch(s.id);
+      const record = isFirebase ? { stages: {} } : getResearch(s.id);
       const submitted = [1, 2, 3, 4].filter((n) => record.stages?.[String(n)]?.submittedAt);
-      const progress = record.propositionIds ? (submitted.length ? `${submitted.join(', ')}단계 제출` : '1단계 진행 중') : '아직 시작 전';
+      const progress = isFirebase ? serverSessionProgress(s) : record.propositionIds ? (submitted.length ? `${submitted.join(', ')}단계 제출` : '1단계 진행 중') : '아직 시작 전';
       const active = s.id === activeId;
       return `<li class="session-row${active ? ' is-active' : ''}">
         <div class="session-row__main">
           <strong class="session-row__round">${s.round}회차</strong>${active ? ' <span class="tag tag--mint">진행 중</span>' : ''}
-          <span class="session-row__meta">연구 ${s.open ? escapeHtml(stageText(s)) : '닫힘'}, 명제 ${s.propositionIds.length}개, 이 브라우저 학생: ${escapeHtml(progress)}</span>
+          <span class="session-row__meta">연구 ${s.open ? escapeHtml(stageText(s)) : '닫힘'}, 명제 ${s.propositionIds.length}개, ${isFirebase ? '' : '이 브라우저 학생: '}${escapeHtml(progress)}</span>
           <span class="session-code"><span class="meta">세션 코드</span> <strong class="session-code__value num${s.codeOpen === false ? ' is-closed' : ''}" data-session-code="${s.id}">${escapeHtml(formatCode(ensureSessionCode(s)))}</strong>${s.codeOpen === false ? ' <span class="tag tag--warn">코드 닫힘</span>' : ''} <span class="meta">들어온 사람 ${sessionMembers(s.id).length}명</span>
             <button type="button" class="button button--ghost button--small" data-session-action="code-toggle" data-session-id="${s.id}">${s.codeOpen === false ? '코드 열기' : '코드 닫기'}</button>
             <button type="button" class="button button--ghost button--small" data-session-action="code-new" data-session-id="${s.id}">코드 다시 만들기</button></span>
         </div>
-        <div class="session-actions">${active ? '<span class="meta">학생 화면에 연결됨</span>' : `<button type="button" class="button button--secondary button--small" data-session-action="activate" data-session-id="${s.id}">진행 중으로</button>
+        <div class="session-actions">${active ? `<span class="meta">${isFirebase ? '내 진행 중 세션' : '학생 화면에 연결됨'}</span>` : `<button type="button" class="button button--secondary button--small" data-session-action="activate" data-session-id="${s.id}">진행 중으로</button>
           <button type="button" class="button button--ghost button--small" data-session-action="remove" data-session-id="${s.id}">지우기</button>`}</div>
       </li>`;
     }).join('');
@@ -61,6 +89,7 @@ function sessionPanel(status) {
           ${c.sessions.length ? '' : `<button type="button" class="button button--ghost button--small" data-session-action="remove-class" data-class-id="${c.id}">학급 지우기</button>`}
         </div>
       </div>
+      ${teachersBlock(c)}
       ${c.sessions.length ? `<ul class="session-list" aria-label="${escapeHtml(c.name)} 회차">${rows}</ul>` : '<p class="meta">아직 회차가 없습니다.</p>'}
       <details class="disclosure">
         <summary>학급 이름 바꾸기</summary>
@@ -70,7 +99,10 @@ function sessionPanel(status) {
   }).join('');
   return `<section class="panel" aria-labelledby="session-heading" data-session-panel>
     <h2 id="session-heading" class="section-title">연구 세션 (학급 × 회차)</h2>
-    <p class="meta">학급마다 연구 회차(1회차, 2회차 …)를 만들어 기록을 나누어 받습니다. 세션마다 탐구할 명제와 단계 열기를 따로 정하고, 학생 화면은 "진행 중" 세션으로 활동합니다. 연구 분석에서는 학급·회차를 골라 합쳐 볼 수 있습니다.</p>
+    <p class="meta">${isFirebase
+      ? '학급마다 연구 회차(1회차, 2회차 …)를 만들어 기록을 나누어 받습니다. 학생은 회차의 세션 코드로 들어옵니다. "진행 중"은 내 업무판과 탐구 진행 설정이 다루는 세션입니다(교사마다 따로). 연구 분석에서는 학급·회차를 골라 합쳐 볼 수 있습니다.'
+      : '학급마다 연구 회차(1회차, 2회차 …)를 만들어 기록을 나누어 받습니다. 세션마다 탐구할 명제와 단계 열기를 따로 정하고, 학생 화면은 "진행 중" 세션으로 활동합니다. 연구 분석에서는 학급·회차를 골라 합쳐 볼 수 있습니다.'}</p>
+    ${isFirebase && !getSessions().classes.length ? '<p>아직 담당 학급이 없어요. 아래에서 학급을 만든 뒤 "새 회차 만들기"를 누르세요.</p>' : ''}
     <p class="save-status" data-session-status tabindex="-1" aria-live="polite">${escapeHtml(status)}</p>
     ${groups}
     <form class="inline-form" data-class-form novalidate>
@@ -201,7 +233,7 @@ export function renderTeacherSettings(root, [tabParam]) {
     const classroom = getClassroom();
     let body = '';
     if (tab === 'sessions') body = sessionPanel(status);
-    if (tab === 'research') body = `<section class="panel" aria-labelledby="settings-heading"><h2 id="settings-heading" class="section-title">탐구 진행</h2>${researchForm(classroom)}</section>`;
+    if (tab === 'research') body = `<section class="panel" aria-labelledby="settings-heading"><h2 id="settings-heading" class="section-title">탐구 진행</h2>${classroom.sessionId ? researchForm(classroom) : '<p>진행 중 세션이 없어요. <a href="#/teacher/settings/sessions">학급·세션</a>에서 학급과 회차를 먼저 만드세요.</p>'}</section>`;
     if (tab === 'practice') body = `<section class="panel" aria-labelledby="practice-heading"><h2 id="practice-heading" class="section-title">증명 연습 (학급별)</h2>${practiceForm(practiceClass)}<p class="save-status" role="status" data-tab-status>${escapeHtml(status)}</p></section>`;
     if (tab === 'grading') body = `<section class="panel" aria-labelledby="gp-heading"><h2 id="gp-heading" class="section-title">채점·분석 보기</h2>${gradingForm()}<p class="save-status" role="status" data-tab-status>${escapeHtml(status)}</p></section>`;
     root.innerHTML = `<div class="page page--teacher page--settings">
@@ -225,6 +257,19 @@ export function renderTeacherSettings(root, [tabParam]) {
       event.preventDefault();
       renameClass(t.dataset.classRename, t.querySelector('input').value);
       status = '학급 이름을 바꾸었습니다.';
+      return draw();
+    }
+    if (t.matches('[data-class-teachers]')) {
+      event.preventDefault();
+      const uids = [...t.querySelectorAll('[name="teacherUid"]:checked')].map((b) => b.value);
+      if (!uids.length) {
+        status = '담당 교사를 한 명 이상 고르세요.';
+        return draw();
+      }
+      const me = currentUser();
+      if (!uids.includes(me?.uid) && me?.role !== 'admin' && !window.confirm('나를 담당 교사에서 빼면 이 학급이 내 화면에서 사라집니다. 계속할까요?')) return;
+      setClassTeachers(t.dataset.classTeachers, uids);
+      status = '담당 교사를 바꾸었습니다.';
       return draw();
     }
     if (t.matches('[data-practice-form]')) {
@@ -295,15 +340,15 @@ export function renderTeacherSettings(root, [tabParam]) {
     const { sessionAction: action, sessionId, classId } = act.dataset;
     if (action === 'activate') {
       setActiveSession(sessionId);
-      status = `진행 중 세션을 ${sessionLabel(findSession(sessionId))}(으)로 바꾸었습니다. 학생 화면은 이 세션으로 활동합니다.`;
+      status = `진행 중 세션을 ${sessionLabel(findSession(sessionId))}(으)로 바꾸었습니다.${isFirebase ? ' 업무판과 탐구 진행 설정이 이 세션을 다룹니다.' : ' 학생 화면은 이 세션으로 활동합니다.'}`;
     }
     if (action === 'new') {
       const session = addSession(classId);
-      status = `${sessionLabel(session)}를 만들었습니다. "진행 중으로"를 누르면 학생 화면이 이 회차로 바뀝니다.`;
+      status = isFirebase ? `${sessionLabel(session)}를 만들고 있습니다. 곧 세션 코드가 보입니다.` : `${sessionLabel(session)}를 만들었습니다. "진행 중으로"를 누르면 학생 화면이 이 회차로 바뀝니다.`;
     }
     if (action === 'remove') {
       const session = findSession(sessionId);
-      const has = hasResearchRecord(sessionId);
+      const has = isFirebase ? sessionRecords(sessionId).size > 0 : hasResearchRecord(sessionId);
       if (!window.confirm(`${sessionLabel(session)}를 지울까요?${has ? ' 이 세션의 학생 연구 기록도 함께 지워지며 되돌릴 수 없습니다.' : ''}`)) return;
       resetResearch(sessionId);
       removeSession(sessionId);
@@ -317,8 +362,8 @@ export function renderTeacherSettings(root, [tabParam]) {
     if (action === 'code-new') {
       const session = findSession(sessionId);
       if (!window.confirm(`${sessionLabel(session)}의 세션 코드를 새로 만들까요? 예전 코드로는 더 이상 들어올 수 없습니다(이미 들어온 학생은 그대로).`)) return;
-      regenerateSessionCode(sessionId);
-      status = `${sessionLabel(session)}의 새 세션 코드: ${formatCode(session.code)}`;
+      const code = regenerateSessionCode(sessionId);
+      status = code ? `${sessionLabel(session)}의 새 세션 코드: ${formatCode(code)}` : `${sessionLabel(session)}의 세션 코드를 새로 만들고 있습니다. 곧 화면에 보입니다.`;
     }
     if (action === 'remove-class') {
       removeClass(classId);

@@ -142,7 +142,7 @@ export function renderSettings(root, [tabParam]) {
         <dl class="read-list">
           <div><dt>이름</dt><dd>${escapeHtml(APP_INFO.name)}</dd></div>
           <div><dt>버전</dt><dd>${escapeHtml(APP_INFO.version)} (${escapeHtml(APP_INFO.stage)})</dd></div>
-          <div><dt>저장 위치</dt><dd>${escapeHtml(isDemo ? '시연 모드: 이 브라우저에만 (서버와 따로)' : isFirebase ? '계정은 서버, 세션과 탐구·연습 기록은 아직 이 브라우저(서버 연결 진행 중)' : APP_INFO.storage)}</dd></div>
+          <div><dt>저장 위치</dt><dd>${escapeHtml(isDemo ? '시연 모드: 이 브라우저에만 (서버와 따로)' : isFirebase ? '서버(계정, 학급·세션, 탐구·연습 기록). 교사의 채점·면담 기록 일부는 아직 이 브라우저(서버 연결 진행 중)' : APP_INFO.storage)}</dd></div>
         </dl>
         ${isBrowserOnly ? '<p class="meta"><a href="#/demo-data">시연 데이터</a>: 이 브라우저의 기록을 파일로 내보내거나 불러와요.</p>' : ''}
       </section>`;
@@ -210,8 +210,13 @@ export function renderSettings(root, [tabParam]) {
     const f = event.target;
     if (f.matches('[data-code-form]')) {
       event.preventDefault();
-      codeError = joinByCode(f.querySelector('[name="code"]').value);
-      if (codeError) draw('#session-code');
+      const result = joinByCode(f.querySelector('[name="code"]').value);
+      const done = (err) => {
+        codeError = err;
+        if (err) draw('#session-code');
+      };
+      if (typeof result === 'string') done(result);
+      else result.then(done);
       return;
     }
     if (f.matches('[data-request-form]')) {

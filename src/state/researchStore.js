@@ -20,6 +20,30 @@ import { readJson, writeJson, removeKey } from './storage.js';
 import { PROOF_HELP_MIN, transcriptMatch, transcriptOk } from '../services/proofHelp.js';
 import { hasInk, inkEnough } from './inkModel.js';
 import { activeSessionId, findSession } from './sessionStore.js';
+import { isFirebase } from './appMode.js';
+
+// ── 서버 연결 (firebase 모드, 로드맵 4-2) ──
+// 내 기록: sessions/{세션}/records/{내 uid} (필기는 칸마다 ink 하위 문서). firebase/dataSync.js가 불러와 applyOwnRecord로 넣고,
+//   saveResearch는 모아서(잠시 뒤) 서버에 쓴다. 불러오기 전에는 쓰지 않는다(서버 기록을 빈 기록으로 덮지 않게).
+// 교사: 담당 세션의 학생 기록을 applySessionRecords로 받는다(sessionRecords). 지우기는 세션을 지울 때 서버가 한다.
+let backend = null;
+const loaded = new Set();
+const others = new Map();
+/** { loadOwn(sessionId), saveOwn(sessionId) } */
+export function setResearchBackend(b) {
+  backend = b;
+}
+export function applyOwnRecord(sessionId, record) {
+  caches.set(sessionId, record ?? { propositionIds: null, stages: {}, updatedAt: null });
+  loaded.add(sessionId);
+}
+/** 이 세션의 내 기록을 서버에서 받았는가 (프로토타입은 늘 참) */
+export const researchReady = (sessionId = activeSessionId()) => !isFirebase || !sessionId || loaded.has(sessionId);
+export function applySessionRecords(sessionId, map) {
+  others.set(sessionId, map);
+}
+/** 교사용: 세션의 학생 기록 Map(uid → 기록) */
+export const sessionRecords = (sessionId) => others.get(sessionId) ?? new Map();
 
 const LEGACY_KEY = 'checkyourprove.prototype.research.v1';
 const SNAPSHOT_LIMIT = 200;
@@ -31,6 +55,12 @@ const caches = new Map();
 const now = () => new Date().toISOString();
 
 export function getResearch(sessionId = activeSessionId()) {
+  if (isFirebase) {
+    if (!sessionId) return { propositionIds: null, stages: {}, updatedAt: null }; // 세션 없음: 저장하지 않는 빈 기록
+    if (!loaded.has(sessionId)) backend?.loadOwn(sessionId);
+    if (!caches.has(sessionId)) caches.set(sessionId, { propositionIds: null, stages: {}, updatedAt: null });
+    return caches.get(sessionId);
+  }
   if (!caches.has(sessionId)) caches.set(sessionId, readJson(keyOf(sessionId), null) ?? { propositionIds: null, stages: {}, updatedAt: null });
   return caches.get(sessionId);
 }
@@ -38,10 +68,16 @@ export function getResearch(sessionId = activeSessionId()) {
 export function saveResearch(sessionId = activeSessionId()) {
   const record = getResearch(sessionId);
   record.updatedAt = now();
+  if (isFirebase) {
+    if (!sessionId || !loaded.has(sessionId)) return false;
+    backend?.saveOwn(sessionId);
+    return true;
+  }
   return writeJson(keyOf(sessionId), record);
 }
 
 export function resetResearch(sessionId = activeSessionId()) {
+  if (isFirebase) return; // 서버 모드: 학생 기록은 세션을 지울 때 서버가 지운다
   removeKey(keyOf(sessionId));
   caches.delete(sessionId);
 }

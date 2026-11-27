@@ -3,11 +3,23 @@
 // TODO: Firestore 연동 시 학생별 문서로 옮기고, 통과 판정은 서버에서 확정한다.
 
 import { readJson, writeJson, removeKey } from './storage.js';
+import { isFirebase } from './appMode.js';
 
 const STORAGE_KEY = 'checkyourprove.prototype.practice.v1';
 
+// 서버 연결(firebase 모드, 로드맵 4-2): practice/{uid}/attempts/{활동:명제}. 로그인할 때 firebase/dataSync.js가 모두 불러오고
+// saveAttempt는 잠시 모았다가 그 기록 하나만 쓴다. 통과·인증을 서버가 확정하는 일은 5단계(실제 AI)에서 한다.
+let backend = null;
+/** { saveAttempt(key, attempt), clear(keys) } */
+export function setAttemptBackend(b) {
+  backend = b;
+}
+export function applyRemoteAttempts(map) {
+  cache = map ?? {};
+}
+
 let cache = null;
-const all = () => (cache ??= readJson(STORAGE_KEY, {}));
+const all = () => (cache ??= isFirebase ? {} : readJson(STORAGE_KEY, {}));
 const keyOf = (levelId, problemId) => `${levelId}:${problemId}`;
 const now = () => new Date().toISOString();
 
@@ -43,7 +55,12 @@ export function getOrCreateAttempt(levelId, problem, createData) {
 
 export function saveAttempt(attempt) {
   attempt.updatedAt = now();
-  all()[keyOf(attempt.levelId, attempt.problemId)] = attempt;
+  const key = keyOf(attempt.levelId, attempt.problemId);
+  all()[key] = attempt;
+  if (isFirebase) {
+    backend?.saveAttempt(key, attempt);
+    return true;
+  }
   return writeJson(STORAGE_KEY, all());
 }
 
@@ -71,6 +88,7 @@ export function listAttempts() {
 }
 
 export function clearAllAttempts() {
+  if (isFirebase) backend?.clear(Object.keys(all()));
   cache = {};
   removeKey(STORAGE_KEY);
 }

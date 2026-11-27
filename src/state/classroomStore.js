@@ -6,14 +6,17 @@
 import { DEFAULT_CLASSROOM } from '../data/classroom.js';
 import { readJson, writeJson, removeKey } from './storage.js';
 import { activeSession, sessionConfig, sessionLabel, updateSession } from './sessionStore.js';
+import { isFirebase } from './appMode.js';
 
 const STORAGE_KEY = 'checkyourprove.prototype.classroom.v1';
 const SESSION_FIELDS = ['consentRequired', 'surveyId', 'surveyPreOpen', 'surveyPostOpen', 'principleOpen'];
 const RESEARCH_FIELDS = ['researchOpen', 'researchPropositionIds', 'researchStagesOpen', ...SESSION_FIELDS];
 
 export function getClassroom() {
-  const base = { ...DEFAULT_CLASSROOM, ...readJson(STORAGE_KEY, {}) };
+  const base = { ...DEFAULT_CLASSROOM, ...(isFirebase ? {} : readJson(STORAGE_KEY, {})) };
   const session = activeSession();
+  // 서버 모드에서 진행 중 세션이 없으면(학급·회차를 만들기 전, 세션 코드로 들어가기 전) 탐구를 닫아 둔다
+  if (!session) return { ...base, sessionId: null, sessionLabel: '', researchOpen: false, researchStagesOpen: [], ...sessionConfig(null) };
   return {
     ...base,
     sessionId: session.id,
@@ -32,7 +35,8 @@ export function saveClassroom(settings) {
   if ('researchPropositionIds' in settings) patch.propositionIds = settings.researchPropositionIds;
   if ('researchStagesOpen' in settings) patch.stagesOpen = settings.researchStagesOpen;
   SESSION_FIELDS.forEach((k) => { if (k in settings) patch[k] = settings[k]; });
-  if (Object.keys(patch).length) updateSession(session.id, patch);
+  if (Object.keys(patch).length && session) updateSession(session.id, patch);
+  if (isFirebase) return true;
   const rest = Object.fromEntries(Object.entries(settings).filter(([k]) => !RESEARCH_FIELDS.includes(k) && !['sessionId', 'sessionLabel'].includes(k)));
   return writeJson(STORAGE_KEY, rest);
 }

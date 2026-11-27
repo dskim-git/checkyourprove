@@ -4,10 +4,11 @@
 // firebase 모드(4-1): 구글 로그인(팝업) → 서버가 사용자 문서를 만든다. 정보 입력·승인은 서버 함수(api/account.js)가 처리한다.
 
 import {
-  canTeach, currentUser, displayName, ethics, isAdmin, joinSession, roleLabel, signInDemo, signInDemoRole, signInWithGoogle, signOut, STATUS_LABELS,
-  submitProfile,
+  canTeach, currentUser, displayName, ethics, isAdmin, joinSession, joinSessionByCode, roleLabel, signInDemo, signInDemoRole, signInWithGoogle, signOut,
+  STATUS_LABELS, submitProfile,
 } from '../state/accountStore.js';
 import { isFirebase } from '../state/appMode.js';
+import { researchReady } from '../state/researchStore.js';
 import { googleErrorText } from './landingView.js';
 import { findSession, findSessionByCode, formatCode, sessionLabel, setActiveSession } from '../state/sessionStore.js';
 import { breadcrumb, notice } from '../ui/components.js';
@@ -29,19 +30,35 @@ export function sessionCodeForm({ error = '' } = {}) {
   </form>`;
 }
 
-/** 세션 코드 제출 처리: 성공하면 그 세션을 이 기기의 진행 세션으로 하고 탐구 홈으로. 실패하면 오류 글을 돌려준다. */
+const goResearch = () => {
+  // 이미 탐구 홈에 있으면 주소가 같아 다시 그려지지 않으므로 직접 알린다
+  if (window.location.hash === '#/research') window.dispatchEvent(new Event('hashchange'));
+  else window.location.hash = '#/research';
+};
+
+/**
+ * 세션 코드 제출 처리: 성공하면 그 세션을 진행 세션으로 하고 탐구 홈으로. 실패하면 오류 글을 돌려준다.
+ * 서버 모드는 서버 함수가 코드를 확인하므로 Promise(오류 글)를 돌려준다.
+ */
 export function joinByCode(code) {
   const user = currentUser();
   if (!user) return '먼저 로그인하세요.';
+  if (isFirebase) {
+    return joinSessionByCode(code).then(async (r) => {
+      if (r.error) return r.error;
+      // 서버가 들어간 세션을 알려 줄 때까지(최대 8초) 기다렸다가 탐구 홈으로
+      for (let i = 0; i < 40 && !(findSession(r.sessionId) && researchReady(r.sessionId)); i += 1) await new Promise((ok) => setTimeout(ok, 200));
+      goResearch();
+      return '';
+    });
+  }
   const found = findSessionByCode(code);
   if (found.error === 'none') return '그런 세션 코드가 없어요. 선생님이 알려 준 코드를 다시 확인해 주세요.';
   if (found.error === 'closed') return '이 세션 코드는 지금 닫혀 있어요. 선생님께 여쭤보세요.';
   joinSession(user.uid, found.session.id);
   // 프로토타입: 이 브라우저(기기)의 학생 화면을 그 세션으로 바꾼다. 서버 연결 뒤에는 사용자마다 참여 세션을 고른다.
   setActiveSession(found.session.id);
-  // 이미 탐구 홈에 있으면 주소가 같아 다시 그려지지 않으므로 직접 알린다
-  if (window.location.hash === '#/research') window.dispatchEvent(new Event('hashchange'));
-  else window.location.hash = '#/research';
+  goResearch();
   return '';
 }
 
@@ -180,8 +197,17 @@ export function renderAccount(root) {
       return draw();
     }
     if (form.matches('[data-code-form]')) {
-      codeError = joinByCode(val('code'));
-      if (codeError) draw();
+      const result = joinByCode(val('code'));
+      if (typeof result === 'string') {
+        codeError = result;
+        if (codeError) draw();
+      } else {
+        form.querySelector('button[type="submit"]')?.setAttribute('disabled', '');
+        result.then((err) => {
+          codeError = err;
+          if (err) draw();
+        });
+      }
     }
   };
   const onChange = (event) => {

@@ -1,5 +1,6 @@
 // 내 기록 보기: 증명법별 인증 현황, 최근 활동, AI와 탐구하기 기록
 
+import { isFirebase } from '../state/appMode.js';
 import { METHODS, getMethod } from '../data/methods.js';
 import { LEVELS, getLevel } from '../data/levels.js';
 import { getProblem } from '../data/problems/index.js';
@@ -112,11 +113,11 @@ export function renderRecords(root) {
         ${researchLine}
       </section>
 
-      <details class="disclosure proto-tools">
+      ${isFirebase ? '' : `<details class="disclosure proto-tools">
         <summary>프로토타입 도구</summary>
         <p class="disclosure__note">기록은 이 브라우저에만 임시로 보관됩니다.</p>
         <button type="button" class="button button--ghost" data-action="clear-all">이 브라우저의 기록 모두 지우기</button>
-      </details>
+      </details>`}
     </div>`;
   };
 

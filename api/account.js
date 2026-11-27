@@ -11,6 +11,9 @@
 //   researchIds/{연구 번호} { uid }  ← 연구 번호가 겹치지 않게
 //   settings/ethics, settings/signup
 //   audit/{자동}       { at, action, detail, by }  ← 관리 기록(서버만 씀)
+//   staff/{uid}       { name, role }  ← 승인된 교사·관리자 명단(담당 교사 고르기, 교사가 읽음). 4-2
+//   settings/admin    { practice, contact, notices }  ← 관리자 설정(로그인한 사람이 읽음). 4-2
+//   requests/{id}     { uid, researchId, type, reason, at, status, note, doneAt }  ← 개인정보 요청(본인·관리자가 읽음). 4-2
 
 import { adminAuth, db, fieldValue, handler, HttpError } from './_lib/server.js';
 
@@ -38,8 +41,20 @@ async function signupRules() {
   return { ...SIGNUP_DEFAULTS, ...(snap.exists ? snap.data() : {}) };
 }
 
-/** 승인된 사용자만 클레임 { role }, 나머지는 클레임 없음. 바뀌었으면 true */
+/** 교사 명단(staff): 승인된 교사·관리자만. 이름은 연결 정보에서 */
+async function syncStaff(uid, user) {
+  const ref = db().doc(`staff/${uid}`);
+  if (user.status === 'approved' && (user.role === 'admin' || user.role === 'teacher')) {
+    const link = (await links().doc(uid).get()).data();
+    await ref.set({ name: link?.profile?.name || link?.email || user.researchId, role: user.role });
+  } else {
+    await ref.delete();
+  }
+}
+
+/** 승인된 사용자만 클레임 { role }, 나머지는 클레임 없음. 바뀌었으면 true (교사 명단도 함께 맞춘다) */
 async function syncClaims(uid, user) {
+  await syncStaff(uid, user);
   const want = user.status === 'approved' && ROLES.includes(user.role) ? { role: user.role } : {};
   const record = await adminAuth().getUser(uid);
   const have = record.customClaims ?? {};
@@ -139,6 +154,16 @@ async function joinSession({ token, body }) {
   if (user.status !== 'approved') throw new HttpError(403, '승인된 뒤에 세션에 들어갈 수 있어요.');
   await users().doc(token.uid).update({ sessionIds: fieldValue().arrayUnion(id) });
   return { ok: true };
+}
+
+/** 개인정보 요청(기록 삭제·탈퇴): 본인이 올리고 관리자가 처리 */
+async function addRequest({ token, body }) {
+  const user = await getUser(token.uid);
+  const type = ['delete-records', 'delete-account'].includes(body.type) ? body.type : null;
+  if (!type) throw new HttpError(400, '요청 종류를 고르세요.');
+  const ref = db().collection('requests').doc();
+  await ref.set({ uid: token.uid, researchId: user.researchId, type, reason: String(body.reason ?? '').trim().slice(0, 500), at: now(), status: 'open', note: '', doneAt: null });
+  return { ok: true, id: ref.id };
 }
 
 // ── 관리자 ──
@@ -279,6 +304,59 @@ async function adminAction(action, { token, body }) {
       await audit('연구 윤리 설정', Object.keys(patch).join(', '), me.researchId);
       return { ok: true };
     }
+    case 'saveAdmin': {
+      // 연습 기본값·문의처 (공지는 addNotice/removeNotice)
+      const section = String(body.section);
+      const KEYS = {
+        practice: { requiredClears: 'number', revealAfterTries: 'number', soloPassScore: 'number', practiceAi: 'boolean', unlockAll: 'boolean' },
+        contact: { name: 'string', email: 'string', note: 'string' },
+      }[section];
+      if (!KEYS) throw new HttpError(400, '알 수 없는 설정이에요.');
+      const patch = {};
+      Object.entries(body.patch ?? {}).forEach(([k, v]) => { if (KEYS[k] === typeof v) patch[`${section}.${k}`] = typeof v === 'string' ? v.slice(0, 300) : v; });
+      if (!Object.keys(patch).length) return { ok: true };
+      const ref = db().doc('settings/admin');
+      if (!(await ref.get()).exists) await ref.set({ practice: {}, contact: {}, notices: [] });
+      await ref.update(patch);
+      if (section === 'practice') await audit('연습 기본값 변경', Object.entries(body.patch).map(([k, v]) => `${k}=${v}`).join(', '), me.researchId);
+      return { ok: true };
+    }
+    case 'addNotice': {
+      const n = body.notice ?? {};
+      const notice = {
+        id: `n-${Date.now().toString(36)}${randomCode(3).toLowerCase()}`, title: String(n.title ?? '').trim().slice(0, 100), body: String(n.body ?? '').trim().slice(0, 500),
+        audience: ['all', 'students', 'teachers'].includes(n.audience) ? n.audience : 'all', until: /^\d{4}-\d{2}-\d{2}$/.test(n.until ?? '') ? n.until : '', createdAt: now(), by: me.researchId,
+      };
+      if (!notice.title) throw new HttpError(400, '공지 제목을 입력하세요.');
+      const ref = db().doc('settings/admin');
+      if (!(await ref.get()).exists) await ref.set({ practice: {}, contact: {}, notices: [] });
+      await db().runTransaction(async (tx) => {
+        const cur = (await tx.get(ref)).data().notices ?? [];
+        tx.update(ref, { notices: [notice, ...cur].slice(0, 50) });
+      });
+      await audit('공지 올림', notice.title, me.researchId);
+      return { ok: true, id: notice.id };
+    }
+    case 'removeNotice': {
+      const ref = db().doc('settings/admin');
+      let title = '';
+      await db().runTransaction(async (tx) => {
+        const cur = (await tx.get(ref)).data()?.notices ?? [];
+        title = cur.find((n) => n.id === body.id)?.title ?? '';
+        tx.update(ref, { notices: cur.filter((n) => n.id !== body.id) });
+      });
+      if (title) await audit('공지 내림', title, me.researchId);
+      return { ok: true };
+    }
+    case 'closeRequest': {
+      const ref = db().doc(`requests/${String(body.id)}`);
+      const r = (await ref.get()).data();
+      if (!r) throw new HttpError(404, '그런 요청이 없어요.');
+      const note = String(body.note ?? '').trim().slice(0, 300);
+      await ref.update({ status: 'done', note, doneAt: now() });
+      await audit('개인정보 요청 처리', `${r.researchId} ${r.type}${note ? `: ${note}` : ''}`, me.researchId);
+      return { ok: true };
+    }
     case 'saveSignup': {
       const patch = {};
       ['rosterAutoApprove', 'allowGuests'].forEach((k) => { if (typeof body.patch?.[k] === 'boolean') patch[k] = body.patch[k]; });
@@ -296,5 +374,6 @@ export default handler(async ({ body, token }) => {
   if (action === 'bootstrap') return bootstrap({ token });
   if (action === 'profile') return submitProfile({ token, body });
   if (action === 'joinSession') return joinSession({ token, body });
+  if (action === 'addRequest') return addRequest({ token, body });
   return adminAction(action, { token, body });
 });

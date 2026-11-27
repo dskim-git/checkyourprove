@@ -143,7 +143,17 @@
 - 위 문서는 모두 서버 함수만 씁니다. 역할 클레임 `{ role }`은 승인된 사용자에게만 붙습니다.
 - 이메일은 Firebase Auth와 `links`에 있습니다. 연결 지우기는 `links`의 이메일·이름·학번을 지우고, Auth 계정 삭제는 연구가 끝날 때(6절).
 
-아래는 처음 초안이며, 4-1에서 정하지 않은 부분(세션·기록·채점·면담·녹음)은 4-2~4-4에서 확정합니다.
+4-2에서 확정한 것(2026-11-28, `api/session.js`, `firestore.rules`)
+- `classes/{classId}` = { name, teacherUids, practice, createdAt, createdBy }. 담당 교사(teacherUids)와 관리자만 읽음. 서버만 씀.
+- `sessions/{sessionId}` = { classId, className, classPractice, teacherUids, round, open, propositionIds, stagesOpen, consentRequired, surveyId, surveyPreOpen, surveyPostOpen, principleOpen, code, codeOpen, createdAt }. 담당 교사·관리자와 들어온 사람이 읽음. 담당 교사는 진행 설정 칸만 바로 씀, 나머지는 서버.
+- `sessions/{id}/members/{uid}` = { researchId, role, joinedAt } (세션 코드로 들어올 때 서버가 씀), `sessionCodes/{코드}` = { sessionId } (서버만).
+- `sessions/{id}/records/{uid}` = 학생 연구 기록(7절 구조, 필기 칸은 비움). 본인만 씀(들어온 사람, 또는 미리보기하는 담당 교사), 담당 교사가 읽음. 제출한 단계는 바꿀 수 없고 교사가 연 단계만 쓸 수 있음.
+- `sessions/{id}/records/{uid}/ink/{단계~명제~칸}` = { stage, problemId, field, json(필기 기록 JSON 글) }. 그 단계를 제출한 뒤에는 바꿀 수 없음.
+- `practice/{uid}/attempts/{활동:명제}` = 연습 기록(7절). 본인만 쓰고 교사가 읽음. 통과·인증의 서버 확인은 5단계.
+- `users/{uid}.activeSessionId`(본인이 바꿈), `staff/{uid}` = { name, role }(승인된 교사·관리자, 교사가 읽음, 담당 교사 고르기).
+- `settings/admin` = { practice, contact, notices }(로그인한 사람이 읽음, 서버만 씀), `requests/{id}` = 개인정보 요청(본인·관리자가 읽음, 서버만 씀).
+
+아래는 처음 초안이며, 아직 정하지 않은 부분(채점·면담·설문·진행 제어·녹음)은 4-3·4-4에서 확정합니다.
 
 ```
 users/{uid}                 역할, 상태, 연구 번호, 참여 세션 (본인 읽기, 관리자 쓰기, 역할은 사용자 지정 클레임)

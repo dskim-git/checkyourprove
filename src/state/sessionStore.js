@@ -18,6 +18,36 @@ import { DEFAULT_SURVEY_ID } from '../data/surveyDefaults.js';
 export const SESSION_DEFAULTS = { consentRequired: true, surveyId: DEFAULT_SURVEY_ID, surveyPreOpen: true, surveyPostOpen: true, principleOpen: true };
 export const sessionConfig = (session) => ({ ...SESSION_DEFAULTS, ...Object.fromEntries(Object.keys(SESSION_DEFAULTS).filter((k) => session?.[k] !== undefined).map((k) => [k, session[k]])) });
 import { readJson, writeJson } from './storage.js';
+import { isFirebase } from './appMode.js';
+
+// ── 서버 연결 (firebase 모드, 로드맵 4-2) ──
+// 학급·세션은 Firestore(classes, sessions)에서 firebase/dataSync.js가 받아 applyRemoteSessions로 넣는다.
+// 교사는 담당 학급·세션(관리자는 모두), 학생은 세션 코드로 들어간 세션만 받는다. 진행 중 세션은 사람마다(users.activeSessionId).
+// 구조(만들기·지우기·이름·학급 연습 설정·코드)는 서버 함수(api/session.js), 진행 설정은 Firestore에 바로 쓴다(보안 규칙이 막음).
+// 바꾸는 함수는 메모리 값을 먼저 바꾸고 서버에 보낸다. 실패하면 dataSync가 서버 값으로 되돌리고 알린다.
+let backend = null;
+/** firebase/dataSync.js가 연결한다: { call(action, payload), updateSession(id, patch), setActive(id) } */
+export function setSessionBackend(b) {
+  backend = b;
+}
+export function applyRemoteSessions(data) {
+  cache = { classes: data.classes ?? [], sessions: data.sessions ?? [], activeSessionId: data.activeSessionId ?? null };
+}
+const pendingId = (p) => `pending-${p}-${Date.now().toString(36)}`;
+// 담당 교사로 고를 수 있는 교사·관리자 명단(staff, 서버 모드에서 교사가 받음)
+let staff = [];
+export function applyStaff(list) {
+  staff = list ?? [];
+}
+export const staffList = () => staff;
+/** 학급의 담당 교사 바꾸기(서버 모드). 한 명 이상 */
+export function setClassTeachers(classId, uids) {
+  const c = getSessions().classes.find((x) => x.id === classId);
+  if (!c || !uids.length) return false;
+  c.teacherUids = [...uids];
+  if (isFirebase) backend?.call('setClassTeachers', { classId, uids });
+  return true;
+}
 
 const STORAGE_KEY = 'checkyourprove.prototype.sessions.v1';
 const CLASSROOM_KEY = 'checkyourprove.prototype.classroom.v1';
@@ -77,6 +107,7 @@ function normalize(raw) {
 }
 
 export function getSessions() {
+  if (isFirebase) return (cache ??= { classes: [], sessions: [], activeSessionId: null });
   if (!cache) {
     const raw = readJson(STORAGE_KEY, null);
     const { data, fixed } = normalize(raw);
@@ -89,7 +120,7 @@ export function getSessions() {
   return cache;
 }
 
-export const saveSessions = () => writeJson(STORAGE_KEY, getSessions());
+export const saveSessions = () => (isFirebase ? true : writeJson(STORAGE_KEY, getSessions()));
 
 export function resetSessionsCache() {
   cache = null;
@@ -97,8 +128,11 @@ export function resetSessionsCache() {
 
 export const activeSessionId = () => getSessions().activeSessionId;
 export const findSession = (id) => getSessions().sessions.find((s) => s.id === id) ?? SAMPLE_SESSIONS.find((s) => s.id === id) ?? null;
-export const activeSession = () => findSession(activeSessionId()) ?? getSessions().sessions[0];
-export const className = (classId) => [...getSessions().classes, ...SAMPLE_CLASSES].find((c) => c.id === classId)?.name ?? '학급';
+/** 진행 중 세션. 서버 모드에서는 세션이 하나도 없으면 null(학급·회차를 아직 만들지 않았거나 세션 코드로 들어가지 않음) */
+export const activeSession = () => findSession(activeSessionId()) ?? (isFirebase ? null : getSessions().sessions[0]);
+/** 학급 이름 (학생은 학급 문서를 읽지 않으므로 세션에 복사된 이름) */
+export const className = (classId) => [...getSessions().classes, ...SAMPLE_CLASSES].find((c) => c.id === classId)?.name
+  ?? getSessions().sessions.find((s) => s.classId === classId)?.className ?? '학급';
 
 /** "1반 2회차" */
 export const sessionLabel = (session) => (session ? `${className(session.classId)} ${session.round}회차` : '');
@@ -110,8 +144,9 @@ export function addClass(name) {
   const data = getSessions();
   const clean = String(name ?? '').trim();
   if (!clean) return null;
-  const klass = { id: newId('c'), name: clean };
+  const klass = { id: isFirebase ? pendingId('c') : newId('c'), name: clean };
   data.classes.push(klass);
+  if (isFirebase) backend?.call('createClass', { name: clean });
   saveSessions();
   return klass;
 }
@@ -122,13 +157,19 @@ export function setClassPractice(classId, patch) {
   if (!c) return false;
   c.practice = { ...(c.practice ?? {}), ...patch };
   Object.keys(c.practice).forEach((k) => { if (c.practice[k] == null) delete c.practice[k]; });
+  if (isFirebase) backend?.call('setClassPractice', { classId, patch });
   return saveSessions();
 }
-export const classPractice = (classId) => getSessions().classes.find((x) => x.id === classId)?.practice ?? {};
+/** 학급의 연습 설정 덮어쓰기 (학생은 세션에 복사된 값) */
+export const classPractice = (classId) => getSessions().classes.find((x) => x.id === classId)?.practice
+  ?? getSessions().sessions.find((s) => s.classId === classId)?.classPractice ?? {};
 
 export function renameClass(id, name) {
   const klass = getSessions().classes.find((c) => c.id === id);
-  if (klass && String(name).trim()) klass.name = String(name).trim();
+  if (klass && String(name).trim()) {
+    klass.name = String(name).trim();
+    if (isFirebase) backend?.call('renameClass', { classId: id, name: klass.name });
+  }
   return saveSessions();
 }
 
@@ -137,6 +178,7 @@ export function removeClass(id) {
   const data = getSessions();
   if (data.sessions.some((s) => s.classId === id)) return false;
   data.classes = data.classes.filter((c) => c.id !== id);
+  if (isFirebase) backend?.call('removeClass', { classId: id });
   return saveSessions();
 }
 
@@ -146,7 +188,7 @@ export function addSession(classId) {
   const same = data.sessions.filter((s) => s.classId === classId);
   const base = same.at(-1) ?? activeSession();
   const session = {
-    id: newId('s'),
+    id: isFirebase ? pendingId('s') : newId('s'),
     classId,
     round: same.reduce((m, s) => Math.max(m, s.round), 0) + 1,
     open: true,
@@ -156,6 +198,7 @@ export function addSession(classId) {
     createdAt: now(),
   };
   data.sessions.push(session);
+  if (isFirebase) backend?.call('createSession', { classId }); // 서버가 회차 번호·코드를 정해 만든다
   saveSessions();
   return session;
 }
@@ -164,6 +207,7 @@ export function setActiveSession(id) {
   const data = getSessions();
   if (!data.sessions.some((s) => s.id === id)) return false;
   data.activeSessionId = id;
+  if (isFirebase) backend?.setActive(id);
   return saveSessions();
 }
 
@@ -171,6 +215,7 @@ export function updateSession(id, patch) {
   const session = getSessions().sessions.find((s) => s.id === id);
   if (!session) return false;
   Object.assign(session, patch);
+  if (isFirebase) backend?.updateSession(id, patch);
   return saveSessions();
 }
 
@@ -179,6 +224,7 @@ export function removeSession(id) {
   const data = getSessions();
   if (id === data.activeSessionId) return false;
   data.sessions = data.sessions.filter((s) => s.id !== id);
+  if (isFirebase) backend?.call('removeSession', { sessionId: id }); // 서버가 그 세션의 학생 기록까지 지운다
   return saveSessions();
 }
 
@@ -202,6 +248,7 @@ export const cleanCode = (text) => String(text ?? '').toUpperCase().replace(/[\s
 /** 세션 코드가 없으면 만든다(겹치지 않게). 예시 세션은 코드가 없다. */
 export function ensureSessionCode(session) {
   if (!session || session.sample) return '';
+  if (isFirebase) return session.code ?? ''; // 서버가 세션을 만들 때 코드를 정한다
   if (!session.code) {
     const used = new Set(getSessions().sessions.map((s) => s.code).filter(Boolean));
     let code;
@@ -216,6 +263,10 @@ export function ensureSessionCode(session) {
 export function regenerateSessionCode(id) {
   const s = getSessions().sessions.find((x) => x.id === id);
   if (!s) return '';
+  if (isFirebase) {
+    backend?.call('regenerateCode', { sessionId: id });
+    return ''; // 새 코드는 서버에서 곧 들어온다
+  }
   delete s.code;
   return ensureSessionCode(s);
 }
@@ -224,6 +275,7 @@ export function setSessionCodeOpen(id, open) {
   const s = getSessions().sessions.find((x) => x.id === id);
   if (!s) return false;
   s.codeOpen = Boolean(open);
+  if (isFirebase) backend?.updateSession(id, { codeOpen: s.codeOpen });
   return saveSessions();
 }
 

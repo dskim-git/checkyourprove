@@ -63,6 +63,7 @@ import { renderSettings } from './views/settingsView.js';
 import { canTeach, currentUser, displayName, isAdmin } from './state/accountStore.js';
 import { isBrowserOnly, isDemo, isFirebase } from './state/appMode.js';
 import { renderLanding } from './views/landingView.js';
+import { researchReady } from './state/researchStore.js';
 import { icons } from './ui/icons.js';
 import { activeNotices } from './state/adminStore.js';
 import { dismissNotice, getPrefs } from './state/prefsStore.js';
@@ -204,6 +205,15 @@ document.addEventListener('click', (event) => {
 // 서버의 계정 값이 바뀌면 다시 그릴 화면(계정·설정·관리자·교사 업무판과 교사 설정). 채점처럼 고르는 중인 값이 있는 화면은 다시 그리지 않는다.
 const LIVE = [/^\/account$/, /^\/settings/, /^\/admin/, /^\/teacher\/admin/, /^\/teacher$/, /^\/teacher\/settings/];
 const userSig = (u) => (u ? `${u.uid}|${u.role}|${u.status}` : '');
+// 서버의 학급·세션·기록 값이 바뀌면 다시 그릴 목록 화면(4-2). 글을 쓰거나 고르는 화면(단계·채점 하나·면담 하나)은 다시 그리지 않는다.
+const LIVE_DATA = [/^\/$/, /^\/records$/, /^\/research$/, /^\/account$/, /^\/settings/, /^\/admin/, /^\/teacher$/, /^\/teacher\/settings/,
+  /^\/teacher\/grading$/, /^\/teacher\/chats$/, /^\/teacher\/analysis$/, /^\/teacher\/interviews$/];
+// 내 탐구 기록이 서버에서 오기 전에는 탐구 화면을 그리지 않는다(빈 기록으로 서버 기록을 덮지 않게)
+const LOADING = { section: 'student', tab: 'research', title: 'AI와 탐구하기', render: (root) => {
+  root.innerHTML = '<div class="page"><p class="meta" role="status">탐구 기록을 불러오는 중…</p></div>';
+} };
+
+let waitingForData = false;
 
 export function startRouter(root) {
   let cleanup = null;
@@ -224,7 +234,9 @@ export function startRouter(root) {
       if (match) params = match.slice(1);
       return Boolean(match);
     });
-    const route = gate(path, found);
+    let route = gate(path, found);
+    if (route === found && isFirebase && /^\/research/.test(path) && !researchReady()) route = LOADING;
+    waitingForData = route === LOADING;
     if (route !== found) params = [];
 
     root.innerHTML = '';
@@ -289,13 +301,14 @@ export function startRouter(root) {
     clearTimeout(timer);
     timer = setTimeout(() => {
       const a = document.activeElement;
-      const typing = a && (a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && !['checkbox', 'radio', 'button', 'submit', 'file'].includes(a.type)));
+      // 글이 들어 있는 칸에 쓰는 중이면 미룬다(빈 칸은 잃을 것이 없으니 다시 그리고 초점을 돌려준다)
+      const typing = a && (a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && !['checkbox', 'radio', 'button', 'submit', 'file'].includes(a.type))) && a.value !== '';
       if (typing || document.querySelector('dialog[open]')) {
         a?.addEventListener('blur', refresh, { once: true });
         return;
       }
       // 내 역할·승인 상태가 바뀌었거나 계정을 보여 주는 화면이면 다시 그리고, 아니면 머리글만
-      if (userSig(currentUser()) !== shownSig || LIVE.some((re) => re.test(currentPath()))) render({ refresh: true });
+      if (userSig(currentUser()) !== shownSig || LIVE.some((re) => re.test(currentPath())) || LIVE_DATA.some((re) => re.test(currentPath()))) render({ refresh: true });
       else {
         drawAppNav(currentUser());
         drawNoticeBar(currentUser());
@@ -303,5 +316,13 @@ export function startRouter(root) {
     }, 60);
   };
   window.addEventListener('checkyourprove:accounts', refresh);
+  // 학급·세션·기록(4-2): 불러오기를 기다리던 화면이거나 목록 화면이면 다시 그린다
+  window.addEventListener('checkyourprove:data', () => {
+    if (waitingForData) {
+      if (researchReady()) render();
+      return;
+    }
+    if (LIVE_DATA.some((re) => re.test(currentPath()))) refresh();
+  });
   render();
 }

@@ -8,8 +8,9 @@ import { sampleResearchStudents } from '../data/sampleResearch.js';
 import { getProblem } from '../data/problems/index.js';
 import { hasInk } from './inkModel.js';
 import { readingEditOf } from './gradingStore.js';
-import { sessionMembers } from './accountStore.js';
-import { getResearch } from './researchStore.js';
+import { findUser, sessionMembers } from './accountStore.js';
+import { getResearch, sessionRecords } from './researchStore.js';
+import { isFirebase } from './appMode.js';
 import { findSession, getSessions, localStudentId, sessionLabel } from './sessionStore.js';
 
 export const LOCAL_STUDENT_ID = 'local';
@@ -19,6 +20,7 @@ const sampleSessionOf = (index) => findSession(index < 3 ? 'sample-s1' : 'sample
 
 export function researchStudents({ includeSamples = true, sessionIds = null } = {}) {
   const inScope = (session) => !sessionIds || sessionIds.includes(session.id);
+  if (isFirebase) return [...serverStudents(inScope), ...samplesIn(includeSamples, inScope)];
   // 세션 코드로 들어온 계정이 있으면 이름 대신 연구 번호로 보인다(로드맵 3단계). 일반인(guest)은 연구 분석에서 기본으로 뺀다.
   const locals = getSessions().sessions.filter(inScope).map((session) => {
     const member = sessionMembers(session.id).find((u) => u.role === 'student' || u.role === 'guest');
@@ -32,10 +34,27 @@ export function researchStudents({ includeSamples = true, sessionIds = null } = 
       record: getResearch(session.id),
     };
   });
-  const samples = includeSamples
-    ? sampleResearchStudents().map((s, i) => ({ ...s, session: sampleSessionOf(i) })).filter((s) => inScope(s.session))
-    : [];
-  return [...locals, ...samples];
+  return [...locals, ...samplesIn(includeSamples, inScope)];
+}
+
+const samplesIn = (includeSamples, inScope) => (includeSamples
+  ? sampleResearchStudents().map((s, i) => ({ ...s, session: sampleSessionOf(i) })).filter((s) => inScope(s.session))
+  : []);
+
+/** 서버 모드(4-2): 담당 세션마다 학생 기록(학생 id = uid, 이름 대신 연구 번호). 교사·관리자의 미리보기 기록은 뺀다. */
+function serverStudents(inScope) {
+  return getSessions().sessions.filter(inScope).flatMap((session) => [...sessionRecords(session.id)]
+    .map(([uid, record]) => ({ uid, record, user: findUser(uid) }))
+    .filter(({ user }) => !user || user.role === 'student' || user.role === 'guest')
+    .map(({ uid, record, user }) => ({
+      id: uid,
+      pseudonym: `${user?.researchId ?? '연구 번호 확인 중'} (${sessionLabel(session)})`,
+      researchId: user?.researchId ?? null,
+      guest: user?.role === 'guest',
+      sample: false,
+      session,
+      record,
+    })));
 }
 
 export const targetKey = (studentId, stage, problemId) => `${studentId}~${stage}~${problemId}`;

@@ -3,6 +3,8 @@
 // 설정은 교사 설정(#/teacher/settings), 관리자 설정(#/admin), 내 설정(#/settings)으로 나뉜다.
 
 import { isFirebase } from '../state/appMode.js';
+import { sessionRecords } from '../state/researchStore.js';
+import { findUser } from '../state/accountStore.js';
 import { METHODS, getMethod } from '../data/methods.js';
 import { LEVELS, getLevel } from '../data/levels.js';
 import { getProblem } from '../data/problems/index.js';
@@ -35,6 +37,26 @@ export function renderTeacher(root) {
   const draw = () => {
     const classroom = getClassroom();
     const session = activeSession();
+    if (!session) {
+      // 서버 모드: 아직 담당 학급·회차가 없다
+      root.innerHTML = `<div class="page page--teacher">
+        ${breadcrumb([{ label: '홈', href: '#/' }, { label: '교사 업무판' }])}
+        <header class="page-intro board-head">
+          <div><h1>교사 업무판</h1><p class="lead">오늘 수업에 필요한 일을 모았습니다.</p></div>
+          <a class="button button--secondary" href="#/teacher/settings">교사 설정</a>
+        </header>
+        <section class="panel today" aria-labelledby="today-heading">
+          <h2 id="today-heading" class="section-title">진행 중 세션</h2>
+          <p>아직 담당 학급·회차가 없어요. 학급을 만들고 회차를 열면 세션 코드가 생기고, 학생은 그 코드로 들어와요.</p>
+          <p><a class="button button--primary" href="#/teacher/settings/sessions">학급·세션 만들기</a></p>
+        </section>
+        <section class="panel" aria-labelledby="tasks-heading">
+          <h2 id="tasks-heading" class="section-title">업무</h2>
+          <ul class="task-grid">${TASKS.map((t) => `<li><a class="task-tile" href="${t.href}"><span class="task-tile__title">${escapeHtml(t.title)}</span><span class="task-tile__desc">${escapeHtml(t.desc)}</span></a></li>`).join('')}</ul>
+        </section>
+      </div>`;
+      return;
+    }
     root.innerHTML = `<div class="page page--teacher">
     ${breadcrumb([{ label: '홈', href: '#/' }, { label: '교사 업무판' }])}
     <header class="page-intro board-head">
@@ -42,7 +64,7 @@ export function renderTeacher(root) {
       <a class="button button--secondary" href="#/teacher/settings">교사 설정</a>
     </header>
     ${isFirebase
-      ? notice('warn', '서버 연결 진행 중입니다', '로그인과 교사 권한은 서버가 확인합니다. 학급·세션과 학생 기록은 아직 이 브라우저에만 저장되며, 아래 학생 기록은 예시 데이터입니다.')
+      ? notice('warn', '서버 연결 진행 중입니다', '학급·세션과 학생의 탐구·연습 기록은 서버에 저장됩니다. 채점·대화 태그·면담·설문 편집과 원리 활동 진행 제어는 아직 이 브라우저에만 저장됩니다(다음 단계에서 옮김). 아래 증명 연습 현황은 예시 데이터입니다.')
       : notice('warn', '프로토타입 상태입니다', '교사 권한 확인, 실제 학생 데이터, 서버 저장은 아직 연결되지 않았습니다. 설정은 이 브라우저에만 저장되며, 아래 학생 기록은 모두 예시 데이터입니다.')}
     <div data-retention-alert></div>
 
@@ -81,13 +103,15 @@ export function renderTeacher(root) {
     <section class="panel" aria-labelledby="research-progress-heading">
       <div class="section-head">
         <h2 id="research-progress-heading" class="section-title">AI와 탐구하기 진행 현황</h2>
-        <span class="tag tag--proto">${escapeHtml(classroom.sessionLabel)}, 이 브라우저의 학생</span>
+        <span class="tag tag--proto">${escapeHtml(classroom.sessionLabel)}${isFirebase ? '' : ', 이 브라우저의 학생'}</span>
       </div>
-      <p class="meta">서버 연결 전이라 진행 중 세션(${escapeHtml(classroom.sessionLabel)})에서 이 브라우저로 활동한 학생 한 명의 기록만 보입니다. 학생이 1단계를 시작하면 그때의 명제 목록으로 고정됩니다.</p>
+      ${isFirebase
+        ? `<div data-research-progress>${serverProgress(session)}</div>`
+        : `<p class="meta">서버 연결 전이라 진행 중 세션(${escapeHtml(classroom.sessionLabel)})에서 이 브라우저로 활동한 학생 한 명의 기록만 보입니다. 학생이 1단계를 시작하면 그때의 명제 목록으로 고정됩니다.</p>
       <div data-research-progress>${researchProgress(classroom)}</div>
       <div class="actions actions--start">
         <button type="button" class="button button--ghost" data-action="reset-research">이 세션의 연구 기록 초기화</button>
-      </div>
+      </div>`}
     </section>
   </div>`;
   };
@@ -147,6 +171,23 @@ function activityTable() {
       <tbody>${rows}</tbody>
     </table>
   </div>`;
+}
+
+/** 서버 모드: 진행 중 세션에 들어온 학생들의 단계별 시작·제출 수 */
+function serverProgress(session) {
+  const students = [...sessionRecords(session.id)].filter(([uid]) => {
+    const u = findUser(uid);
+    return !u || u.role === 'student' || u.role === 'guest';
+  }).map(([, record]) => record);
+  const joined = sessionMembers(session.id).filter((u) => u.role === 'student' || u.role === 'guest').length;
+  const rows = RESEARCH_STAGES.map((stage) => {
+    const started = students.filter((r) => r.stages?.[String(stage.n)]).length;
+    const submitted = students.filter((r) => r.stages?.[String(stage.n)]?.submittedAt).length;
+    return `<tr><th scope="row">${stage.n}단계 ${escapeHtml(stage.short)}</th><td class="num">${started}명</td><td class="num">${submitted}명</td></tr>`;
+  }).join('');
+  return `<p class="meta">세션 코드로 들어온 학생 ${joined}명, 탐구 기록이 있는 학생 ${students.length}명</p>
+    <div class="table-wrap" role="region" aria-label="단계별 진행" tabindex="0"><table class="data-table">
+      <thead><tr><th scope="col">단계</th><th scope="col">시작</th><th scope="col">제출</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 function researchProgress(classroom) {

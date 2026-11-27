@@ -19,6 +19,7 @@ import {
 import { firebaseConfig } from './config.js';
 import { applyRemoteAccounts, DEFAULT_ETHICS, setAccountBackend } from '../state/accountStore.js';
 import { applyRemoteAudit, applyRemoteSignup, setAdminRemote } from '../state/adminStore.js';
+import { flushNow, updateDataSync } from './dataSync.js';
 
 const app = initializeApp(firebaseConfig);
 const auth = initializeAuth(app, { persistence: browserLocalPersistence, popupRedirectResolver: browserPopupRedirectResolver });
@@ -52,6 +53,7 @@ function merged(uid, u) {
     profile: link?.profile ?? (u.kind ? { kind: u.kind } : null),
     researchId: u.researchId,
     sessionIds: u.sessionIds ?? [],
+    activeSessionId: u.activeSessionId ?? null,
     guardianConsent: link?.guardianConsent ?? null,
     createdAt: u.createdAt,
     submittedAt: u.submittedAt,
@@ -80,9 +82,9 @@ function notifyError(message) {
   window.dispatchEvent(new window.CustomEvent('checkyourprove:remote-error', { detail: { message } }));
 }
 
-async function api(action, payload = {}) {
+async function api(action, payload = {}, path = '/api/account') {
   if (!auth.currentUser) throw new Error('로그인이 필요해요.');
-  const res = await fetch('/api/account', {
+  const res = await fetch(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await auth.currentUser.getIdToken()}` },
     body: JSON.stringify({ action, ...payload }),
@@ -93,9 +95,9 @@ async function api(action, payload = {}) {
 }
 
 /** 화면에서 바꾼 값을 서버에 보낸다. 실패하면 마지막 서버 값으로 되돌리고 알린다 */
-async function call(action, payload) {
+async function call(action, payload, path = '/api/account') {
   try {
-    const data = await api(action, payload);
+    const data = await api(action, payload, path);
     if (data.claimsChanged) await refreshClaims(true);
     return data;
   } catch (error) {
@@ -113,6 +115,7 @@ async function refreshClaims(force) {
   if (role !== claimRole) {
     claimRole = role;
     subscribe();
+    syncData();
   }
 }
 
@@ -130,6 +133,15 @@ async function ensureClaims(want) {
   ensuring = null;
 }
 
+/** 학급·세션·기록 동기화(dataSync)를 지금 로그인·역할에 맞춘다. 승인 전(클레임 없음)에는 멈춘다 */
+function syncData() {
+  if (!authUser || !claimRole || !selfUser) return updateDataSync(null);
+  return updateDataSync({
+    db, uid: authUser.uid, role: claimRole, notify: notifyError,
+    call: (path, action, payload) => call(action, payload, path),
+  }, selfUser);
+}
+
 function subscribe() {
   stopAll();
   allUsers = null;
@@ -143,6 +155,7 @@ function subscribe() {
     const want = selfUser?.status === 'approved' ? selfUser.role : null;
     if (want !== claimRole) ensureClaims(want);
     publish();
+    syncData();
   }, onErr('users/self')));
   unsubs.push(onSnapshot(doc(db, 'links', uid), (snap) => {
     selfLink = snap.exists() ? snap.data() : null;
@@ -189,6 +202,8 @@ async function signInWithGoogle() {
 }
 
 async function signOutHere() {
+  await flushNow().catch(() => {});
+  updateDataSync(null);
   stopAll();
   await fbSignOut(auth);
   // 공용 기기: 이 기기에 남은 Firestore 캐시를 지운다
@@ -211,7 +226,12 @@ export function initAccountSync() {
       return signInWithCustomToken(auth, token);
     };
   }
-  setAccountBackend({ call, signIn: signInWithGoogle, signOut: signOutHere });
+  setAccountBackend({
+    call,
+    signIn: signInWithGoogle,
+    signOut: signOutHere,
+    join: (code) => api('join', { code }, '/api/session').catch((error) => ({ error: error.message })),
+  });
   setAdminRemote(call);
   return new Promise((resolve) => {
     let first = true;
@@ -222,6 +242,7 @@ export function initAccountSync() {
       claimRole = null;
       if (!user) {
         stopAll();
+        updateDataSync(null);
         publish();
       } else {
         try {
@@ -235,6 +256,8 @@ export function initAccountSync() {
             const check = () => { if (selfUser) { clearTimeout(t); r(); } else setTimeout(check, 50); };
             check();
           });
+          // 학급·세션·내 기록의 첫 값까지 기다린다(그 전에 그리면 빈 화면이 잠깐 보인다)
+          await syncData();
         } catch (error) {
           notifyError(`계정 정보를 불러오지 못했어요: ${error.message}`);
           publish();

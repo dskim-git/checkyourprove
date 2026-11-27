@@ -114,8 +114,14 @@ function sessionGate(root, crumbs) {
   const onSubmit = (event) => {
     if (!event.target.matches('[data-code-form]')) return;
     event.preventDefault();
-    error = joinByCode(event.target.querySelector('[name="code"]').value);
-    if (error) draw();
+    const result = joinByCode(event.target.querySelector('[name="code"]').value);
+    const done = (err) => {
+      error = err;
+      if (err) draw();
+    };
+    // 서버 모드는 Promise(서버가 코드를 확인), 프로토타입은 바로
+    if (typeof result === 'string') done(result);
+    else result.then(done);
   };
   draw();
   root.addEventListener('submit', onSubmit);

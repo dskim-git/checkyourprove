@@ -34,6 +34,8 @@ export function setAccountBackend(b) {
   backend = b;
 }
 const remote = (action, payload = {}) => backend?.call(action, payload);
+/** 세션 코드로 들어가기(firebase 모드): 서버가 코드·열림·승인을 확인한다. 돌려줌 Promise<{ sessionId } | { error }> */
+export const joinSessionByCode = (code) => (backend ? backend.join(code) : Promise.resolve({ error: '서버에 연결되지 않았어요.' }));
 /** 구글 로그인(팝업, firebase 모드). 실패하면 오류를 던진다 */
 export const signInWithGoogle = () => (backend ? backend.signIn() : Promise.reject(new Error('서버에 연결되지 않았어요.')));
 /** 관리 기록: 서버 모드에서는 서버가 남긴다 */

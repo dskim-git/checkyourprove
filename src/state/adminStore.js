@@ -11,9 +11,12 @@
 //     audit: [{ at, by, action, detail }] }
 
 import { readJson, writeJson } from './storage.js';
+import { isFirebase } from './appMode.js';
 
 // 서버 연결(firebase 모드, 4-1): 가입 규칙은 settings/signup(서버 함수만 씀), 계정 관련 관리 기록은 서버의 audit 모음.
-// firebase/accountSync.js가 setAdminRemote·applyRemoteSignup·applyRemoteAudit으로 연결한다. 나머지는 4-2에서 옮긴다.
+// firebase/accountSync.js가 setAdminRemote·applyRemoteSignup·applyRemoteAudit으로 연결한다.
+// 4-2: 연습 기본값·문의처·공지는 settings/admin, 개인정보 요청은 requests(서버 함수가 쓰고 관리 기록을 남김, dataSync.js가 받음).
+//   이 모드에서 이 브라우저에 남는 것은 아직 옮기지 않은 화면의 관리 기록뿐이다(4-3).
 let remote = null;
 let remoteAudit = null;
 export function setAdminRemote(fn) {
@@ -24,6 +27,16 @@ export function applyRemoteSignup(signup) {
 }
 export function applyRemoteAudit(list) {
   remoteAudit = list;
+}
+/** settings/admin = { practice, contact, notices } */
+export function applyRemoteAdminSettings(data) {
+  const d = getAdmin();
+  d.practice = { ...PRACTICE_DEFAULTS, ...(data?.practice ?? {}) };
+  d.contact = { name: '', email: '', note: '', ...(data?.contact ?? {}) };
+  d.notices = Array.isArray(data?.notices) ? data.notices : [];
+}
+export function applyRemoteRequests(list) {
+  getAdmin().requests = [...(list ?? [])].sort((a, b) => String(b.at).localeCompare(String(a.at)));
 }
 /** 관리 기록(새것부터): 이 브라우저의 기록 + 서버 기록 */
 export const auditLog = () => (remoteAudit
@@ -69,7 +82,7 @@ const newId = (p) => `${p}-${Date.now().toString(36)}${Math.random().toString(36
 
 export function getAdmin() {
   if (!cache) {
-    const raw = readJson(STORAGE_KEY, {}) ?? {};
+    const raw = (isFirebase ? { audit: readJson(STORAGE_KEY, {})?.audit } : readJson(STORAGE_KEY, {})) ?? {};
     const d = DEFAULTS();
     cache = {
       practice: { ...d.practice, ...(raw.practice ?? {}) },
@@ -82,7 +95,8 @@ export function getAdmin() {
   }
   return cache;
 }
-const save = () => writeJson(STORAGE_KEY, getAdmin());
+// 서버 모드: 이 브라우저에는 관리 기록만 남긴다(나머지는 서버)
+const save = () => writeJson(STORAGE_KEY, isFirebase ? { audit: getAdmin().audit } : getAdmin());
 export function resetAdminCache() {
   cache = null;
 }
@@ -101,6 +115,7 @@ export function logAction(action, detail = '', by = '') {
 
 export function savePracticeDefaults(patch, by) {
   Object.assign(getAdmin().practice, patch);
+  if (remote) return remote('saveAdmin', { section: 'practice', patch });
   save();
   logAction('연습 기본값 변경', Object.entries(patch).map(([k, v]) => `${k}=${v}`).join(', '), by);
 }
@@ -114,6 +129,10 @@ export function saveSignupRules(patch, by) {
 
 export function saveContact(patch) {
   Object.assign(getAdmin().contact, patch);
+  if (remote) {
+    remote('saveAdmin', { section: 'contact', patch });
+    return true;
+  }
   return save();
 }
 
@@ -124,6 +143,10 @@ const today = () => new Date().toISOString().slice(0, 10);
 export function addNotice({ title, body, audience = 'all', until = '' }, by) {
   const n = { id: newId('n'), title: String(title).trim(), body: String(body ?? '').trim(), audience, until, createdAt: now(), by };
   getAdmin().notices.unshift(n);
+  if (remote) {
+    remote('addNotice', { notice: { title: n.title, body: n.body, audience, until } });
+    return n;
+  }
   save();
   logAction('공지 올림', n.title, by);
   return n;
@@ -133,6 +156,7 @@ export function removeNotice(id, by) {
   const d = getAdmin();
   const n = d.notices.find((x) => x.id === id);
   d.notices = d.notices.filter((x) => x.id !== id);
+  if (remote) return remote('removeNotice', { id });
   save();
   if (n) logAction('공지 내림', n.title, by);
 }
@@ -148,6 +172,10 @@ export function activeNotices(role) {
 export function addRequest({ uid, researchId, type, reason }) {
   const r = { id: newId('rq'), uid, researchId, type, reason: String(reason ?? '').trim(), at: now(), status: 'open', note: '', doneAt: null };
   getAdmin().requests.unshift(r);
+  if (remote) {
+    remote('addRequest', { type, reason: r.reason });
+    return r;
+  }
   save();
   return r;
 }
@@ -158,6 +186,10 @@ export function closeRequest(id, note, by) {
   const r = getAdmin().requests.find((x) => x.id === id);
   if (!r) return false;
   Object.assign(r, { status: 'done', note: String(note ?? '').trim(), doneAt: now() });
+  if (remote) {
+    remote('closeRequest', { id, note: r.note });
+    return true;
+  }
   save();
   logAction('개인정보 요청 처리', `${r.researchId} ${REQUEST_TYPES.find((t) => t.id === r.type)?.label ?? r.type}${r.note ? `: ${r.note}` : ''}`, by);
   return true;
