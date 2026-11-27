@@ -2,11 +2,17 @@
 // 비밀 값: FIREBASE_SERVICE_ACCOUNT(서비스 계정 JSON 내용, Vercel 민감 값) 또는 GOOGLE_APPLICATION_CREDENTIALS(로컬 키 파일 경로).
 // 로컬 개발 서버(npm run dev)에서는 vite.config.js의 개발용 중계가 같은 함수를 불러 준다.
 
-import { applicationDefault, cert, getApps, initializeApp } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
+// firebase-admin은 요청을 받은 뒤 불러온다(ready). 불러오기가 실패해도 함수가 통째로 멈추지 않고 원인을 JSON 오류로 돌려준다.
+let sdk = null;
+async function ready() {
+  if (sdk) return;
+  const [app, auth, firestore] = await Promise.all([import('firebase-admin/app'), import('firebase-admin/auth'), import('firebase-admin/firestore')]);
+  sdk = { ...app, getAuth: auth.getAuth, getFirestore: firestore.getFirestore, FieldValue: firestore.FieldValue };
+}
+export const fieldValue = () => sdk.FieldValue;
 
 function credential() {
+  const { applicationDefault, cert } = sdk;
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
   if (raw) {
     const text = raw.trim().startsWith('{') ? raw : Buffer.from(raw, 'base64').toString('utf8');
@@ -18,10 +24,11 @@ function credential() {
 }
 
 export function adminApp() {
+  const { getApps, initializeApp } = sdk;
   return getApps()[0] ?? initializeApp({ credential: credential(), projectId: process.env.VITE_FIREBASE_PROJECT_ID || undefined });
 }
-export const adminAuth = () => getAuth(adminApp());
-export const db = () => getFirestore(adminApp());
+export const adminAuth = () => sdk.getAuth(adminApp());
+export const db = () => sdk.getFirestore(adminApp());
 
 /** 오류를 화면에 보여 줄 글과 HTTP 상태로 */
 export class HttpError extends Error {
@@ -29,6 +36,16 @@ export class HttpError extends Error {
     super(message);
     this.status = status;
   }
+}
+
+/** 오류 원인을 짧게(비밀 값은 넣지 않는다): 설정 문제를 바로 알아보게 */
+function setupHint(error) {
+  const msg = String(error?.message ?? '');
+  if (!process.env.FIREBASE_SERVICE_ACCOUNT && !process.env.GOOGLE_APPLICATION_CREDENTIALS) return 'FIREBASE_SERVICE_ACCOUNT 환경 변수가 없음';
+  if (error instanceof SyntaxError || /JSON/.test(msg)) return 'FIREBASE_SERVICE_ACCOUNT 내용이 JSON이 아님';
+  if (/credential|private key|PEM|invalid_grant|UNAUTHENTICATED/i.test(msg)) return '서비스 계정 키를 쓸 수 없음';
+  if (/Cannot find|ERR_MODULE|import/i.test(msg)) return `라이브러리를 불러오지 못함, Node ${process.versions.node}`;
+  return error?.code ? String(error.code) : 'unknown';
 }
 
 async function readBody(req) {
@@ -54,6 +71,13 @@ export function handler(fn) {
   return async (req, res) => {
     try {
       if (req.method !== 'POST') throw new HttpError(405, 'POST만 받아요.');
+      try {
+        await ready();
+        adminApp();
+      } catch (error) {
+        console.error(error);
+        throw new HttpError(500, `서버 준비 실패(${setupHint(error)}). 관리자에게 알려 주세요.`);
+      }
       const header = req.headers.authorization ?? '';
       const idToken = header.startsWith('Bearer ') ? header.slice(7) : '';
       if (!idToken) throw new HttpError(401, '로그인이 필요해요.');
@@ -67,8 +91,8 @@ export function handler(fn) {
       send(res, 200, (await fn({ body, token })) ?? { ok: true });
     } catch (error) {
       const status = error instanceof HttpError ? error.status : 500;
-      if (status === 500) console.error(error);
-      send(res, status, { error: status === 500 ? '서버에서 처리하지 못했어요.' : error.message });
+      if (!(error instanceof HttpError)) console.error(error);
+      send(res, status, { error: error instanceof HttpError ? error.message : `서버에서 처리하지 못했어요(${setupHint(error)}).` });
     }
   };
 }

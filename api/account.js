@@ -12,8 +12,7 @@
 //   settings/ethics, settings/signup
 //   audit/{자동}       { at, action, detail, by }  ← 관리 기록(서버만 씀)
 
-import { FieldValue } from 'firebase-admin/firestore';
-import { adminAuth, db, handler, HttpError } from './_lib/server.js';
+import { adminAuth, db, fieldValue, handler, HttpError } from './_lib/server.js';
 
 const ROLES = ['admin', 'teacher', 'student', 'guest'];
 const ROLE_LABEL = { admin: '관리자', teacher: '교사', student: '학생', guest: '일반인' };
@@ -138,7 +137,7 @@ async function joinSession({ token, body }) {
   if (!/^[\w-]{1,64}$/.test(id)) throw new HttpError(400, '세션을 알 수 없어요.');
   const user = await getUser(token.uid);
   if (user.status !== 'approved') throw new HttpError(403, '승인된 뒤에 세션에 들어갈 수 있어요.');
-  await users().doc(token.uid).update({ sessionIds: FieldValue.arrayUnion(id) });
+  await users().doc(token.uid).update({ sessionIds: fieldValue().arrayUnion(id) });
   return { ok: true };
 }
 
