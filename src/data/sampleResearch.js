@@ -6,6 +6,38 @@
 
 import { fullProofText } from './proofModel.js';
 import { handwritingInk } from './sampleHandwriting.js';
+import { DEFAULT_SURVEY, DEFAULT_SURVEY_ID } from './surveyDefaults.js';
+
+/**
+ * 예시 사전·사후 설문 응답: 학생마다 출발점(level)을 두고, 사후에는 영역마다 조금씩 바뀌게 한다.
+ * 증명 개념·AI 리터러시는 대체로 오르고, 수학 능력은 학생에 따라 다르다. 역문항(q6)은 반대로 움직인다.
+ */
+const SURVEY_TEXT = {
+  pre: ['AI는 답을 빨리 알려 줘서 편하다', '잘 모르겠다', 'AI가 틀릴 수도 있을 것 같다', '숙제할 때 쓰면 좋을 것 같다', '없음', 'AI가 쓴 답은 다 맞는 줄 알았다'],
+  post: ['AI가 쓴 증명도 근거를 확인해야 한다', '질문을 나누어 물으면 더 도움이 된다', 'AI가 틀릴 수 있어서 내가 비교해 보는 것이 중요하다', '처음 시작할 때 도움이 되지만 내가 먼저 생각해야 한다', 'AI 답을 그대로 쓰지 않고 내 말로 고쳐 쓴다', '편하지만 그대로 믿으면 안 된다'],
+};
+const clamp = (v) => Math.max(1, Math.min(5, Math.round(v)));
+function sampleSurveys(index, day) {
+  const level = [2, 4, 3, 1, 4, 3][index];
+  const gain = { concept: [2, 0, 1, 1, 0, 1][index], ability: [1, 0, 1, 0, -1, 0][index], ai: [1, 1, 2, 1, 1, 0][index] };
+  const answers = (kind) => Object.fromEntries(DEFAULT_SURVEY.questions.map((q, i) => {
+    if (q.type === 'scale') {
+      const base = level + ((i + index) % 3) - 1;
+      const g = kind === 'post' ? gain[q.domain] : 0;
+      return [q.id, clamp(q.reverse ? 6 - base - g : base + g)];
+    }
+    if (q.type === 'choice') {
+      const pick = kind === 'pre' ? (level <= 2 ? 0 : 1) : (level <= 1 ? 0 : 1);
+      return [q.id, q.options[pick]];
+    }
+    return [q.id, SURVEY_TEXT[kind][index]];
+  }));
+  const response = (kind, d, h) => ({
+    surveyId: DEFAULT_SURVEY_ID, startedAt: at(d, h, 0), submittedAt: at(d, h, 6 + (index % 3)), activeMs: (5 + (index % 3)) * 60000 + 20000,
+    answers: answers(kind), answeredAt: {}, changes: index % 2,
+  });
+  return { pre: response('pre', day, 8), post: response('post', day + 2, 10) };
+}
 import { RESEARCH_PROPOSITIONS } from './researchPropositions.js';
 
 const P = Object.fromEntries(RESEARCH_PROPOSITIONS.map((p) => [p.id, p]));
@@ -212,7 +244,9 @@ function buildRecord(profile, index) {
       3: stage(day + 2, 9, 22, stage3),
       4: stage(day + 2, 9, 45, stage4),
     },
-    updatedAt: at(day + 2, 9, 45),
+    consent: { agreed: true, at: at(day, 7, 55), version: 'consent-proto-1', history: [{ at: at(day, 7, 55), agreed: true, version: 'consent-proto-1' }] },
+    surveys: sampleSurveys(index, day),
+    updatedAt: at(day + 2, 10, 10),
   };
 }
 

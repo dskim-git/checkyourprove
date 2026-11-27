@@ -9,8 +9,10 @@ import { researchStudents } from '../../state/researchRoster.js';
 import { escapeHtml } from '../../ui/dom.js';
 import { breadcrumb, notice } from '../../ui/components.js';
 import { handleScopeEvent, scopePicker, scopeText } from './sessionScope.js';
-import { sessionLabel } from '../../state/sessionStore.js';
-import { barList, bindChartTips, columns, scatter, splitBar, statTiles, wordCloud } from '../../ui/charts.js';
+import { isResearchIncluded, surveyCsv, surveyStats, surveysInUse } from '../../services/surveyAnalysis.js';
+import { SCALE_LABELS } from '../../data/surveyDefaults.js';
+import { className as classNameOf, sessionLabel } from '../../state/sessionStore.js';
+import { barList, bindChartTips, columns, dotPlot, scatter, splitBar, statTiles, wordCloud } from '../../ui/charts.js';
 import { acceptanceStats, checklistStats, isNoneAnswer, OPEN_QUESTIONS, openAnswers, wordFrequencies } from '../../services/classInsights.js';
 
 const fmt = (v, digits = 1) => (v == null ? '–' : Number(v).toFixed(digits).replace(/\.0$/, ''));
@@ -18,6 +20,13 @@ const signed = (v) => (v == null ? '–' : `${v > 0 ? '+' : ''}${fmt(v)}`);
 const rText = (r) => (r == null ? '계산 불가' : r.toFixed(2));
 
 export const sourceOf = () => getGrading().analysisSource ?? 'r1';
+
+/** 분석 대상 학생: 포함한 세션, 1단계 제출, 연구 동의(설정하면 동의하지 않은·답하지 않은 학생도) */
+export function analysisStudents(g = getGrading()) {
+  const all = researchStudents({ includeSamples: g.includeSamples, sessionIds: g.scopeSessionIds });
+  const included = all.filter((s) => g.includeNonConsent || isResearchIncluded(s));
+  return { all, included, excluded: all.length - included.length };
+}
 
 /** 점수 출처 고르기 (분석 화면들이 함께 쓴다) */
 export function sourcePicker(source) {
@@ -31,11 +40,13 @@ export function sourcePicker(source) {
 export function renderAnalysisHome(root) {
   let disposeTips = () => {};
   let openField = 'aiHelpful';
+  let surveyPick = null;
   const draw = () => {
     disposeTips();
     const g = getGrading();
     const source = sourceOf();
-    const students = researchStudents({ includeSamples: g.includeSamples, sessionIds: g.scopeSessionIds }).filter((s) => s.record.stages?.['1']?.submittedAt);
+    const pool = analysisStudents(g);
+    const students = pool.included.filter((s) => s.record.stages?.['1']?.submittedAt);
     const analyses = students.map((s) => analyzeStudent(s, source));
     const sum = classSummary(analyses);
     const scored = analyses.some((a) => a.props.some((p) => p.totals[1] != null || p.totals[4] != null));
@@ -71,6 +82,7 @@ export function renderAnalysisHome(root) {
         <form class="settings-form grading-settings" data-analysis-settings novalidate>
           ${sourcePicker(source)}
           <label class="check"><input type="checkbox" name="includeSamples"${g.includeSamples ? ' checked' : ''}><span>예시 학생 포함</span></label>
+          <label class="check"><input type="checkbox" name="includeNonConsent"${g.includeNonConsent ? ' checked' : ''}><span>연구에 동의하지 않은 학생도 포함 <span class="meta">기본은 동의한 학생만 분석합니다.${pool.excluded ? ` 지금 ${pool.excluded}명이 빠져 있습니다.` : ''}</span></span></label>
           ${scopePicker(g)}
         </form>
         ${scored ? '' : notice('eye', '아직 채점한 증명이 없습니다', '증명 채점 화면에서 채점하거나, 점수 출처를 "AI 채점(참고)"으로 바꾸면 대시보드를 미리 볼 수 있습니다.')}
@@ -95,6 +107,7 @@ export function renderAnalysisHome(root) {
       ${acceptanceSection(analyses)}
       ${checklistSection(analyses, source)}
       ${openSection(analyses)}
+      ${surveySection(pool.included)}
       <section class="panel" aria-labelledby="an-students">
         <div class="section-head">
           <h2 id="an-students" class="section-title">학생별 요약</h2>
@@ -184,6 +197,56 @@ export function renderAnalysisHome(root) {
     </section>`;
   }
 
+  function surveySection(students) {
+    const use = surveysInUse(students);
+    if (!use.length) {
+      return `<section class="panel" aria-labelledby="an-survey"><h2 id="an-survey" class="section-title">사전·사후 설문</h2><p class="empty-text">아직 제출한 설문 응답이 없습니다.</p></section>`;
+    }
+    const pick = use.find((u) => u.id === surveyPick) ?? use[0];
+    const st = surveyStats(pick.survey, students);
+    const fmt = (v) => (v == null ? '–' : Number(v).toFixed(2).replace(/\.?0+$/, ''));
+    const signed = (v) => (v == null ? '–' : `${v > 0 ? '+' : ''}${fmt(v)}`);
+    const series = [{ key: 'pre', label: '사전', short: '사전', cls: 'mine' }, { key: 'post', label: '사후', short: '사후', cls: 'final' }];
+    const scaleItems = st.items.filter((i) => i.q.type === 'scale');
+    const choiceItems = st.items.filter((i) => i.q.type === 'choice');
+    const textItems = st.items.filter((i) => i.q.type === 'short' || i.q.type === 'long');
+    const qNum = (q) => st.survey.questions.indexOf(q) + 1;
+    return `<section class="panel" aria-labelledby="an-survey">
+      <div class="section-head">
+        <h2 id="an-survey" class="section-title">사전·사후 설문</h2>
+        <button type="button" class="button button--secondary button--small" data-action="survey-csv">설문 CSV 내려받기</button>
+      </div>
+      ${use.length > 1 ? `<fieldset class="choice-group"><legend>설문</legend><div class="pick-group__options">${use.map((u) => `<label class="pick pick--tag"><input type="radio" name="surveyPick" value="${u.id}"${u.id === pick.id ? ' checked' : ''}><span>${escapeHtml(u.survey.title)} (${u.n}명)</span></label>`).join('')}</div></fieldset>` : `<p class="meta">${escapeHtml(pick.survey.title)}</p>`}
+      <p class="meta">변화와 효과 크기(dz = 변화 평균 ÷ 변화의 표준편차)는 사전·사후를 모두 낸 학생끼리 짝지어 계산합니다. 5점 척도(1 ${SCALE_LABELS[0]} ~ 5 ${SCALE_LABELS[4]}), 역문항은 6 − 점수로 바꾸어 영역 평균에 넣습니다. 학생 수가 적으면 효과 크기는 참고만 하세요.</p>
+      ${statTiles([
+        { label: '사전 응답', value: `${st.preN}명`, sub: st.minutes.pre != null ? `평균 ${fmt(st.minutes.pre)}분` : '' },
+        { label: '사후 응답', value: `${st.postN}명`, sub: st.minutes.post != null ? `평균 ${fmt(st.minutes.post)}분` : '' },
+        { label: '사전·사후 모두', value: `${st.pairedN}명`, sub: '변화 계산에 쓰는 학생' },
+        ...st.domains.map((d) => ({ label: `${d.label} 변화`, value: signed(d.diff), sub: `${fmt(d.pre)} → ${fmt(d.post)}, dz ${fmt(d.dz)}` })),
+      ])}
+      <div class="an-charts">
+        ${dotPlot({ title: '영역별 평균 (5점 척도)', series, max: 5, min: 1, ticks: [1, 2, 3, 4, 5], unit: '점', rows: st.domains.map((d) => ({ label: d.label, values: { pre: d.pre, post: d.post } })) })}
+        ${dotPlot({ title: '문항별 평균 (5점 척도)', series, max: 5, min: 1, ticks: [1, 2, 3, 4, 5], unit: '점', rows: scaleItems.map((i) => ({ label: `${qNum(i.q)}번${i.q.reverse ? ' (역)' : ''}`, values: { pre: i.pre, post: i.post } })) })}
+      </div>
+      <div class="table-wrap" role="region" aria-label="문항별 사전·사후" tabindex="0">
+        <table class="data-table grade-table" data-survey-table>
+          <thead><tr><th scope="col">문항</th><th scope="col">사전</th><th scope="col">사후</th><th scope="col">변화</th><th scope="col">짝 n</th><th scope="col">dz</th></tr></thead>
+          <tbody>${scaleItems.map((i) => `<tr><th scope="row">${qNum(i.q)}. ${escapeHtml(i.q.text)}${i.q.reverse ? ' <span class="tag">역문항</span>' : ''}</th><td class="num">${fmt(i.pre)}</td><td class="num">${fmt(i.post)}</td><td class="num">${signed(i.diff)}</td><td class="num">${i.n}</td><td class="num">${fmt(i.dz)}</td></tr>`).join('')}</tbody>
+        </table>
+      </div>
+      ${choiceItems.map((i) => `<div class="an-charts">
+        ${barList({ title: `${qNum(i.q)}. ${i.q.text} (사전)`, unit: '명', wide: true, rows: i.preCounts.map((c) => ({ label: c.option, value: c.count })), max: st.rows.length })}
+        ${barList({ title: '(사후)', unit: '명', wide: true, rows: i.postCounts.map((c) => ({ label: c.option, value: c.count })), max: st.rows.length })}
+      </div>`).join('')}
+      ${textItems.map((i) => `<details class="ref-card"><summary>${qNum(i.q)}. ${escapeHtml(i.q.text)}</summary>
+        <div class="an-charts">
+          <figure class="chart"><figcaption class="chart__head"><span class="chart__title">사전 (${i.preTexts.length})</span></figcaption>${wordCloud({ words: wordFrequencies(i.preTexts.filter((t) => !isNoneAnswer(t.text)).map((t) => t.text)).slice(0, 20) })}<ul class="answer-list">${i.preTexts.map((t) => `<li><span class="meta">${escapeHtml(t.who)}</span>${escapeHtml(t.text)}</li>`).join('')}</ul></figure>
+          <figure class="chart"><figcaption class="chart__head"><span class="chart__title">사후 (${i.postTexts.length})</span></figcaption>${wordCloud({ words: wordFrequencies(i.postTexts.filter((t) => !isNoneAnswer(t.text)).map((t) => t.text)).slice(0, 20) })}<ul class="answer-list">${i.postTexts.map((t) => `<li><span class="meta">${escapeHtml(t.who)}</span>${escapeHtml(t.text)}</li>`).join('')}</ul></figure>
+        </div>
+      </details>`).join('')}
+    </section>`;
+  }
+
   const onChange = (event) => {
     if (handleScopeEvent(event, root)) {
       draw();
@@ -199,17 +262,39 @@ export function renderAnalysisHome(root) {
     }
     if (event.target.name === 'analysisSource') updateGradingSettings({ analysisSource: event.target.value });
     if (event.target.name === 'includeSamples') updateGradingSettings({ includeSamples: event.target.checked });
+    if (event.target.name === 'includeNonConsent') updateGradingSettings({ includeNonConsent: event.target.checked });
+    if (event.target.name === 'surveyPick') {
+      surveyPick = event.target.value;
+      draw();
+      return;
+    }
     if (event.target.closest('[data-analysis-settings]')) draw();
   };
+  const download = (csv, name) => {
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = name;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
   const onClick = (event) => {
     if (handleScopeEvent(event, root)) {
       draw();
       return;
     }
+    if (event.target.closest('[data-action="survey-csv"]')) {
+      const { included } = analysisStudents();
+      const use = surveysInUse(included);
+      const pick = use.find((u) => u.id === surveyPick) ?? use[0];
+      if (pick) download(surveyCsv(pick.survey, included, { className: classNameOf }), `설문-${new Date().toISOString().slice(0, 10)}.csv`);
+      return;
+    }
     if (!event.target.closest('[data-action="csv"]')) return;
     const g = getGrading();
     const source = sourceOf();
-    const students = researchStudents({ includeSamples: g.includeSamples, sessionIds: g.scopeSessionIds }).filter((s) => s.record.stages?.['1']?.submittedAt);
+    const students = analysisStudents(g).included.filter((s) => s.record.stages?.['1']?.submittedAt);
     const csv = analysisCsv(students.map((s) => analyzeStudent(s, source)), source);
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     const link = document.createElement('a');

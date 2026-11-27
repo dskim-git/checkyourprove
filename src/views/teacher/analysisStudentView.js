@@ -10,15 +10,18 @@ import { ACTUAL_METHOD_OPTIONS, COMPLETENESS_OPTIONS, DEFAULT_RUBRIC, RUBRIC_TOT
 import { getProblem } from '../../data/problems/index.js';
 import { analyzeStudent, scoreFor, SCORE_SOURCES } from '../../services/analysis.js';
 import { getGrading, updateGradingSettings } from '../../state/gradingStore.js';
-import { conversationKey, researchStudents, targetKey } from '../../state/researchRoster.js';
+import { conversationKey, targetKey } from '../../state/researchRoster.js';
 import { escapeHtml, formatDateTime } from '../../ui/dom.js';
 import { breadcrumb, renderNotFound } from '../../ui/components.js';
 import { barList, bindChartTips, dotPlot, splitBar, statTiles } from '../../ui/charts.js';
 import { mountInkViews } from '../../ui/inkCanvas.js';
 import { statementHtml } from '../../ui/mathText.js';
 import { readProofInk } from '../research/researchParts.js';
-import { sourceOf, sourcePicker } from './analysisHomeView.js';
+import { analysisStudents, sourceOf, sourcePicker } from './analysisHomeView.js';
 import { sessionLabel } from '../../state/sessionStore.js';
+import { SCALE_LABELS, SURVEY_DOMAINS } from '../../data/surveyDefaults.js';
+import { CONSENT_LABELS, consentStatus, domainMeans, responsesOf } from '../../services/surveyAnalysis.js';
+import { findSurvey } from '../../state/surveyStore.js';
 import { gradedBy, openChatPopup, openGradePopup, taggedBy } from './recordPopups.js';
 
 const fmt = (v) => (v == null ? '–' : Number.isInteger(v) ? String(v) : Number(v).toFixed(1));
@@ -36,7 +39,7 @@ export function renderAnalysisStudent(root, [studentId]) {
     disposeInk();
     const g = getGrading();
     const source = sourceOf();
-    const students = researchStudents({ includeSamples: g.includeSamples, sessionIds: g.scopeSessionIds }).filter((s) => s.record.stages?.['1']?.submittedAt);
+    const students = analysisStudents(g).included.filter((s) => s.record.stages?.['1']?.submittedAt);
     const index = students.findIndex((s) => s.id === studentId);
     const student = students[index];
     if (!student) {
@@ -71,7 +74,7 @@ export function renderAnalysisStudent(root, [studentId]) {
       ${breadcrumb([{ label: '교사 화면', href: '#/teacher' }, { label: '연구 분석', href: '#/teacher/analysis' }, { label: student.pseudonym }])}
       <header class="page-intro">
         <h1>${escapeHtml(student.pseudonym)}${student.sample ? ' <span class="tag tag--proto">예시</span>' : ''}</h1>
-        <p class="grade-who"><span class="tag tag--strong">${escapeHtml(sessionLabel(student.session))}</span></p>
+        <p class="grade-who"><span class="tag tag--strong">${escapeHtml(sessionLabel(student.session))}</span><span class="tag${consentStatus(student) === 'agreed' ? ' tag--mint' : ''}">연구 동의: ${escapeHtml(CONSENT_LABELS[consentStatus(student)])}</span></p>
         <p class="lead">명제 ${a.props.length}개의 1~4단계 기록입니다. 점수 출처: ${escapeHtml(sourceLabel)}.</p>
         <nav class="an-nav" aria-label="다른 학생">
           ${prev ? `<a class="button button--ghost button--small" href="#/teacher/analysis/${prev.id}">이전 학생: ${escapeHtml(prev.pseudonym)}</a>` : ''}
@@ -101,6 +104,8 @@ export function renderAnalysisStudent(root, [studentId]) {
         ${timeChart}
       </section>
 
+      ${surveyBlock(student)}
+
       ${a.props.map((p) => propSection(student, p, source)).join('')}
     </div>`;
     disposeTips = bindChartTips(root);
@@ -109,6 +114,36 @@ export function renderAnalysisStudent(root, [studentId]) {
       return student.record.stages?.[stage]?.items?.[problemId]?.ink?.[field] ?? null;
     });
   };
+
+  /** 사전·사후 설문: 영역 평균, 문항별 응답 */
+  function surveyBlock(student) {
+    const { pre, post } = responsesOf(student);
+    const survey = findSurvey(pre?.surveyId ?? post?.surveyId);
+    if (!survey) {
+      return `<section class="panel" aria-labelledby="st-survey"><h2 id="st-survey" class="section-title">사전·사후 설문</h2><p class="empty-text">제출한 설문이 없습니다.</p></section>`;
+    }
+    const dm = domainMeans(survey, student);
+    const ans = (q, r) => {
+      const v = r?.answers?.[q.id];
+      if (v == null || v === '') return '–';
+      return q.type === 'scale' ? `<span class="num">${v}</span> <span class="meta">${escapeHtml(SCALE_LABELS[v - 1])}</span>` : escapeHtml(String(v));
+    };
+    const change = (q) => (q.type === 'scale' && pre && post && pre.answers[q.id] != null && post.answers[q.id] != null
+      ? (() => { const d = post.answers[q.id] - pre.answers[q.id]; return `<span class="num">${d > 0 ? '+' : ''}${d}</span>`; })()
+      : '');
+    const series = [{ key: 'pre', label: '사전', short: '사전', cls: 'mine' }, { key: 'post', label: '사후', short: '사후', cls: 'final' }];
+    return `<section class="panel" aria-labelledby="st-survey">
+      <h2 id="st-survey" class="section-title">사전·사후 설문</h2>
+      <p class="meta">${escapeHtml(survey.title)}. 사전 ${pre ? `${escapeHtml(formatDateTime(pre.submittedAt))} 제출, ${Math.round((pre.activeMs ?? 0) / 60000)}분` : '제출 전'}, 사후 ${post ? `${escapeHtml(formatDateTime(post.submittedAt))} 제출, ${Math.round((post.activeMs ?? 0) / 60000)}분` : '제출 전'}</p>
+      ${dotPlot({ title: '영역별 평균 (5점 척도, 역문항 바꿈)', series, max: 5, min: 1, ticks: [1, 2, 3, 4, 5], unit: '점', rows: SURVEY_DOMAINS.filter((d) => dm.pre?.[d.id] != null || dm.post?.[d.id] != null).map((d) => ({ label: d.label, values: { pre: dm.pre?.[d.id] ?? null, post: dm.post?.[d.id] ?? null } })) })}
+      <div class="table-wrap" role="region" aria-label="설문 응답" tabindex="0">
+        <table class="data-table grade-table">
+          <thead><tr><th scope="col">문항</th><th scope="col">사전</th><th scope="col">사후</th><th scope="col">변화</th></tr></thead>
+          <tbody>${survey.questions.map((q, i) => `<tr><th scope="row">${i + 1}. ${escapeHtml(q.text)}${q.reverse ? ' <span class="tag">역문항</span>' : ''}</th><td>${ans(q, pre)}</td><td>${ans(q, post)}</td><td>${change(q)}</td></tr>`).join('')}</tbody>
+        </table>
+      </div>
+    </section>`;
+  }
 
   function propSection(student, p, source) {
     const n = p.propIndex + 1;
@@ -268,7 +303,7 @@ export function renderAnalysisStudent(root, [studentId]) {
   const onClick = (event) => {
     const btn = event.target.closest('[data-popup]');
     if (!btn) return;
-    const student = researchStudents({ includeSamples: getGrading().includeSamples, sessionIds: getGrading().scopeSessionIds }).find((s) => s.id === studentId);
+    const student = analysisStudents().all.find((s) => s.id === studentId);
     const problem = getProblem(btn.dataset.problem);
     closePopup = btn.dataset.popup === 'grade'
       ? openGradePopup(student, Number(btn.dataset.stage), btn.dataset.problem, problem)

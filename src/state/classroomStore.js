@@ -5,10 +5,11 @@
 
 import { DEFAULT_CLASSROOM } from '../data/classroom.js';
 import { readJson, writeJson, removeKey } from './storage.js';
-import { activeSession, sessionLabel, updateSession } from './sessionStore.js';
+import { activeSession, sessionConfig, sessionLabel, updateSession } from './sessionStore.js';
 
 const STORAGE_KEY = 'checkyourprove.prototype.classroom.v1';
-const RESEARCH_FIELDS = ['researchOpen', 'researchPropositionIds', 'researchStagesOpen'];
+const SESSION_FIELDS = ['consentRequired', 'surveyId', 'surveyPreOpen', 'surveyPostOpen'];
+const RESEARCH_FIELDS = ['researchOpen', 'researchPropositionIds', 'researchStagesOpen', ...SESSION_FIELDS];
 
 export function getClassroom() {
   const base = { ...DEFAULT_CLASSROOM, ...readJson(STORAGE_KEY, {}) };
@@ -20,6 +21,7 @@ export function getClassroom() {
     researchOpen: session.open,
     researchPropositionIds: session.propositionIds,
     researchStagesOpen: session.stagesOpen,
+    ...sessionConfig(session),
   };
 }
 
@@ -29,6 +31,7 @@ export function saveClassroom(settings) {
   if ('researchOpen' in settings) patch.open = settings.researchOpen;
   if ('researchPropositionIds' in settings) patch.propositionIds = settings.researchPropositionIds;
   if ('researchStagesOpen' in settings) patch.stagesOpen = settings.researchStagesOpen;
+  SESSION_FIELDS.forEach((k) => { if (k in settings) patch[k] = settings[k]; });
   if (Object.keys(patch).length) updateSession(session.id, patch);
   const rest = Object.fromEntries(Object.entries(settings).filter(([k]) => !RESEARCH_FIELDS.includes(k) && !['sessionId', 'sessionLabel'].includes(k)));
   return writeJson(STORAGE_KEY, rest);

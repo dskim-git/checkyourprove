@@ -5,11 +5,17 @@
 //   session = { id, classId, round, open, propositionIds, stagesOpen, createdAt, legacy? }
 //     open: 학생 홈에서 AI와 탐구하기를 열었는가, propositionIds: 탐구할 명제, stagesOpen: 교사가 열어 준 단계(1~4)
 //     legacy: 세션 기능 전의 수업 설정·연구 기록을 옮겨 온 첫 세션(기존 저장 위치와 학생 id 'local'을 그대로 쓴다)
+//     consentRequired(연구 동의 받기), surveyId(쓸 설문), surveyPreOpen·surveyPostOpen(사전·사후 설문 열기) — 없으면 SESSION_DEFAULTS
 // 학생(이 브라우저)은 교사가 고른 "진행 중 세션"으로 활동하고, 연구 기록은 세션마다 따로 저장된다(state/researchStore.js).
 // 연구 분석·채점·태그 화면은 포함할 세션을 골라 합쳐 본다(gradingStore의 scopeSessionIds).
 // TODO: Firestore 연동 뒤에는 학급·세션을 서버 문서로 두고, 학생은 로그인한 학급의 진행 중 세션에 자동으로 연결한다.
 
 import { DEFAULT_CLASSROOM } from '../data/classroom.js';
+import { DEFAULT_SURVEY_ID } from '../data/surveyDefaults.js';
+
+/** 세션의 동의·설문 기본값 (구현 4 전에 만든 세션도 이 값을 따른다) */
+export const SESSION_DEFAULTS = { consentRequired: true, surveyId: DEFAULT_SURVEY_ID, surveyPreOpen: true, surveyPostOpen: true };
+export const sessionConfig = (session) => ({ ...SESSION_DEFAULTS, ...Object.fromEntries(Object.keys(SESSION_DEFAULTS).filter((k) => session?.[k] !== undefined).map((k) => [k, session[k]])) });
 import { readJson, writeJson } from './storage.js';
 
 const STORAGE_KEY = 'checkyourprove.prototype.sessions.v1';
@@ -96,6 +102,7 @@ export function addSession(classId) {
     open: true,
     propositionIds: [...(base?.propositionIds ?? DEFAULT_CLASSROOM.researchPropositionIds)],
     stagesOpen: [1],
+    ...sessionConfig(base),
     createdAt: now(),
   };
   data.sessions.push(session);

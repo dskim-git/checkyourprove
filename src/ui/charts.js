@@ -20,7 +20,8 @@ export const legend = (series = STAGE_SERIES) => `<ul class="chart-legend" aria-
  * 점그래프: 행마다 계열 값을 한 축(0~max) 위의 점으로 놓고, 가장 낮은 값과 높은 값 사이를 가는 선으로 잇는다.
  * rows: [{ label, values: { [계열 key]: number|null } }]
  */
-export function dotPlot({ title, rows, max, unit = '점', series = STAGE_SERIES, ticks = null, note = '' }) {
+export function dotPlot({ title, rows, max, min = 0, unit = '점', series = STAGE_SERIES, ticks = null, note = '' }) {
+  const at = (v) => pct(v - min, max - min);
   const tickList = ticks ?? Array.from({ length: max + 1 }, (_, i) => i).filter((i) => max <= 10 || i % 2 === 0);
   const body = rows.map((row) => {
     const vals = series.map((s) => row.values[s.key]).filter((v) => v != null);
@@ -30,19 +31,19 @@ export function dotPlot({ title, rows, max, unit = '점', series = STAGE_SERIES,
       const v = row.values[s.key];
       if (v == null) return '';
       const tip = `${row.label}, ${s.label}: ${fmt(v)}${unit}`;
-      return `<span class="dot dot--${s.cls}" style="left:${pct(v, max)};--lane:${i - 1}" tabindex="0" role="img" aria-label="${escapeHtml(tip)}" data-tip="${escapeHtml(tip)}"></span>`;
+      return `<span class="dot dot--${s.cls}" style="left:${at(v)};--lane:${i - 1}" tabindex="0" role="img" aria-label="${escapeHtml(tip)}" data-tip="${escapeHtml(tip)}"></span>`;
     }).join('');
     const missing = series.filter((s) => row.values[s.key] == null).map((s) => s.short);
     return `<div class="dotplot__row">
       <span class="dotplot__label">${escapeHtml(row.label)}${missing.length && missing.length < series.length ? `<span class="dotplot__missing">${escapeHtml(missing.join(', '))} 채점 전</span>` : ''}</span>
       <div class="dotplot__track">
-        ${tickList.map((t) => `<span class="dotplot__grid" style="left:${pct(t, max)}" aria-hidden="true"></span>`).join('')}
-        ${lo != null && hi > lo ? `<span class="dotplot__range" style="left:${pct(lo, max)};width:calc(${pct(hi, max)} - ${pct(lo, max)})" aria-hidden="true"></span>` : ''}
+        ${tickList.map((t) => `<span class="dotplot__grid" style="left:${at(t)}" aria-hidden="true"></span>`).join('')}
+        ${lo != null && hi > lo ? `<span class="dotplot__range" style="left:${at(lo)};width:calc(${at(hi)} - ${at(lo)})" aria-hidden="true"></span>` : ''}
         ${vals.length ? marks : '<span class="dotplot__empty">채점 전</span>'}
       </div>
     </div>`;
   }).join('');
-  const axis = `<div class="dotplot__row dotplot__row--axis" aria-hidden="true"><span></span><div class="dotplot__axis">${tickList.map((t) => `<span style="left:${pct(t, max)}">${t}</span>`).join('')}</div></div>`;
+  const axis = `<div class="dotplot__row dotplot__row--axis" aria-hidden="true"><span></span><div class="dotplot__axis">${tickList.map((t) => `<span style="left:${at(t)}">${t}</span>`).join('')}</div></div>`;
   const table = `<details class="chart-table"><summary>표로 보기</summary><div class="table-wrap"><table class="data-table data-table--compact">
       <thead><tr><th scope="col"></th>${series.map((s) => `<th scope="col">${escapeHtml(s.label)}</th>`).join('')}</tr></thead>
       <tbody>${rows.map((r) => `<tr><th scope="row">${escapeHtml(r.label)}</th>${series.map((s) => `<td class="num">${fmt(r.values[s.key])}</td>`).join('')}</tr>`).join('')}</tbody>

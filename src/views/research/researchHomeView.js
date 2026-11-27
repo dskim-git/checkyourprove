@@ -3,13 +3,66 @@
 import { getProblem } from '../../data/problems/index.js';
 import { RESEARCH_STAGES } from '../../data/research.js';
 import { getClassroom } from '../../state/classroomStore.js';
-import { findStage, isItemComplete, propositionIdsFor, stageStatus } from '../../state/researchStore.js';
+import {
+  findStage, getConsent, getSurveyResponse, isItemComplete, postSurveyState, preStageBlocker, propositionIdsFor, researchParticipating, stageStatus,
+} from '../../state/researchStore.js';
 import { escapeHtml } from '../../ui/dom.js';
 import { icons } from '../../ui/icons.js';
 import { breadcrumb, notice } from '../../ui/components.js';
 import { statementHtml } from '../../ui/mathText.js';
 
 const STATE_TO_NODE = { submitted: 'certified', progress: 'here', open: 'here', waiting: 'locked', closed: 'locked' };
+
+/** 준비·마무리 단계 한 줄: { href, title, desc, status, state: 'here'|'done'|'locked'|'skip' } */
+function taskRow({ href, title, desc, status, state }) {
+  const mark = state === 'done' ? icons.check : state === 'locked' ? icons.lock : state === 'skip' ? icons.x : icons.pencil;
+  const inner = `<span class="task-row__mark" aria-hidden="true">${mark}</span>
+    <span class="task-row__text"><span class="task-row__title">${escapeHtml(title)}</span><span class="task-row__desc">${escapeHtml(desc)}</span><span class="task-row__status">${escapeHtml(status)}</span></span>`;
+  return `<li>${href ? `<a class="task-row is-${state}" href="${href}">${inner}</a>` : `<div class="task-row is-${state}" aria-disabled="true">${inner}</div>`}</li>`;
+}
+
+/** 준비: 연구 동의, 사전 설문 (1단계를 시작하기 전) */
+function prepSection(classroom) {
+  const rows = [];
+  if (classroom.consentRequired) {
+    const c = getConsent();
+    rows.push(taskRow({
+      href: '#/research/consent',
+      title: '연구 참여 동의',
+      desc: '내 기록을 연구에 써도 되는지 고릅니다. 참여하지 않아도 활동은 똑같이 해요.',
+      status: c.agreed === true ? '동의함 (바꿀 수 있어요)' : c.agreed === false ? '참여하지 않음 (바꿀 수 있어요)' : '먼저 답해 주세요',
+      state: c.agreed == null ? 'here' : 'done',
+    }));
+  }
+  if (classroom.surveyId) {
+    const res = getSurveyResponse('pre');
+    const participating = researchParticipating(classroom);
+    const blocker = preStageBlocker(classroom);
+    let row;
+    if (res?.submittedAt) row = { href: '#/research/survey/pre', status: '제출 완료', state: 'done' };
+    else if (!participating && getConsent().agreed === false) row = { status: '연구에 참여하지 않아 하지 않아요', state: 'skip' };
+    else if (blocker?.step === 'consent') row = { status: '연구 동의 뒤에 할 수 있어요', state: 'locked' };
+    else if (!classroom.surveyPreOpen) row = { status: '선생님이 아직 열지 않았어요', state: 'locked' };
+    else row = { href: '#/research/survey/pre', status: res ? '작성 중' : '시작할 수 있어요', state: 'here' };
+    rows.push(taskRow({ title: '사전 설문', desc: '탐구를 시작하기 전 지금의 생각을 답합니다.', ...row }));
+  }
+  if (!rows.length) return '';
+  return `<section class="task-group" aria-labelledby="prep-title"><h2 class="task-group__title" id="prep-title">시작하기 전에</h2><ol class="task-list">${rows.join('')}</ol></section>`;
+}
+
+/** 마무리: 사후 설문 (4단계 제출 뒤) */
+function postSection(classroom) {
+  const state = postSurveyState(classroom);
+  if (state === 'none') return '';
+  const map = {
+    closed: { status: '선생님이 아직 열지 않았어요', state: 'locked' },
+    waiting: { status: '4단계를 제출하면 할 수 있어요', state: 'locked' },
+    open: { href: '#/research/survey/post', status: '시작할 수 있어요', state: 'here' },
+    progress: { href: '#/research/survey/post', status: '작성 중', state: 'here' },
+    submitted: { href: '#/research/survey/post', status: '제출 완료', state: 'done' },
+  };
+  return `<section class="task-group" aria-labelledby="post-title"><h2 class="task-group__title" id="post-title">마무리</h2><ol class="task-list">${taskRow({ title: '사후 설문', desc: '탐구를 마친 뒤 사전 설문과 같은 문항에 다시 답합니다.', ...map[state] })}</ol></section>`;
+}
 
 /** 지금 할 단계의 상태 한 줄 (홈 타일 등) */
 export function researchSummary(classroom = getClassroom()) {
@@ -67,8 +120,9 @@ export function renderResearchHome(root) {
       <summary>이번 탐구의 명제 ${problems.length}개</summary>
       <ol class="statement-list">${problems.map((p, i) => `<li><span class="statement-list__num">명제 ${i + 1}</span><span>${statementHtml(p.statement)}</span></li>`).join('')}</ol>
     </details>
+    ${prepSection(classroom)}
     <ol class="path path--stages" aria-label="탐구 단계">${nodes}</ol>
-    <p class="note-chip">${icons.info}<span>사전 설문과 "AI는 어떻게 답할까?" 활동은 다음 업데이트에서 이 화면 앞에 추가됩니다.</span></p>
+    ${postSection(classroom)}
   </div>`;
   return null;
 }

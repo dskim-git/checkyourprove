@@ -8,6 +8,7 @@ import { inkStats } from '../state/inkModel.js';
 import { activeChatTags, getGrading } from '../state/gradingStore.js';
 import { conversationKey, targetKey } from '../state/researchRoster.js';
 import { className } from '../state/sessionStore.js';
+import { CONSENT_LABELS, consentStatus } from './surveyAnalysis.js';
 import { assessProof } from './mockGradeAssist.js';
 import { PROOF_HELP_MIN } from './proofHelp.js';
 import { getProblem } from '../data/problems/index.js';
@@ -234,6 +235,7 @@ const csvCell = (v) => {
 export function analysisCsv(analyses, source) {
   const head = [
     ['학생 id', (a) => a.student.id], ['가명', (a) => a.student.pseudonym], ['예시', (a) => (a.student.sample ? 'Y' : 'N')],
+    ['연구 동의', (a) => CONSENT_LABELS[consentStatus(a.student)]],
     ['세션 id', (a) => a.student.session?.id], ['학급', (a) => (a.student.session ? className(a.student.session.classId) : '')], ['회차', (a) => a.student.session?.round], ['점수 출처', () => SCORE_SOURCES.find((s) => s.id === source)?.label],
     ['명제 id', (a, p) => p.problemId], ['명제 순서', (a, p) => p.propIndex + 1],
     ['1단계 점수', (a, p) => p.totals[1]], ['2단계 AI 점수', (a, p) => p.totals[2]], ['4단계 점수', (a, p) => p.totals[4]], ['만점', () => RUBRIC_TOTAL],

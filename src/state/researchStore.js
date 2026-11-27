@@ -7,6 +7,9 @@
 //   증명 칸(1·4단계 proof, 2단계 aiProof)은 펜 필기 ink[필드]와 입력 방식 inputMode[필드]를 함께 둔다(state/inkModel.js).
 // 학생이 1단계를 처음 열 때 명제 목록을 고정한다(교사가 나중에 바꿔도 이 학생의 기록은 같은 명제로 이어진다).
 // 제출한 단계는 다시 고칠 수 없다.
+// 연구 동의 consent = { agreed: true|false|null, at, version, history: [{ at, agreed, version }] }
+// 설문 surveys = { pre|post: { surveyId, startedAt, submittedAt, activeMs, answers: { [문항 id]: 값 }, answeredAt: { [문항 id]: 시각 }, changes } }
+//   동의하지 않은 학생은 연구용 설문을 하지 않고 1~4단계 활동만 한다(기록은 연구 분석에서 기본으로 빠진다).
 // 연구 기록은 세션(학급 × 회차)마다 따로 저장한다. 인자 없이 부르면 진행 중 세션의 기록이다(state/sessionStore.js).
 // TODO: Firestore 연동 시 학생별 문서로 옮기고, 제출 뒤 수정 금지와 단계 열림 여부를 보안 규칙·서버에서 확인한다.
 
@@ -38,6 +41,58 @@ export function saveResearch(sessionId = activeSessionId()) {
 export function resetResearch(sessionId = activeSessionId()) {
   removeKey(keyOf(sessionId));
   caches.delete(sessionId);
+}
+
+// ── 연구 동의와 사전·사후 설문 ──
+
+export function getConsent(sessionId = activeSessionId()) {
+  const record = getResearch(sessionId);
+  record.consent ??= { agreed: null, at: null, version: null, history: [] };
+  return record.consent;
+}
+
+/** 동의하거나 그만두기(바꿀 때마다 기록이 남는다) */
+export function answerConsent(agreed, version, sessionId = activeSessionId()) {
+  const consent = getConsent(sessionId);
+  const at = now();
+  consent.history.push({ at, agreed, version });
+  Object.assign(consent, { agreed, at, version });
+  return saveResearch(sessionId);
+}
+
+export function getSurveyResponse(kind, sessionId = activeSessionId()) {
+  const record = getResearch(sessionId);
+  record.surveys ??= {};
+  return record.surveys[kind] ?? null;
+}
+
+export function ensureSurveyResponse(kind, surveyId, sessionId = activeSessionId()) {
+  const record = getResearch(sessionId);
+  record.surveys ??= {};
+  record.surveys[kind] ??= { surveyId, startedAt: now(), submittedAt: null, activeMs: 0, answers: {}, answeredAt: {}, changes: 0 };
+  return record.surveys[kind];
+}
+
+/** 연구 참여(설문을 하는가): 동의를 받지 않는 세션이면 참여로 본다 */
+export const researchParticipating = (classroom, sessionId = activeSessionId()) => !classroom.consentRequired || getConsent(sessionId).agreed === true;
+
+/** 1단계 전에 해야 할 일: { step: 'consent'|'pre', label } 또는 null */
+export function preStageBlocker(classroom, sessionId = activeSessionId()) {
+  if (classroom.consentRequired && getConsent(sessionId).agreed == null) return { step: 'consent', label: '먼저 연구 동의에 답하세요' };
+  if (researchParticipating(classroom, sessionId) && classroom.surveyId && classroom.surveyPreOpen && !getSurveyResponse('pre', sessionId)?.submittedAt) {
+    return { step: 'pre', label: '먼저 사전 설문을 하세요' };
+  }
+  return null;
+}
+
+/** 사후 설문 상태: 'none'(하지 않음) | 'closed'(선생님이 열지 않음) | 'waiting'(4단계 제출 전) | 'open' | 'progress' | 'submitted' */
+export function postSurveyState(classroom, sessionId = activeSessionId()) {
+  if (!classroom.surveyId || !researchParticipating(classroom, sessionId)) return 'none';
+  const res = getSurveyResponse('post', sessionId);
+  if (res?.submittedAt) return 'submitted';
+  if (!classroom.surveyPostOpen) return 'closed';
+  if (!findStage(4)?.submittedAt) return 'waiting';
+  return res ? 'progress' : 'open';
 }
 
 /** 세션에 학생 기록이 있는가 (1단계를 시작했는가) */
@@ -232,6 +287,11 @@ export function stageStatus(n, classroom) {
   if (stage?.submittedAt) return { state: 'submitted', label: '제출 완료' };
   if (!classroom.researchStagesOpen.includes(n)) return { state: 'closed', label: '선생님이 아직 열지 않았어요' };
   if (n > 1 && !findStage(n - 1)?.submittedAt) return { state: 'waiting', label: `${n - 1}단계를 먼저 제출하세요` };
+  // 1단계를 아직 시작하지 않았으면 연구 동의·사전 설문을 먼저 한다(이미 시작한 기록은 막지 않는다)
+  if (n === 1 && !stage) {
+    const blocker = preStageBlocker(classroom);
+    if (blocker) return { state: 'waiting', label: blocker.label };
+  }
   if (stage) return { state: 'progress', label: '진행 중' };
   return { state: 'open', label: '시작할 수 있어요' };
 }

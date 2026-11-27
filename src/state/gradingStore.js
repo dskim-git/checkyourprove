@@ -36,6 +36,7 @@ const DEFAULTS = () => ({
   includeSamples: true,
   sortBy: 'mixed',
   scopeSessionIds: null,
+  includeNonConsent: false,
   rubric: null,
   rubricEditedAt: null,
   seeds: {},

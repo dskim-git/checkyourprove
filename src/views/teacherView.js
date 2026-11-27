@@ -12,7 +12,10 @@ import { getClassroom, saveClassroom } from '../state/classroomStore.js';
 import {
   activeSessionId, addClass, addSession, findSession, removeClass, removeSession, renameClass, sessionLabel, sessionsByClass, setActiveSession,
 } from '../state/sessionStore.js';
-import { findStage, getResearch, hasResearchRecord, inkOf, propositionIdsFor, resetResearch, stageStatus } from '../state/researchStore.js';
+import {
+  findStage, getConsent, getResearch, getSurveyResponse, hasResearchRecord, inkOf, propositionIdsFor, resetResearch, stageStatus,
+} from '../state/researchStore.js';
+import { listSurveys } from '../state/surveyStore.js';
 import { hasInk } from '../state/inkModel.js';
 import { escapeHtml, formatDateTime, formatTime } from '../ui/dom.js';
 import { breadcrumb, notice } from '../ui/components.js';
@@ -62,6 +65,7 @@ export function renderTeacher(root) {
         <a class="button button--secondary" href="#/teacher/chats">AI 대화 태그</a>
         <a class="button button--secondary" href="#/teacher/analysis">연구 분석</a>
         <a class="button button--secondary" href="#/teacher/rubric">채점 루브릭</a>
+        <a class="button button--secondary" href="#/teacher/surveys">설문과 연구 동의</a>
         <button type="button" class="button button--ghost" data-action="reset-research">이 세션의 연구 기록 초기화</button>
         <p class="actions__note" id="unimplemented-note">기록 내려받기(CSV)는 연구 분석 화면에 있습니다. 면담 기능은 다음 작업에서 추가합니다.</p>
       </div>
@@ -108,6 +112,10 @@ export function renderTeacher(root) {
       researchOpen: data.get('researchOpen') === 'on',
       researchPropositionIds: propositionIds,
       researchStagesOpen: data.getAll('researchStagesOpen').map(Number).sort(),
+      consentRequired: data.get('consentRequired') === 'on',
+      surveyId: data.get('surveyId') || null,
+      surveyPreOpen: data.get('surveyPreOpen') === 'on',
+      surveyPostOpen: data.get('surveyPostOpen') === 'on',
     });
     root.querySelector('[data-research-progress]').innerHTML = researchProgress(getClassroom());
     root.querySelector('[data-session-panel]').outerHTML = sessionPanel('');
@@ -254,6 +262,21 @@ function settingsForm(classroom) {
         ${stageChecks}
       </fieldset>
       <fieldset class="choice-group">
+        <legend class="field__label">연구 동의와 설문</legend>
+        <p class="field__help">동의를 받으면 학생은 1단계 전에 동의 여부를 고르고, 동의한 학생만 사전·사후 설문을 합니다. 동의하지 않은 학생도 활동은 똑같이 하고 기록은 연구 분석에서 빠집니다. 사전 설문은 1단계 전, 사후 설문은 4단계 제출 뒤에 합니다.</p>
+        <label class="check"><input type="checkbox" name="consentRequired"${classroom.consentRequired ? ' checked' : ''}><span>연구 동의 받기</span></label>
+        <div class="field field--inline">
+          <label class="field__label" for="survey-id">설문 (사전·사후 같은 문항)</label>
+          <select id="survey-id" name="surveyId" class="field__select">
+            <option value=""${classroom.surveyId ? '' : ' selected'}>설문 하지 않음</option>
+            ${listSurveys().map((s) => `<option value="${s.id}"${s.id === classroom.surveyId ? ' selected' : ''}>${escapeHtml(s.title)} (문항 ${s.questions.length}개${s.lockedAt ? ', 잠김' : ''})</option>`).join('')}
+          </select>
+          <a class="an-link" href="#/teacher/surveys">설문 문항 만들기·고치기</a>
+        </div>
+        <label class="check"><input type="checkbox" name="surveyPreOpen"${classroom.surveyPreOpen ? ' checked' : ''}><span>사전 설문 열기</span></label>
+        <label class="check"><input type="checkbox" name="surveyPostOpen"${classroom.surveyPostOpen ? ' checked' : ''}><span>사후 설문 열기 <span class="meta">4단계를 제출한 학생만 할 수 있습니다.</span></span></label>
+      </fieldset>
+      <fieldset class="choice-group">
         <legend class="field__label">탐구할 명제</legend>
         <p class="field__help">모든 학생이 같은 명제로 활동합니다. 학생이 1단계를 시작한 뒤에는 바꿔도 그 학생의 기록에는 반영되지 않습니다.</p>
         ${researchChecks}
@@ -332,7 +355,13 @@ function researchProgress(classroom) {
   const fixed = record.propositionIds
     ? `<p class="meta">고정된 명제: ${record.propositionIds.map((id, i) => `명제 ${i + 1} ${escapeHtml(getProblem(id)?.title ?? id)}`).join(', ')}</p>`
     : '<p class="meta">아직 1단계를 시작하지 않았습니다.</p>';
-  return `${fixed}
+  const consent = getConsent();
+  const surveyState = (kind) => {
+    const r = getSurveyResponse(kind);
+    return r?.submittedAt ? `제출 (${formatDateTime(r.submittedAt)})` : r ? '작성 중' : '아직';
+  };
+  const researchLine = `<p class="meta">연구 동의: ${classroom.consentRequired ? (consent.agreed === true ? '동의함' : consent.agreed === false ? '참여하지 않음' : '아직 답하지 않음') : '받지 않음'}${classroom.surveyId ? `, 사전 설문: ${surveyState('pre')}, 사후 설문: ${surveyState('post')}` : ', 설문 하지 않음'}</p>`;
+  return `${fixed}${researchLine}
     <div class="table-wrap" role="region" aria-labelledby="research-progress-heading" tabindex="0">
       <table class="data-table">
         <thead><tr><th scope="col">단계</th><th scope="col">상태</th><th scope="col">시작</th><th scope="col">제출</th><th scope="col">작업 시간</th><th scope="col">화면 이탈</th><th scope="col">펜 필기</th><th scope="col">AI 대화</th></tr></thead>

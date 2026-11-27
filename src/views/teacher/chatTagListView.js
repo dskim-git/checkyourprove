@@ -15,12 +15,12 @@ export function renderChatTagList(root) {
 
   const draw = (status = '') => {
     const tags = activeChatTags();
-    const scopeSelect = (name, value, disabled = false) => `<select class="field__select" name="${name}"${disabled ? ' disabled' : ''}>${TAG_SCOPES.map((s) => `<option value="${s.id}"${s.id === value ? ' selected' : ''}>${escapeHtml(s.label)}</option>`).join('')}</select>`;
+    const scopeSelect = (name, value, disabled = false, id = '') => `<select class="field__select" id="${id}" name="${name}"${disabled ? ' disabled' : ''}>${TAG_SCOPES.map((s) => `<option value="${s.id}"${s.id === value ? ' selected' : ''}>${escapeHtml(s.label)}</option>`).join('')}</select>`;
     const rows = tags.map((t, i) => `<fieldset class="choice-group rubric-edit" data-tag-row="${escapeHtml(t.id)}">
         <legend>${i + 1}. ${escapeHtml(t.label)} <span class="meta">${escapeHtml(TAG_SCOPES.find((s) => s.id === t.scope)?.label ?? '')}${isDefault(t.id) ? ', 기본 태그' : ''}, 붙인 수 ${usage(t.id)}</span></legend>
         <div class="field"><label class="field__label" for="tag-${i}-label">태그 이름</label><input type="text" class="field__input" id="tag-${i}-label" name="label" value="${escapeHtml(t.label)}"></div>
         <div class="field"><label class="field__label" for="tag-${i}-desc">설명</label><textarea class="field__input" id="tag-${i}-desc" name="desc" rows="2">${escapeHtml(t.desc)}</textarea></div>
-        <div class="field field--inline"><label class="field__label">붙이는 곳</label>${scopeSelect('scope', t.scope, isDefault(t.id))}</div>
+        <div class="field field--inline"><label class="field__label" for="tag-${i}-scope">붙이는 곳</label>${scopeSelect('scope', t.scope, isDefault(t.id), `tag-${i}-scope`)}</div>
         <label class="check"><input type="checkbox" name="remove"><span>이 태그 지우기 <span class="meta">이미 붙인 기록은 남습니다.</span></span></label>
       </fieldset>`).join('');
     root.innerHTML = `<div class="page page--teacher">
@@ -35,7 +35,7 @@ export function renderChatTagList(root) {
           <legend>새 태그 추가</legend>
           <div class="field"><label class="field__label" for="tag-new-label">태그 이름</label><input type="text" class="field__input" id="tag-new-label" name="label" placeholder="예: 개념을 묻는 질문"></div>
           <div class="field"><label class="field__label" for="tag-new-desc">설명</label><textarea class="field__input" id="tag-new-desc" name="desc" rows="2"></textarea></div>
-          <div class="field field--inline"><label class="field__label">붙이는 곳</label>${scopeSelect('scope', 'student')}</div>
+          <div class="field field--inline"><label class="field__label" for="tag-new-scope">붙이는 곳</label>${scopeSelect('scope', 'student', false, 'tag-new-scope')}</div>
         </fieldset>
         <div class="actions">
           <p class="save-status" data-tag-list-status aria-live="polite">${escapeHtml(status)}</p>
