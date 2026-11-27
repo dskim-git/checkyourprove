@@ -26,6 +26,9 @@ const GEN_STEPS = [
   { probs: [['먹었다', 0.78], ['차렸다', 0.12], ['샀다', 0.06], ['굶었다', 0.04]], pick: 0, note: '문장이 완성됐어요. AI의 긴 답도 이렇게 낱말을 하나씩 이어 붙여 만든 거예요.' },
 ];
 const NET_LAYERS = [3, 5, 5, 3];
+const NET_LABELS = ['입력 층', '숨은 층 1', '숨은 층 2', '출력 층'];
+const NET_PICK = 1; // 출력 층에서 가장 크게 켜지는 출력(답)
+const NET_STEP_MS = 700;
 
 const tenth = (v) => (v / 10).toFixed(1).replace('-', '−');
 const signed = (v) => (v < 0 ? `(${tenth(v)})` : tenth(v));
@@ -94,18 +97,19 @@ function networkHtml() {
   let edges = '';
   pos.slice(0, -1).forEach((layer, l) => layer.forEach(([x1, y1], a) => pos[l + 1].forEach(([x2, y2], b) => {
     const strong = (a * 3 + b * 5 + l) % 4 === 0;
-    edges += `<line class="nn-edge${strong ? ' is-strong' : ''}" style="--layer:${l}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
+    edges += `<line class="nn-edge${strong ? ' is-strong' : ''}" data-layer="${l}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
   })));
-  const nodes = pos.map((layer, l) => layer.map(([x, y]) => `<circle class="nn-node" style="--layer:${l}" cx="${x}" cy="${y}" r="11"/>`).join('')).join('');
+  const nodes = pos.map((layer, l) => layer.map(([x, y], k) => `<circle class="nn-node" data-layer="${l}" data-k="${k}" cx="${x}" cy="${y}" r="11"/>`).join('')).join('');
   const weights = NET_LAYERS.slice(0, -1).reduce((s, n, l) => s + n * NET_LAYERS[l + 1], 0);
   return `<figure class="nn">
     <svg class="nn__svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="입력 층 3개, 숨은 층 5개씩 두 층, 출력 층 3개의 퍼셉트론이 선으로 이어진 신경망. 왼쪽에서 오른쪽으로 신호가 흐른다.">${edges}${nodes}</svg>
-    <figcaption class="nn__layers"><span>입력 층</span><span>숨은 층</span><span>숨은 층</span><span>출력 층</span></figcaption>
+    <figcaption class="nn__layers">${NET_LABELS.map((t, l) => `<span data-layer="${l}">${t}</span>`).join('')}</figcaption>
+    <p class="nn__status" data-nn-status aria-live="polite">"신호 보내기"를 누르면 입력 층에서 출력 층까지 한 층씩 계산이 이어져요.</p>
+    <button type="button" class="button button--secondary button--small" data-nn-replay>${icons.play}<span>신호 보내기</span></button>
     <div class="nn__facts">
       <p class="nn__fact"><span class="nn__fact-v num">${weights}개</span><span class="meta">이 그림의 가중치(선)</span></p>
       <p class="nn__fact"><span class="nn__fact-v">수천억 개</span><span class="meta">AI 언어 모델의 가중치</span></p>
     </div>
-    <button type="button" class="button button--secondary button--small" data-nn-replay>${icons.play}<span>신호 다시 보내기</span></button>
   </figure>`;
 }
 
@@ -172,16 +176,44 @@ export function mountSlide(root) {
   if (s2) cleanups.push(mountTraining(s2, root.querySelector('[data-train]')));
   const nn = root.querySelector('.nn');
   if (nn) {
-    const onClick = (e) => {
-      if (!e.target.closest('[data-nn-replay]')) return;
-      const svg = nn.querySelector('.nn__svg');
-      svg.classList.remove('is-running');
-      void svg.getBoundingClientRect();
-      svg.classList.add('is-running');
+    // 신호 보내기: 한 층씩 켠다(움직임 줄이기 설정이 켜진 기기에서도 단계가 보이도록 CSS 애니메이션이 아니라 상태를 바꾼다)
+    let timers = [];
+    const status = nn.querySelector('[data-nn-status]');
+    const btn = nn.querySelector('[data-nn-replay]');
+    const clear = () => {
+      timers.forEach((t) => window.clearTimeout(t));
+      timers = [];
+      nn.querySelectorAll('.is-lit, .is-pick').forEach((el) => el.classList.remove('is-lit', 'is-pick'));
     };
-    nn.querySelector('.nn__svg').classList.add('is-running');
+    const light = (l) => {
+      nn.querySelectorAll(`.nn-edge[data-layer="${l - 1}"]`).forEach((el) => el.classList.add('is-lit'));
+      nn.querySelectorAll(`.nn-node[data-layer="${l}"]`).forEach((el) => el.classList.add('is-lit'));
+      nn.querySelector(`.nn__layers [data-layer="${l}"]`)?.classList.add('is-lit');
+      const last = l === NET_LAYERS.length - 1;
+      if (last) nn.querySelector(`.nn-node[data-layer="${l}"][data-k="${NET_PICK}"]`)?.classList.add('is-pick');
+      status.textContent = l === 0
+        ? '입력 층: 입력(예: 앞의 문장)이 들어와요.'
+        : last
+          ? '출력 층: 가장 크게 켜진 출력이 답이 돼요. 이 계산이 모두 가중치로 정해져요.'
+          : `${NET_LABELS[l]}: 앞 층의 출력에 가중치를 곱해 더한 값으로 켜질지 정해요.`;
+      if (last) {
+        btn.disabled = false;
+        btn.querySelector('span').textContent = '신호 다시 보내기';
+      }
+    };
+    const run = () => {
+      clear();
+      btn.disabled = true;
+      NET_LAYERS.forEach((_, l) => timers.push(window.setTimeout(() => light(l), l * NET_STEP_MS)));
+    };
+    const onClick = (e) => {
+      if (e.target.closest('[data-nn-replay]')) run();
+    };
     nn.addEventListener('click', onClick);
-    cleanups.push(() => nn.removeEventListener('click', onClick));
+    cleanups.push(() => {
+      clear();
+      nn.removeEventListener('click', onClick);
+    });
   }
   const gen = root.querySelector('[data-gen]');
   if (gen) cleanups.push(mountGen(gen));

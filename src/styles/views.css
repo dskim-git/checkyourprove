@@ -1299,14 +1299,15 @@ button.pc-in:focus-visible { outline: 3px solid var(--color-focus); outline-offs
 
 .nn { display: grid; gap: var(--space-sm); margin: 0; }
 .nn__svg { width: 100%; height: auto; }
-.nn-edge { stroke: var(--color-edge); stroke-width: 1.5; }
+.nn-edge { stroke: var(--color-edge); stroke-width: 1.5; transition: stroke var(--dur-long) var(--ease-out); }
 .nn-edge.is-strong { stroke-width: 3; }
-.nn-node { fill: var(--color-card); stroke: var(--color-ink-2); stroke-width: 2; }
-.nn__svg.is-running .nn-edge { animation: nn-edge 2.8s var(--ease-in-out) calc(var(--layer) * 0.5s + 0.2s) infinite; }
-.nn__svg.is-running .nn-node { animation: nn-node 2.8s var(--ease-in-out) calc(var(--layer) * 0.5s) infinite; }
-@keyframes nn-edge { 0%, 40%, 100% { stroke: var(--color-edge); } 15% { stroke: var(--color-accent-2); } }
-@keyframes nn-node { 0%, 35%, 100% { fill: var(--color-card); } 12% { fill: var(--color-accent); } }
+.nn-edge.is-lit { stroke: var(--color-accent-2); }
+.nn-node { fill: var(--color-card); stroke: var(--color-ink-2); stroke-width: 2; transition: fill var(--dur-long) var(--ease-out); }
+.nn-node.is-lit { fill: var(--color-accent); }
+.nn-node.is-pick { fill: var(--color-mint-deep); stroke-width: 4; }
 .nn__layers { display: flex; justify-content: space-between; font-size: var(--text-xs); color: var(--color-muted); }
+.nn__layers .is-lit { color: var(--color-ink); font-weight: var(--display-weight); }
+.nn__status { min-height: 3.2em; margin: 0; padding: var(--space-xs) var(--space-sm); border-radius: var(--radius-stock); background: var(--color-paper-2); line-height: 1.6; }
 .nn__facts { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-xs); }
 .nn__fact { display: grid; gap: var(--space-3xs); margin: 0; padding: var(--space-sm); border-radius: var(--radius-stock); background: var(--color-paper-2); }
 .nn__fact-v { font-size: var(--text-xl); font-weight: var(--display-weight); }
