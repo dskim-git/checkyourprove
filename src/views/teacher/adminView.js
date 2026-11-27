@@ -15,13 +15,14 @@ import {
 } from '../../state/accountStore.js';
 import { consentDoc, listSurveys, saveConsent } from '../../state/surveyStore.js';
 import {
-  addNotice, auditCsv, closeRequest, getAdmin, logAction, NOTICE_AUDIENCES, PRACTICE_FIELDS, REQUEST_TYPES, removeNotice, saveContact,
+  addNotice, auditCsv, auditLog, closeRequest, getAdmin, logAction, NOTICE_AUDIENCES, PRACTICE_FIELDS, REQUEST_TYPES, removeNotice, saveContact,
   savePracticeDefaults, saveSignupRules,
 } from '../../state/adminStore.js';
 import { interviewThresholds, resetThresholds, retentionUntil, saveThresholds, setRetentionUntil } from '../../state/interviewStore.js';
 import { THRESHOLD_FIELDS } from '../../data/interview.js';
 import { activeChatTags, activeRubric, getGrading, updateGradingSettings } from '../../state/gradingStore.js';
 import { settingsTabs } from '../../ui/settingsTabs.js';
+import { isFirebase } from '../../state/appMode.js';
 import { findSession, sessionLabel } from '../../state/sessionStore.js';
 import { retentionState } from '../../state/recordingStore.js';
 import { breadcrumb, notice } from '../../ui/components.js';
@@ -90,7 +91,7 @@ export function renderAdminUsers(root) {
     const rules = getAdmin().signup;
     root.innerHTML = `<div class="page page--teacher page--admin">
       ${chrome('users')}
-      ${notice('warn', '프로토타입 상태입니다', '계정은 이 브라우저에만 저장됩니다. 서버를 연결하면 구글 로그인과 서버 저장으로 바뀝니다.')}
+      ${isFirebase ? '' : notice('warn', '프로토타입 상태입니다', '계정은 이 브라우저에만 저장됩니다. 서버를 연결하면 구글 로그인과 서버 저장으로 바뀝니다.')}
       <section class="panel" aria-labelledby="ad-rules">
         <h2 id="ad-rules" class="section-title">가입 규칙</h2>
         <form class="settings-form" data-signup-rules novalidate>
@@ -596,7 +597,7 @@ export function renderAdminNotices(root) {
 export function renderAdminAudit(root) {
   if (guard(root, '관리자 설정')) return null;
   const draw = () => {
-    const log = getAdmin().audit;
+    const log = auditLog();
     root.innerHTML = `<div class="page page--teacher page--admin">
       ${chrome('audit')}
       <section class="panel" aria-labelledby="au-heading">
@@ -604,7 +605,7 @@ export function renderAdminAudit(root) {
           <h2 id="au-heading" class="section-title">관리 기록 (${log.length})</h2>
           <button type="button" class="button button--secondary button--small" data-action="audit-csv"${log.length ? '' : ' disabled'}>CSV 내려받기</button>
         </div>
-        <p class="meta">최근 500개까지 남습니다. 서버를 연결하면 서버만 쓸 수 있게 해 고칠 수 없게 합니다.</p>
+        <p class="meta">${isFirebase ? '가입 승인·역할·명단·연결표·연구 윤리·가입 규칙 기록은 서버가 남겨 고칠 수 없습니다. 그 밖의 기록은 아직 이 브라우저에 남습니다(서버 연결 진행 중).' : '최근 500개까지 남습니다. 서버를 연결하면 서버만 쓸 수 있게 해 고칠 수 없게 합니다.'}</p>
         ${log.length ? `<div class="table-wrap" role="region" aria-labelledby="au-heading" tabindex="0"><table class="data-table grade-table" data-audit-table>
           <thead><tr><th scope="col">시각</th><th scope="col">한 사람</th><th scope="col">작업</th><th scope="col">내용</th></tr></thead>
           <tbody>${log.map((a) => `<tr><td>${escapeHtml(formatDateTime(a.at))}</td><td>${escapeHtml(a.by || '–')}</td><th scope="row">${escapeHtml(a.action)}</th><td>${escapeHtml(a.detail || '')}</td></tr>`).join('')}</tbody>
@@ -672,7 +673,7 @@ export function renderAdminBoard(root) {
     </section>
     <section class="panel" aria-labelledby="ab-log">
       <div class="section-head"><h2 id="ab-log" class="section-title">최근 관리 기록</h2><a class="an-link" href="#/admin/audit">전체 보기</a></div>
-      ${a.audit.length ? `<ul class="answer-list">${a.audit.slice(0, 5).map((x) => `<li><strong>${escapeHtml(x.action)}</strong><span class="meta">${escapeHtml(formatDateTime(x.at))}, ${escapeHtml(x.by || '–')}${x.detail ? `, ${escapeHtml(x.detail)}` : ''}</span></li>`).join('')}</ul>` : '<p class="empty-text">아직 기록이 없습니다.</p>'}
+      ${auditLog().length ? `<ul class="answer-list">${auditLog().slice(0, 5).map((x) => `<li><strong>${escapeHtml(x.action)}</strong><span class="meta">${escapeHtml(formatDateTime(x.at))}, ${escapeHtml(x.by || '–')}${x.detail ? `, ${escapeHtml(x.detail)}` : ''}</span></li>`).join('')}</ul>` : '<p class="empty-text">아직 기록이 없습니다.</p>'}
     </section>
   </div>`;
   return null;

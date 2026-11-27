@@ -1,11 +1,13 @@
 // 계정 화면 (로드맵 3단계 프로토타입): 구글 로그인(시연) → 처음 한 번 정보 입력 → 승인 대기 / 승인됨(세션 코드 입력)
 // 사용자 결정(2026-11-27): 학생은 학년도·학번·이름, 일반인은 이름·소속·가입 이유. 명단과 맞는 학생은 바로 승인.
 // 증명 연습은 승인되면 바로, AI와 탐구하기는 세션 코드로 들어간다.
-// TODO(Firebase): signInDemo를 Firebase Auth의 Google 로그인(signInWithPopup/Redirect)으로 바꾼다.
+// firebase 모드(4-1): 구글 로그인(팝업) → 서버가 사용자 문서를 만든다. 정보 입력·승인은 서버 함수(api/account.js)가 처리한다.
 
 import {
-  canTeach, currentUser, displayName, ethics, isAdmin, joinSession, roleLabel, signInDemo, signInDemoRole, signOut, STATUS_LABELS, submitProfile,
+  canTeach, currentUser, displayName, ethics, isAdmin, joinSession, roleLabel, signInDemo, signInDemoRole, signInWithGoogle, signOut, STATUS_LABELS,
+  submitProfile,
 } from '../state/accountStore.js';
+import { isFirebase } from '../state/appMode.js';
 import { findSession, findSessionByCode, formatCode, sessionLabel, setActiveSession } from '../state/sessionStore.js';
 import { breadcrumb, notice } from '../ui/components.js';
 import { getAdmin } from '../state/adminStore.js';
@@ -45,6 +47,8 @@ export function joinByCode(code) {
 export function renderAccount(root) {
   let codeError = '';
   let kind = null;
+  let loginError = '';
+  let signingIn = false;
   /** 입력 오류: 다시 그리지 않고 오류 칸에만 쓴다(입력한 값을 지키려고) */
   const showError = (form, msg) => {
     const el = form.querySelector('[data-form-error]');
@@ -56,7 +60,15 @@ export function renderAccount(root) {
     const user = currentUser();
     const crumbs = [{ label: '홈', href: '#/' }, { label: '계정' }];
     let body;
-    if (!user) {
+    if (!user && isFirebase) {
+      body = `<section class="panel account-box" aria-labelledby="acc-login">
+        <h2 id="acc-login" class="section-title">로그인</h2>
+        <p>구글 계정으로 로그인합니다. 비밀번호를 따로 만들 필요가 없어요. 처음 로그인하면 한 번만 정보를 입력해요.</p>
+        <p class="field__error" data-google-error role="alert"${loginError ? '' : ' hidden'}>${escapeHtml(loginError)}</p>
+        <div class="actions actions--start"><button type="button" class="button button--primary" data-action="google"${signingIn ? ' disabled' : ''}>${signingIn ? '로그인하는 중…' : '구글로 로그인'}</button></div>
+        <p class="meta">학교 구글 계정으로 로그인이 안 되면 학교에서 외부 앱 로그인을 막아 둔 것일 수 있어요. 선생님께 말해 주세요.</p>
+      </section>`;
+    } else if (!user) {
       body = `<section class="panel account-box" aria-labelledby="acc-login">
         <h2 id="acc-login" class="section-title">로그인</h2>
         <p>구글 계정으로 로그인합니다. 비밀번호를 따로 만들 필요가 없어요.</p>
@@ -185,6 +197,23 @@ export function renderAccount(root) {
       return;
     }
     const a = event.target.closest('[data-action]')?.dataset.action;
+    if (a === 'google') {
+      signingIn = true;
+      loginError = '';
+      draw();
+      signInWithGoogle().then(() => {
+        signingIn = false; // 로그인되면 서버 값이 들어와 라우터가 다시 그린다
+      }).catch((error) => {
+        signingIn = false;
+        const code = error?.code ?? '';
+        loginError = code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request' ? ''
+          : code === 'auth/popup-blocked' ? '팝업이 막혀 있어요. 브라우저에서 이 사이트의 팝업을 허용한 뒤 다시 눌러 주세요.'
+            : code === 'auth/unauthorized-domain' ? '이 주소에서는 로그인할 수 없어요(Firebase 승인된 도메인 확인 필요).'
+              : `로그인하지 못했어요. 잠시 뒤 다시 해 보세요. (${code || error?.message || '오류'})`;
+        draw();
+      });
+      return;
+    }
     if (a === 'signout') {
       signOut();
       kind = null;

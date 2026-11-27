@@ -42,10 +42,11 @@ AI가 학생 대신 답을 완성해 주는 도구가 아닙니다. 모든 설�
 - **프런트엔드**: Vanilla JavaScript(ES 모듈), HTML, CSS. 프레임워크(React, Vue 등)는 도입하지 않습니다.
 - **패키지 관리**: npm (`package-lock.json`을 커밋합니다)
 
-### 계획된 스택 (아직 연결하지 않음)
+### 서버 스택 (4-1부터 연결 중)
 
-- **인증**: Firebase Authentication
-- **데이터베이스**: Cloud Firestore
+- **인증**: Firebase Authentication(Google 제공자, 팝업). 4-1 연결함. Firebase 프로젝트 `goprove-9d482`, Firestore 위치 asia-northeast3(서울)
+- **데이터베이스**: Cloud Firestore(오프라인 캐시 `persistentLocalCache`, 로그아웃하면 이 기기 캐시 지움). 4-1은 계정·역할·명단·연결표·설정, 나머지는 4-2·4-3
+- **라이브러리(2026-11-27 사용자 허락)**: `firebase`(앱, firebase 모드에서만 따로 나눈 파일로 받음, gzip 약 187KB), `firebase-admin`(서버 함수 전용). Google Analytics는 쓰지 않습니다(학생 사용 기록이 밖으로 나가지 않게).
 - **AI**: OpenRouter API. 반드시 서버 측 엔드포인트를 거쳐 호출합니다.
 - **배포**: Vercel (2026-11-26 Netlify에서 변경. 이유: Netlify는 배포할 때마다 크레딧이 차감되어 잦은 커밋에 불리함)
 - **서버 측 엔드포인트**: Vercel Functions(프로젝트 루트의 `api/` 폴더, `firebase-admin`으로 ID 토큰 검증·사용자 지정 클레임·서버만 쓰는 기록). 2026-11-27 사용자 결정. 이유: 이미 Vercel로 배포하고, Firebase Cloud Functions와 달리 Blaze 요금제 없이 돌아가며, 5단계 OpenRouter 중계도 같은 곳에 둡니다. 서비스 계정 키는 Vercel 환경 변수(민감 값)로만 둡니다.
@@ -65,7 +66,12 @@ AI가 학생 대신 답을 완성해 주는 도구가 아닙니다. 모든 설�
 ├─ src/
 │  ├─ main.js          # JavaScript 진입 파일. 여기서 CSS를 import한다.
 │  └─ ...              # 애플리케이션 코드와 CSS (아래 "현재 src/ 구조" 참고)
-└─ api/               # TODO: 서버 측 함수(Vercel Functions)를 도입할 때 추가 (현재 없음)
+├─ firestore.rules     # Firestore 보안 규칙(콘솔에 붙여 넣어 게시). 계정·명단·연결표·설정은 서버만 씀, 연결표는 관리자·본인만 읽음
+├─ .env.example        # 환경 변수 이름(VITE_FIREBASE_* 6개, FIREBASE_SERVICE_ACCOUNT, GOOGLE_APPLICATION_CREDENTIALS, ADMIN_EMAILS). 값은 .env.local과 Vercel에만
+└─ api/               # 서버 함수(Vercel Functions). 로컬은 vite.config.js의 개발용 중계로 npm run dev에서 함께 돈다
+   ├─ account.js      # 계정 함수 하나: bootstrap(사용자 문서·연구 번호·ADMIN_EMAILS 관리자·클레임), profile(명단 자동 승인), joinSession,
+   │                  #   관리자: approve, reject, setRole(마지막 관리자 보호), addRoster, removeRoster, unlink, unlinkAll, guardianConsent, saveEthics, saveSignup. 관리 기록 audit
+   └─ _lib/server.js  # firebase-admin 초기화(서비스 계정), ID 토큰 확인, JSON 요청·응답 (밑줄 폴더는 함수가 되지 않음)
 ```
 
 - HTML, CSS, JavaScript는 역할에 따라 **파일을 분리**합니다. HTML 안에 큰 `<style>`이나 `<script>` 블록을 넣지 않습니다.
@@ -102,7 +108,7 @@ src/
 │  ├─ surveyStore.js       # 설문(문항 세트, 응답 시작 시 잠금)과 연구 동의서(판 관리)
 │  ├─ interviewStore.js    # 면담 기준값, 면담 대상 선정(유형·근거), 면담 기록(동의 날짜·일시·면담자·상태·질문별 메모·전체 메모), 녹음 보관 기한
 │  ├─ adminStore.js        # 관리자 설정: 연습 기본값, 가입 규칙, 공지, 문의처, 개인정보 요청, 관리 기록(CSV)
-│  ├─ appMode.js           # 실행 모드(prototype / demo, 4-1에서 firebase 추가), 모드별 저장 키 접두어(storageKey)
+│  ├─ appMode.js           # 실행 모드: prototype(설정값 없음, 동작 테스트) / demo(demo.html) / firebase(설정값 있음), 모드별 저장 키 접두어(storageKey)
 │  ├─ browserData.js       # 이 브라우저의 앱 기록 전체(녹음 포함)를 JSON 파일로 내보내기·불러오기(시연 데이터)
 │  ├─ prefsStore.js        # 내 설정(기기별): 글자 크기, 대비, 움직임 줄이기, 증명 칸 처음 입력 방식, 손가락으로도 쓰기, 닫은 공지
 │  ├─ practiceSettings.js  # 증명 연습 설정 = 관리자 기본값 + 학급별 덮어쓰기(sessionStore 학급의 practice)
@@ -114,6 +120,10 @@ src/
 │  ├─ researchRoster.js    # 교사 화면용 연구 기록 모음(이 브라우저 학생 + 예시 학생)과 채점 대상
 │  ├─ motivation.js        # 연속 학습일·통과 수·인증 배지·이어서 하기
 │  └─ classroomStore.js, storage.js       # 수업 설정, localStorage 임시 보관
+├─ firebase/              # firebase 모드에서만 불러온다(main.js가 동적 import)
+│  ├─ config.js            # VITE_FIREBASE_* 환경 변수 → firebaseConfig, hasFirebaseConfig
+│  └─ accountSync.js       # 구글 로그인, bootstrap, 역할별 onSnapshot 구독(본인 / 교사: users / 관리자: users·links·roster·audit) → accountStore.applyRemoteAccounts,
+│                          #   클레임 새로 받기, 서버 함수 호출(실패하면 되돌리고 알림), 로그아웃 때 캐시 지우기. 개발 서버에서만 시험 토큰 로그인 통로
 ├─ services/
 │  ├─ aiRequests.js        # AI 요청 입력 구성 (활동별·모드별로 다른 함수)
 │  ├─ mockProofChecker.js  # 더미 AI 점검·코치·채점 (→ 추후 서버 호출로 교체)
@@ -171,7 +181,8 @@ src/
   - Build Command: `npm run build`
   - Output Directory: `dist`
 - `main` 브랜치에 푸시하면 본 배포, 다른 브랜치·PR은 미리보기 배포가 만들어집니다. 배포 횟수를 줄이려면 작업을 로컬에서 확인하고 묶어서 푸시합니다.
-- 서버 측 함수를 도입하면 로컬에서는 Vercel CLI(`vercel dev`)로 화면과 함수를 함께 실행해 확인합니다. CLI를 설치할 때 사용자에게 먼저 확인합니다.
+- 서버 측 함수(`api/`)는 로컬에서 `npm run dev` 하나로 화면과 함께 돕니다(vite.config.js의 개발용 중계, Vercel CLI 쓰지 않음). 서버 비밀 값은 `.env.local`의 `GOOGLE_APPLICATION_CREDENTIALS`(프로젝트 폴더 밖 키 파일 경로)와 `ADMIN_EMAILS`.
+- Vercel 환경 변수: `VITE_FIREBASE_*` 6개(넣으면 배포된 앱이 firebase 모드가 됨), `FIREBASE_SERVICE_ACCOUNT`(서비스 계정 JSON 내용 전체, Sensitive), `ADMIN_EMAILS`.
 - 무료(Hobby) 플랜은 개인·비상업적 용도 기준입니다. 학교 밖 서비스로 확장하거나 기관 계정이 필요해지면 플랜을 다시 확인합니다.
 - 로컬 명령
   - 개발 서버: `npm run dev`
@@ -219,6 +230,7 @@ src/
   - 학생이 자신의 역할(role)을 직접 바꾸는 것
 - 역할 정보는 학생이 쓸 수 없는 곳에 둡니다. Custom Claims 또는 쓰기가 제한된 문서를 검토합니다.
   - 역할은 관리자만 쓰는 Firebase Auth 사용자 지정 클레임(role)으로 두고, 사용자 문서에도 표시용으로 둡니다(2026-11-27, `docs/data-spec.md` 10절).
+  - 4-1 구현: 클레임 `{ role }`은 **승인된 사용자에게만** 서버가 붙입니다(승인 전·거절은 클레임 없음). 처음 관리자는 `ADMIN_EMAILS`(Vercel 환경 변수)의 이메일로 로그인한 계정입니다(이메일 확인된 구글 계정만). 계정을 바꾸는 일은 모두 `api/account.js`를 거치고, 브라우저는 계정 문서를 읽기만 합니다.
 - 연구 기록 중 AI 입출력 로그처럼 위·변조되면 안 되는 데이터는 **서버만 쓰도록** 합니다. 클라이언트에서 직접 쓰지 않습니다.
 - 로그인과 가입(2026-11-27 사용자 결정): 구글 로그인 → 처음 한 번 정보 입력(학생: 학년도·학번·이름, 일반인: 이름·소속·이유) → 학생 명단과 맞으면 바로 승인, 나머지는 관리자 승인. 증명 연습은 승인되면 바로, AI와 탐구하기는 세션 코드로 들어갑니다. 자세한 것은 `docs/data-spec.md`.
 
@@ -725,7 +737,7 @@ AI와 탐구하기 → 교사가 지정한 명제의 연구 모드 흐름
 | 1 | 디자인·UI 개편, 수식 표시(KaTeX 검토), 모바일 점검 | 디자인 토큰과 공통 부품이 정리되고 폰 화면에서 확인함 | 진행 중 (2026-11-26 Hallmark 개편 완료, 사용자 폰 확인과 수식 표시 남음) |
 | 2 | AI와 탐구하기(연구 모드) 재설계 (더미 AI): 4단계 흐름, 펜 필기, 교사 채점·분석·면담, 설문, AI 원리 활동 | 5절 연구 설계의 구현 순서 1~6이 더미 AI로 동작함 | 완료 2026-11-27 (구현 1~7과 연구 세션, 증명법 한눈에 보기. 설문 문항은 추천 초안이며 사용자가 선행 논문의 평가도구를 찾으면 설문 편집 화면에서 바꿈) |
 | 3 | 데이터 수집 명세와 연구 윤리 결정 (문서 작업) | 수집 항목, 가명 처리, 동의·보존·삭제 기준이 이 문서에 기록됨 | 완료 2026-11-27 (`docs/data-spec.md`, 계정·관리자·세션 코드·연결표·연구 윤리 설정 화면 프로토타입, 동의 철회 처리, AI 보조 채점자 선택) |
-| 4 | Firebase: 로그인, 학급 가입, 역할 구분, Firestore, 보안 규칙, 서버 함수 뼈대 | 3단계 명세대로 저장되고 권한이 서버 규칙으로 강제됨 | 진행 중 (2026-11-27 준비: 시연 모드 demo.html과 시연 데이터 내보내기·불러오기. 다음은 4-1) |
+| 4 | Firebase: 로그인, 학급 가입, 역할 구분, Firestore, 보안 규칙, 서버 함수 뼈대 | 3단계 명세대로 저장되고 권한이 서버 규칙으로 강제됨 | 진행 중 (2026-11-27 준비와 4-1 완료: 구글 로그인, 계정·역할 클레임·가입 승인·명단·연결표·연구 윤리·가입 규칙을 서버로. 다음은 4-2) |
 | 5 | OpenRouter 연결 (연구 모드 먼저, 다음 연습 모드), 요청 한도, AI 응답 평가 세트 | 서버 함수를 거쳐 실제 AI가 응답하고, 평가 세트로 품질을 비교할 수 있음 | 예정 |
 | 6 | 교사 화면과 대시보드 (학생용·교사용), 연구 데이터 내려받기 | 실제 데이터로 학급 현황과 연구 기록을 볼 수 있음 | 예정 |
 | 7 | 명제 확대, 교사의 명제 등록 기능 | 1~6단계와 병행 가능. 추가한 명제는 데이터 검증을 통과함 | 수시 |
@@ -736,7 +748,7 @@ AI와 탐구하기 → 교사가 지정한 명제의 연구 모드 흐름
 - **3단계**: 실명 대신 학급 코드와 가명 번호로 가입하는 방식 검토, 정답 데이터를 서버로 옮길지 결정, AI 채점 점수의 용도 결정.
 - **4단계 나누기(2026-11-27 사용자 결정)**: 단계마다 검증·커밋·배포합니다. Firebase 설정값이 없으면 지금처럼 브라우저 저장으로 동작하는 프로토타입 모드를 남겨 동작 테스트와 로컬 확인에 씁니다.
   - 준비(완료): 시연 모드(`demo.html`, 저장 키 접두어 `checkyourprove.demo.`, 녹음 DB도 따로)와 시연 데이터 내보내기·불러오기(`#/demo-data`). 지금까지의 시연·테스트 기록은 Firestore로 옮기지 않고 파일로 내보내 `_local_archive/demo/`에 보관합니다(공개 저장소에 올리지 않음). 나중에 이 데이터로 파일 하나짜리 데모 HTML도 만들어 같은 폴더에 둡니다.
-  - 4-1: Firebase 연결, 구글 로그인, 사용자 문서·역할 클레임, 가입 승인, 명단, 연결표
+  - 4-1(완료 2026-11-27): Firebase 연결, 구글 로그인, 사용자 문서·역할 클레임, 가입 승인, 명단, 연결표, 연구 윤리 설정·가입 규칙, 계정 관리 기록(서버). 실제 프로젝트에서 시험 계정으로 서버 함수·보안 규칙 35개와 화면 흐름(가입 → 승인 → 학생 화면 저절로 바뀜 → 로그아웃) 15개를 확인함(`_local_archive/dev-tools/firebase/live.mjs`, `render/shots27.mjs`). 세션 참여(`joinSession`)는 세션 id만 기록하고 코드 확인은 4-2에서 서버로 옮김.
   - 4-2: 학급·세션·세션 코드, 학생 연구 기록, 연습 기록, 관리자 설정
   - 4-3: 채점·대화 태그·면담·설문, 원리 활동 진행 제어 실시간 동기화(onSnapshot)
   - 4-4: 면담 녹음 Firebase Storage, 보안 규칙 테스트 정리
@@ -769,7 +781,7 @@ AI와 탐구하기 → 교사가 지정한 명제의 연구 모드 흐름
 | 결정함 | 보존·동의: IRB 설정에 따름, 철회 전 자료 사용, 보호자 동의는 종이 + 날짜 (2026-11-27). `확인 필요`: IRB 보존 기간, 삭제 요청 처리 기한 |
 | TODO | 클라이언트 라우팅 방식 확정 (프로토타입은 해시 방식) |
 | TODO | `vercel.json` 사용 여부 |
-| TODO | Firestore 컬렉션·문서 구조와 보안 규칙 확정 (초안: `docs/data-spec.md` 10절) |
+| 진행 중 | Firestore 구조와 보안 규칙: 4-1의 계정 부분 확정(`docs/data-spec.md` 10절, `firestore.rules`), 세션·기록은 4-2·4-3 |
 | TODO | 프롬프트 저장과 버전 관리 방식 |
 | TODO | 수식 입력·표시 방식 |
 | TODO | 문제(명제) 데이터를 관리하는 방식(코드 내 정적 데이터 또는 Firestore)과 교사의 명제 등록 방식 |

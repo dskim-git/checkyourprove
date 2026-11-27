@@ -2,6 +2,7 @@
 // 공지·보관 기한 알림, 진행 중 세션(세션 코드, 탐구 열기·단계 열기 빠른 스위치), 업무 바로가기, 증명 연습·탐구 진행 현황.
 // 설정은 교사 설정(#/teacher/settings), 관리자 설정(#/admin), 내 설정(#/settings)으로 나뉜다.
 
+import { isFirebase } from '../state/appMode.js';
 import { METHODS, getMethod } from '../data/methods.js';
 import { LEVELS, getLevel } from '../data/levels.js';
 import { getProblem } from '../data/problems/index.js';
@@ -40,7 +41,9 @@ export function renderTeacher(root) {
       <div><h1>교사 업무판</h1><p class="lead">오늘 수업에 필요한 일을 모았습니다.</p></div>
       <a class="button button--secondary" href="#/teacher/settings">교사 설정</a>
     </header>
-    ${notice('warn', '프로토타입 상태입니다', '교사 권한 확인, 실제 학생 데이터, 서버 저장은 아직 연결되지 않았습니다. 설정은 이 브라우저에만 저장되며, 아래 학생 기록은 모두 예시 데이터입니다.')}
+    ${isFirebase
+      ? notice('warn', '서버 연결 진행 중입니다', '로그인과 교사 권한은 서버가 확인합니다. 학급·세션과 학생 기록은 아직 이 브라우저에만 저장되며, 아래 학생 기록은 예시 데이터입니다.')
+      : notice('warn', '프로토타입 상태입니다', '교사 권한 확인, 실제 학생 데이터, 서버 저장은 아직 연결되지 않았습니다. 설정은 이 브라우저에만 저장되며, 아래 학생 기록은 모두 예시 데이터입니다.')}
     <div data-retention-alert></div>
 
     <section class="panel today" aria-labelledby="today-heading" data-today>

@@ -61,6 +61,7 @@ import { renderAdmin } from './views/teacher/adminView.js';
 import { renderTeacherSettings } from './views/teacher/teacherSettingsView.js';
 import { renderSettings } from './views/settingsView.js';
 import { canTeach, currentUser, displayName, isAdmin } from './state/accountStore.js';
+import { isBrowserOnly } from './state/appMode.js';
 import { icons } from './ui/icons.js';
 import { activeNotices } from './state/adminStore.js';
 import { dismissNotice, getPrefs } from './state/prefsStore.js';
@@ -124,7 +125,7 @@ function roleBlock(route) {
   return `<div class="page">
     <h1>${who}만 볼 수 있어요</h1>
     <div class="notice notice--lock" role="note"><div class="notice__body"><p class="notice__title">${u ? `${escapeHtml(displayName(u))} 계정은 ${who} 화면을 볼 수 없어요.` : '로그인하지 않았어요.'}</p>
-      <p>${u ? '역할이 잘못되었다면 관리자에게 말해 주세요.' : `${who} 계정으로 로그인하세요. 서버 연결 전에는 로그인 화면의 "시연용 역할로 보기"를 쓸 수 있어요.`}</p></div></div>
+      <p>${u ? '역할이 잘못되었다면 관리자에게 말해 주세요.' : `${who} 계정으로 로그인하세요.${isBrowserOnly ? ' 서버 연결 전에는 로그인 화면의 "시연용 역할로 보기"를 쓸 수 있어요.' : ''}`}</p></div></div>
     <p><a class="button button--secondary" href="${u ? '#/' : '#/account'}">${u ? '홈으로' : '로그인'}</a></p>
   </div>`;
 }
@@ -148,34 +149,59 @@ function drawAppNav(user) {
 }
 
 /** 앱 위쪽 공지 (관리자가 올린 공지 중 내 역할에 맞고 기한이 지나지 않은 것, 닫으면 이 기기에서 숨김) */
+// 서버에 저장하지 못했다는 알림(firebase 모드). 닫을 때까지 공지 띠에 둔다.
+let remoteErrors = [];
+
 function drawNoticeBar(user) {
   const bar = document.querySelector('[data-notice-bar]');
   if (!bar) return;
   const hidden = getPrefs().dismissedNotices;
   const list = activeNotices(user?.role ?? null).filter((n) => !hidden.includes(n.id));
-  bar.innerHTML = list.map((n) => `<div class="notice-bar__item" role="status" data-notice-id="${escapeHtml(n.id)}">
+  bar.innerHTML = remoteErrors.map((e) => `<div class="notice-bar__item" role="alert" data-remote-error="${e.id}">
+    <p><strong>서버에 저장하지 못했어요</strong> <span>${escapeHtml(e.message)}</span></p>
+    <button type="button" class="button button--ghost button--small" data-dismiss-error aria-label="알림 닫기">닫기</button>
+  </div>`).join('') + list.map((n) => `<div class="notice-bar__item" role="status" data-notice-id="${escapeHtml(n.id)}">
     <p><strong>${escapeHtml(n.title)}</strong>${n.body ? ` <span>${escapeHtml(n.body)}</span>` : ''}</p>
     <button type="button" class="button button--ghost button--small" data-dismiss-notice aria-label="공지 닫기: ${escapeHtml(n.title)}">닫기</button>
   </div>`).join('');
-  bar.hidden = !list.length;
+  bar.hidden = !list.length && !remoteErrors.length;
 }
 
+window.addEventListener('checkyourprove:remote-error', (event) => {
+  remoteErrors = [...remoteErrors, { id: Date.now().toString(36), message: event.detail?.message ?? '' }].slice(-3);
+  drawNoticeBar(currentUser());
+});
+
 document.addEventListener('click', (event) => {
+  const e = event.target.closest?.('[data-dismiss-error]');
+  if (e) {
+    remoteErrors = remoteErrors.filter((x) => x.id !== e.closest('[data-remote-error]').dataset.remoteError);
+    drawNoticeBar(currentUser());
+    return;
+  }
   const b = event.target.closest?.('[data-dismiss-notice]');
   if (!b) return;
   dismissNotice(b.closest('[data-notice-id]').dataset.noticeId);
   drawNoticeBar(currentUser());
 });
 
+// 서버의 계정 값이 바뀌면 다시 그릴 화면(계정·설정·관리자·교사 업무판과 교사 설정). 채점처럼 고르는 중인 값이 있는 화면은 다시 그리지 않는다.
+const LIVE = [/^\/account$/, /^\/settings/, /^\/admin/, /^\/teacher\/admin/, /^\/teacher$/, /^\/teacher\/settings/];
+const userSig = (u) => (u ? `${u.uid}|${u.role}|${u.status}` : '');
+
 export function startRouter(root) {
   let cleanup = null;
   let firstRender = true;
+  let shownSig = userSig(currentUser());
 
-  const render = () => {
+  // refresh: 서버 값이 바뀌어 같은 화면을 다시 그릴 때(맨 위로 올리지 않고, 초점을 있던 칸에 돌려준다)
+  const render = ({ refresh = false } = {}) => {
+    const focusId = refresh ? document.activeElement?.id : null;
     cleanup?.();
     cleanup = null;
 
     const path = currentPath();
+    shownSig = userSig(currentUser());
     let params = [];
     const route = ROUTES.find((candidate) => {
       const match = path.match(candidate.pattern);
@@ -225,7 +251,9 @@ export function startRouter(root) {
     });
 
     // 화면이 바뀌면 맨 위로 올리고, 화면 읽기 프로그램 사용자를 위해 제목으로 초점을 옮긴다.
-    if (!firstRender) {
+    if (refresh) {
+      if (focusId) document.getElementById(focusId)?.focus({ preventScroll: true });
+    } else if (!firstRender) {
       window.scrollTo(0, 0);
       const heading = root.querySelector('h1');
       if (heading) {
@@ -236,6 +264,26 @@ export function startRouter(root) {
     firstRender = false;
   };
 
-  window.addEventListener('hashchange', render);
+  window.addEventListener('hashchange', () => render());
+  // 서버 값(계정·역할·명단 등)이 바뀌면 지금 화면을 다시 그린다. 글을 쓰는 중이면 쓴 글을 지키려고 미룬다.
+  let timer = null;
+  const refresh = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      const a = document.activeElement;
+      const typing = a && (a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && !['checkbox', 'radio', 'button', 'submit', 'file'].includes(a.type)));
+      if (typing || document.querySelector('dialog[open]')) {
+        a?.addEventListener('blur', refresh, { once: true });
+        return;
+      }
+      // 내 역할·승인 상태가 바뀌었거나 계정을 보여 주는 화면이면 다시 그리고, 아니면 머리글만
+      if (userSig(currentUser()) !== shownSig || LIVE.some((re) => re.test(currentPath()))) render({ refresh: true });
+      else {
+        drawAppNav(currentUser());
+        drawNoticeBar(currentUser());
+      }
+    }, 60);
+  };
+  window.addEventListener('checkyourprove:accounts', refresh);
   render();
 }

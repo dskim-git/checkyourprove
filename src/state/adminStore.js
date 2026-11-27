@@ -12,6 +12,24 @@
 
 import { readJson, writeJson } from './storage.js';
 
+// 서버 연결(firebase 모드, 4-1): 가입 규칙은 settings/signup(서버 함수만 씀), 계정 관련 관리 기록은 서버의 audit 모음.
+// firebase/accountSync.js가 setAdminRemote·applyRemoteSignup·applyRemoteAudit으로 연결한다. 나머지는 4-2에서 옮긴다.
+let remote = null;
+let remoteAudit = null;
+export function setAdminRemote(fn) {
+  remote = fn;
+}
+export function applyRemoteSignup(signup) {
+  Object.assign(getAdmin().signup, signup);
+}
+export function applyRemoteAudit(list) {
+  remoteAudit = list;
+}
+/** 관리 기록(새것부터): 이 브라우저의 기록 + 서버 기록 */
+export const auditLog = () => (remoteAudit
+  ? [...remoteAudit, ...getAdmin().audit].sort((a, b) => String(b.at).localeCompare(String(a.at)))
+  : getAdmin().audit);
+
 const STORAGE_KEY = 'checkyourprove.prototype.admin.v1';
 
 /** 증명 연습 기본값 (관리자가 정하고, 교사는 학급마다 바꿀 수 있다) */
@@ -89,6 +107,7 @@ export function savePracticeDefaults(patch, by) {
 
 export function saveSignupRules(patch, by) {
   Object.assign(getAdmin().signup, patch);
+  if (remote) return remote('saveSignup', { patch }); // 서버가 저장하고 관리 기록을 남긴다
   save();
   logAction('가입 규칙 변경', Object.entries(patch).map(([k, v]) => `${k}=${v}`).join(', '), by);
 }
@@ -151,6 +170,6 @@ const csvCell = (v) => {
 };
 
 export function auditCsv() {
-  const rows = [['시각', '한 사람', '작업', '내용'], ...getAdmin().audit.map((a) => [a.at, a.by, a.action, a.detail])];
+  const rows = [['시각', '한 사람', '작업', '내용'], ...auditLog().map((a) => [a.at, a.by, a.action, a.detail])];
   return `﻿${rows.map((r) => r.map(csvCell).join(',')).join('\r\n')}`;
 }

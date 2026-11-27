@@ -20,7 +20,26 @@
 //              deleteBy('YYYY-MM-DD', IRB를 받지 않을 때 관리자가 정한 자료 삭제일) }
 
 import { readJson, writeJson } from './storage.js';
-import { getAdmin, logAction } from './adminStore.js';
+import { getAdmin, logAction as logLocal } from './adminStore.js';
+import { isFirebase } from './appMode.js';
+
+// ── 서버 연결 (firebase 모드, 로드맵 4-1) ──
+// 화면 코드는 그대로 두려고 함수 모양(동기)을 지킨다. 바꾸는 함수는 메모리 값을 먼저 바꾸고(화면이 바로 바뀜)
+// 서버 함수(api/account.js)에 보낸다. 서버가 Firestore에 쓰면 firebase/accountSync.js가 onSnapshot으로 받아
+// applyRemoteAccounts로 메모리 값을 바꾸고 'checkyourprove:accounts' 이벤트를 보낸다(라우터가 화면을 다시 그림).
+// 서버가 거절하면 accountSync가 마지막 서버 값으로 되돌리고 오류를 알린다. 이 모드에서는 이 브라우저에 계정을 저장하지 않는다.
+let backend = null;
+/** firebase/accountSync.js가 연결한다: { call(action, payload), signIn(), signOut() } */
+export function setAccountBackend(b) {
+  backend = b;
+}
+const remote = (action, payload = {}) => backend?.call(action, payload);
+/** 구글 로그인(팝업, firebase 모드). 실패하면 오류를 던진다 */
+export const signInWithGoogle = () => (backend ? backend.signIn() : Promise.reject(new Error('서버에 연결되지 않았어요.')));
+/** 관리 기록: 서버 모드에서는 서버가 남긴다 */
+const logAction = (...args) => {
+  if (!isFirebase) logLocal(...args);
+};
 
 /** 관리 기록에 남길 "한 사람" */
 const actor = () => {
@@ -59,9 +78,15 @@ export function getAccounts() {
   cache ??= normalize(readJson(STORAGE_KEY, null));
   return cache;
 }
-const save = () => writeJson(STORAGE_KEY, getAccounts());
+const save = () => (isFirebase ? true : writeJson(STORAGE_KEY, getAccounts()));
 export function resetAccountsCache() {
   cache = null;
+}
+
+/** 서버 값으로 바꾼다(firebase 모드). data = { users, currentUid, roster, ethics } */
+export function applyRemoteAccounts(data) {
+  cache = normalize(data);
+  window.dispatchEvent(new window.CustomEvent('checkyourprove:accounts'));
 }
 
 const randomCode = (n) => Array.from({ length: n }, () => ALPHABET[Math.floor(Math.random() * ALPHABET.length)]).join('');
@@ -90,6 +115,7 @@ export const displayName = (u) => u?.profile?.name || u?.email || '이름 없음
 
 /** 구글 로그인 흉내: 이메일로 계정을 찾거나 만든다. 처음 만든 계정은 관리자. */
 export function signInDemo(email) {
+  if (isFirebase) return null;
   const d = getAccounts();
   const clean = String(email ?? '').trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) return null;
@@ -126,7 +152,7 @@ export const DEMO_ACCOUNTS = {
 /** 시연용 역할로 로그인 (승인된 계정을 만들거나 찾는다) */
 export function signInDemoRole(role) {
   const demo = DEMO_ACCOUNTS[role];
-  if (!demo) return null;
+  if (!demo || isFirebase) return null;
   const d = getAccounts();
   let user = d.users.find((u) => u.email === demo.email);
   if (!user) {
@@ -145,6 +171,7 @@ export function signInDemoRole(role) {
 
 export function signOut() {
   getAccounts().currentUid = null;
+  if (isFirebase) return backend?.signOut();
   save();
 }
 
@@ -170,6 +197,12 @@ export function submitProfile(uid, profile) {
   u.profile = p;
   u.submittedAt = now();
   if (u.role !== 'admin' && u.role !== 'teacher') u.role = p.kind === 'student' ? 'student' : 'guest';
+  if (isFirebase) {
+    // 명단은 관리자만 보므로 판단은 서버가 한다. 바로 승인되면 서버 값이 곧 들어온다.
+    if (u.status !== 'approved') u.status = 'pending';
+    remote('profile', { profile: p });
+    return u.status;
+  }
   if (p.kind === 'student' && getAdmin().signup.rosterAutoApprove && rosterMatch(p)) {
     Object.assign(u, { status: 'approved', approvedAt: now(), approvedBy: 'roster', autoApproved: true });
   } else if (u.status !== 'approved') {
@@ -185,6 +218,7 @@ export function approveUsers(uids, by = currentUser()?.uid ?? 'admin') {
     if (u && u.profile) Object.assign(u, { status: 'approved', approvedAt: now(), approvedBy: by, autoApproved: false });
   });
   if (uids.length) logAction('가입 승인', uids.map((id) => findUser(id)?.researchId).join(', '), actor());
+  if (uids.length) remote('approve', { uids });
   return save();
 }
 
@@ -193,6 +227,7 @@ export function rejectUser(uid) {
   if (u) {
     u.status = 'rejected';
     logAction('가입 거절', u.researchId, actor());
+    remote('reject', { uid });
   }
   return save();
 }
@@ -205,12 +240,14 @@ export function setRole(uid, role) {
   const before = u.role;
   u.role = role;
   logAction('역할 변경', `${u.researchId} ${roleLabel(before)} → ${roleLabel(role)}`, actor());
+  remote('setRole', { uid, role });
   return save();
 }
 
 export function setGuardianConsent(uid, date) {
   const u = findUser(uid);
   if (u) u.guardianConsent = date || null;
+  remote('guardianConsent', { uid, date: date || null });
   return save();
 }
 
@@ -249,6 +286,8 @@ export function addRoster(text, defaultYear) {
     Object.assign(u, { status: 'approved', approvedAt: now(), approvedBy: 'roster', autoApproved: true });
     approved += 1;
   });
+  // 서버 모드: 명단 확인과 승인은 서버가 다시 한다(화면의 수는 미리 계산한 값)
+  if (added) remote('addRoster', { text, defaultYear });
   save();
   return { added, skipped, approved };
 }
@@ -256,6 +295,7 @@ export function addRoster(text, defaultYear) {
 export function removeRosterEntry(year, studentNo) {
   const d = getAccounts();
   d.roster = d.roster.filter((r) => !(String(r.year) === String(year) && r.studentNo === studentNo));
+  remote('removeRoster', { year, studentNo });
   return save();
 }
 
@@ -264,7 +304,10 @@ export function removeRosterEntry(year, studentNo) {
 export function joinSession(uid, sessionId) {
   const u = findUser(uid);
   if (!u) return false;
-  if (!u.sessionIds.includes(sessionId)) u.sessionIds.push(sessionId);
+  if (!u.sessionIds.includes(sessionId)) {
+    u.sessionIds.push(sessionId);
+    remote('joinSession', { sessionId });
+  }
   return save();
 }
 
@@ -281,11 +324,16 @@ export function unlinkUser(uid) {
   u.email = '';
   u.unlinkedAt = now();
   logAction('연결 정보 지움', u.researchId, actor());
+  if (!unlinkingAll) remote('unlink', { uid });
   return save();
 }
 
+let unlinkingAll = false;
 export function unlinkAll() {
+  unlinkingAll = true;
   getAccounts().users.filter((u) => u.role === 'student' || u.role === 'guest').forEach((u) => unlinkUser(u.uid));
+  unlinkingAll = false;
+  remote('unlinkAll');
   return save();
 }
 
@@ -312,6 +360,7 @@ export const ethics = () => getAccounts().ethics;
 
 export function saveEthics(patch) {
   Object.assign(getAccounts().ethics, patch);
+  remote('saveEthics', { patch });
   return save();
 }
 

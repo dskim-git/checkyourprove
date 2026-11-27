@@ -1,0 +1,43 @@
+// Firestore 보안 규칙 (로드맵 4-1: 계정·역할·명단·연결표·설정)
+// Firebase 콘솔 > Firestore Database > 규칙에 이 파일 내용을 붙여 넣고 [게시]합니다.
+//
+// 원칙(AGENTS.md 4절, docs/data-spec.md)
+//   - 역할은 승인된 사용자에게만 서버가 붙이는 사용자 지정 클레임 role(admin/teacher/student/guest). 학생이 바꿀 수 없다.
+//   - 계정·명단·연결표·설정은 서버 함수(api/account.js, Admin SDK)만 쓴다. 브라우저는 읽기만.
+//   - 연결표(links: 이름·학번·이메일)는 관리자와 본인만 읽는다. 교사는 users(연구 번호·역할·세션)만 읽는다.
+//   - 여기에 적지 않은 문서는 모두 막는다. 4-2·4-3에서 세션·기록 규칙을 더한다.
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function role() { return signedIn() ? request.auth.token.get('role', '') : ''; }
+    function isAdmin() { return role() == 'admin'; }
+    function isTeacher() { return role() == 'admin' || role() == 'teacher'; }
+    function isSelf(uid) { return signedIn() && request.auth.uid == uid; }
+
+    match /users/{uid} {
+      allow read: if isSelf(uid) || isTeacher();
+      allow write: if false;
+    }
+    match /links/{uid} {
+      allow read: if isSelf(uid) || isAdmin();
+      allow write: if false;
+    }
+    match /roster/{id} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+    match /settings/{name} {
+      allow read: if signedIn() && (name == 'ethics' || name == 'signup');
+      allow write: if false;
+    }
+    match /audit/{id} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

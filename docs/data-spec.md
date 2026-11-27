@@ -131,7 +131,19 @@
 - 연습 모드의 정답(빈칸 정답, 예시 증명)은 지금처럼 앱 안에 둡니다(학습용, 빠르고 오프라인에서도 됨). 다만 인증(배지)은 서버가 다시 확인합니다.
 - 연구 모드는 교사 채점이라 정답 노출 문제가 없습니다.
 
-## 10. 서버 구조 초안 (로드맵 4단계에서 확정)
+## 10. 서버 구조 (로드맵 4단계, 4-1에서 계정 부분 확정)
+
+4-1에서 확정한 것(2026-11-27, `api/account.js`, `firestore.rules`)
+- `users/{uid}` = { role, status(profile/pending/approved/rejected), kind(student/guest), researchId, sessionIds, createdAt, submittedAt, approvedAt, approvedBy, autoApproved, unlinkedAt }. 실명 없음. 본인과 교사·관리자가 읽음.
+- `links/{uid}` = { email, profile(학년도·학번·이름 또는 이름·소속·가입 이유), guardianConsent }. 관리자와 본인만 읽음.
+- `roster/{학년도-학번}` = { year, studentNo, name, addedAt }. 관리자만 읽음.
+- `researchIds/{연구 번호}` = { uid }. 연구 번호가 겹치지 않게 서버가 만듦(아무도 읽지 않음).
+- `settings/ethics`, `settings/signup`(명단 자동 승인·일반인 가입). 로그인한 사용자가 읽음.
+- `audit/{자동}` = { at, action, detail, by(관리자의 연구 번호) }. 관리자만 읽음.
+- 위 문서는 모두 서버 함수만 씁니다. 역할 클레임 `{ role }`은 승인된 사용자에게만 붙습니다.
+- 이메일은 Firebase Auth와 `links`에 있습니다. 연결 지우기는 `links`의 이메일·이름·학번을 지우고, Auth 계정 삭제는 연구가 끝날 때(6절).
+
+아래는 처음 초안이며, 4-1에서 정하지 않은 부분(세션·기록·채점·면담·녹음)은 4-2~4-4에서 확정합니다.
 
 ```
 users/{uid}                 역할, 상태, 연구 번호, 참여 세션 (본인 읽기, 관리자 쓰기, 역할은 사용자 지정 클레임)
