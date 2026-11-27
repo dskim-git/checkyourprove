@@ -17,7 +17,7 @@ import { breadcrumb, notice, proofText, renderNotFound } from '../../ui/componen
 import { splitBar } from '../../ui/charts.js';
 import { escapeHtml, newId } from '../../ui/dom.js';
 import { statementHtml } from '../../ui/mathText.js';
-import { SCORE_SOURCES } from '../../services/analysis.js';
+import { sourceLabel as labelOfSource } from '../../services/analysis.js';
 import { sourceOf } from './analysisHomeView.js';
 import { interviewRow, interviewRows, matchList, statusChip, typeChip } from './interviewParts.js';
 import { createRecorder } from './interviewRecorder.js';
@@ -61,7 +61,7 @@ export function renderInterview(root, [studentId]) {
     const i = order.findIndex((s) => s.id === student.id);
     const prev = i > 0 ? order[i - 1] : null;
     const next = i >= 0 ? order[i + 1] : null;
-    const sourceLabel = SCORE_SOURCES.find((s) => s.id === sourceOf())?.label;
+    const sourceLabel = labelOfSource(sourceOf());
 
     root.innerHTML = `<div class="page page--teacher page--interview">
       ${breadcrumb([{ label: '교사 화면', href: '#/teacher' }, { label: '면담', href: '#/teacher/interviews' }, { label: student.pseudonym }])}

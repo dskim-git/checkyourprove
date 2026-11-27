@@ -10,6 +10,9 @@ import { escapeHtml } from '../../ui/dom.js';
 import { icons } from '../../ui/icons.js';
 import { breadcrumb, notice } from '../../ui/components.js';
 import { statementHtml } from '../../ui/mathText.js';
+import { currentUser, isApproved } from '../../state/accountStore.js';
+import { activeSessionId, setActiveSession } from '../../state/sessionStore.js';
+import { joinByCode, sessionCodeForm } from '../accountView.js';
 
 const STATE_TO_NODE = { submitted: 'certified', progress: 'here', open: 'here', waiting: 'locked', closed: 'locked' };
 
@@ -82,9 +85,48 @@ export function researchSummary(classroom = getClassroom()) {
   return `${current.n}단계 ${current.short}: ${stageStatus(current.n, classroom).label}`;
 }
 
+/**
+ * 계정으로 로그인한 학생·일반인은 세션 코드로 들어온 세션에서만 탐구한다(로드맵 3단계 사용자 결정).
+ * 로그인하지 않은 상태(프로토타입 미리보기)는 지금처럼 교사가 고른 진행 중 세션으로 활동한다.
+ * 돌려줌: 대신 그릴 화면이 있으면 그 정리 함수, 없으면 undefined(탐구 홈을 그린다)
+ */
+function sessionGate(root, crumbs) {
+  const user = currentUser();
+  if (!user || user.role === 'admin' || user.role === 'teacher') return undefined;
+  if (!isApproved(user)) {
+    root.innerHTML = `<div class="page">${breadcrumb(crumbs)}<h1>AI와 탐구하기</h1>${notice('lock', '가입 승인을 기다리고 있어요', '관리자가 승인하면 세션 코드로 들어올 수 있어요.')}<p><a class="button button--secondary" href="#/account">계정 보기</a></p></div>`;
+    return null;
+  }
+  if (user.sessionIds.includes(activeSessionId())) return undefined;
+  if (user.sessionIds.length) {
+    // 프로토타입: 이 기기의 진행 세션을 이 사용자가 마지막으로 들어간 세션으로 맞춘다
+    setActiveSession(user.sessionIds[user.sessionIds.length - 1]);
+    return undefined;
+  }
+  let error = '';
+  const draw = () => {
+    root.innerHTML = `<div class="page">${breadcrumb(crumbs)}
+      <header class="page-intro"><h1>AI와 탐구하기</h1><p class="lead">선생님이 알려 준 세션 코드를 입력하면 시작할 수 있어요.</p></header>
+      <section class="panel account-box">${sessionCodeForm({ error })}</section>
+    </div>`;
+    root.querySelector('#session-code')?.focus();
+  };
+  const onSubmit = (event) => {
+    if (!event.target.matches('[data-code-form]')) return;
+    event.preventDefault();
+    error = joinByCode(event.target.querySelector('[name="code"]').value);
+    if (error) draw();
+  };
+  draw();
+  root.addEventListener('submit', onSubmit);
+  return () => root.removeEventListener('submit', onSubmit);
+}
+
 export function renderResearchHome(root) {
-  const classroom = getClassroom();
   const crumbs = [{ label: '홈', href: '#/' }, { label: 'AI와 탐구하기' }];
+  const gate = sessionGate(root, crumbs);
+  if (gate !== undefined) return gate;
+  const classroom = getClassroom();
   if (!classroom.researchOpen) {
     root.innerHTML = `<div class="page">
       ${breadcrumb(crumbs)}

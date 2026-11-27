@@ -20,6 +20,8 @@
 //   #/teacher/principle                  원리 활동 진행(설명 띄우기, 학생에게 열 화면 정하기)
 //   #/teacher/interviews(/:student)      면담 후보와 기록 목록 / 학생 한 명의 면담
 //   #/teacher/recordings                 면담 녹음 관리(보관 기한, 듣기·내려받기·지우기)
+//   #/account                            계정(시연 로그인, 처음 정보 입력, 승인 대기, 세션 코드)
+//   #/teacher/admin(/links|/ethics)      관리자: 가입 승인·명단·역할 / 연결표 / 연구 윤리 설정(IRB)
 //   #/practice/guide                     증명법 한눈에 보기(직접·간접 증명법 설명)
 // 해시 방식은 배포 환경(Vercel)에서 별도 rewrite 설정 없이 동작한다.
 // TODO: 라우팅 방식(해시 / History API)은 AGENTS.md의 결정 필요 항목이다.
@@ -50,6 +52,9 @@ import { renderPrinciplePace } from './views/teacher/principlePaceView.js';
 import { renderInterviewHome } from './views/teacher/interviewHomeView.js';
 import { renderInterview } from './views/teacher/interviewView.js';
 import { renderRecordings } from './views/teacher/recordingsView.js';
+import { renderAccount } from './views/accountView.js';
+import { renderAdminLinks, renderAdminUsers, renderEthics } from './views/teacher/adminView.js';
+import { currentUser, displayName } from './state/accountStore.js';
 import { renderMethodGuide } from './views/practice/methodGuideView.js';
 import { renderNotFound } from './ui/components.js';
 import { escapeHtml } from './ui/dom.js';
@@ -84,6 +89,10 @@ const ROUTES = [
   { section: 'teacher', tab: null, view: 'wide', title: '면담', pattern: /^\/teacher\/interviews$/, render: renderInterviewHome },
   { section: 'teacher', tab: null, view: 'wide', title: '면담', pattern: /^\/teacher\/interviews\/([\w-]+)$/, render: renderInterview },
   { section: 'teacher', tab: null, view: 'wide', title: '녹음 관리', pattern: /^\/teacher\/recordings$/, render: renderRecordings },
+  { section: 'account', tab: null, title: '계정', pattern: /^\/account$/, render: renderAccount },
+  { section: 'teacher', tab: null, view: 'wide', title: '관리자', pattern: /^\/teacher\/admin$/, render: renderAdminUsers },
+  { section: 'teacher', tab: null, view: 'wide', title: '연결표', pattern: /^\/teacher\/admin\/links$/, render: renderAdminLinks },
+  { section: 'teacher', tab: null, view: 'wide', title: '연구 윤리 설정', pattern: /^\/teacher\/admin\/ethics$/, render: renderEthics },
 ];
 
 const APP_TITLE = '증명 연습실';
@@ -133,6 +142,12 @@ export function startRouter(root) {
     }
 
     document.title = route?.title ? `${route.title} - ${APP_TITLE}` : APP_TITLE;
+    // 머리글의 계정 링크: 로그인했으면 이름, 아니면 "로그인"
+    const chip = document.querySelector('[data-account-chip]');
+    if (chip) {
+      const u = currentUser();
+      chip.textContent = u ? displayName(u) : '로그인';
+    }
     document.body.dataset.view = route?.view ?? 'app';
     document.querySelectorAll('[data-nav]').forEach((link) => {
       if (link.dataset.nav === route?.section) link.setAttribute('aria-current', 'page');

@@ -4,6 +4,7 @@
 
 import { RUBRIC_TOTAL } from '../../data/rubric.js';
 import { raterAgreement } from '../../services/agreement.js';
+import { scoreFor } from '../../services/analysis.js';
 import {
   activeRubric, currentRater, getGrading, renameRater, saveGrading, scoreOf, totalOf, updateGradingSettings,
 } from '../../state/gradingStore.js';
@@ -65,6 +66,10 @@ export function renderGradingHome(root) {
             <span>블라인드 채점 <span class="meta">학생 이름과 단계를 가리고 채점자마다 정해진 무작위 순서로 보여 줍니다. 단계가 드러나는 추가 확인(옮겨 적기, 보완 여부)은 점수를 저장한 뒤에 열립니다.</span></span>
           </label>
           <label class="check">
+            <input type="checkbox" name="aiAsRater"${g.aiAsRater ? ' checked' : ''}>
+            <span>AI를 보조 채점자로 쓰기 <span class="meta">켜면 연구 분석의 점수 출처에 "채점자 1과 AI 평균"이 생기고, 아래 일치도에 채점자와 AI 사이의 일치도가 더해집니다. 끄면 AI 채점은 참고로만 남습니다.</span></span>
+          </label>
+          <label class="check">
             <input type="checkbox" name="includeSamples"${g.includeSamples ? ' checked' : ''}>
             <span>예시 학생 포함 <span class="meta">화면 확인용 가상 학생 6명의 기록을 함께 보여 줍니다.</span></span>
           </label>
@@ -106,6 +111,7 @@ export function renderGradingHome(root) {
       <section class="panel" aria-labelledby="agreement-heading">
         <h2 id="agreement-heading" class="section-title">채점자 간 일치도</h2>
         ${agreementBlock(g)}
+        ${g.aiAsRater ? aiAgreementBlock(g, targets) : ''}
       </section>
     </div>`;
   };
@@ -192,6 +198,28 @@ export function renderGradingHome(root) {
       </div>`;
   }
 
+  /** AI 보조 채점자: 채점자마다 그 채점자가 채점한 증명에서 AI 점수와의 일치도 */
+  function aiAgreementBlock(g, targets) {
+    const ai = {};
+    targets.forEach((t) => {
+      const s = scoreFor(t.student, t.stage, t.problemId, 'ai');
+      if (s) ai[t.key] = { criteria: s.criteria };
+    });
+    const rows = g.raters.map((r) => {
+      const res = raterAgreement(activeRubric(), g.scores[r.id], ai);
+      const kappas = res.criteria.map((c) => c.kappa).filter((v) => v != null);
+      return `<tr><th scope="row">${escapeHtml(r.name)} ↔ AI</th><td class="num">${res.n}</td><td class="num">${percent(res.exactTotal)}</td><td class="num">${res.meanDiff == null ? '–' : res.meanDiff.toFixed(2)}</td><td class="num">${kappas.length ? kappaText(kappas.reduce((s, v) => s + v, 0) / kappas.length) : '계산 불가'}</td></tr>`;
+    }).join('');
+    return `<h3 class="an-sub">채점자와 AI 보조 채점자의 일치도</h3>
+      <p class="meta">AI 채점은 지금 예시 규칙(더미)이라 참고용입니다. 기준별 가중 카파의 평균을 함께 보여 줍니다.</p>
+      <div class="table-wrap" role="region" aria-label="채점자와 AI의 일치도" tabindex="0">
+        <table class="data-table" data-ai-agreement>
+          <thead><tr><th scope="col">짝</th><th scope="col">증명 수</th><th scope="col">합계 정확 일치율</th><th scope="col">합계 평균 차이</th><th scope="col">기준별 카파 평균</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }
+
   const onChange = (event) => {
     if (handleScopeEvent(event, root)) {
       draw();
@@ -206,7 +234,7 @@ export function renderGradingHome(root) {
     const form = event.target.closest('[data-grading-settings]');
     if (!form || event.target.matches('[data-rater-name]')) return;
     const data = new FormData(form);
-    updateGradingSettings({ currentRater: data.get('rater'), blind: data.get('blind') === 'on', includeSamples: data.get('includeSamples') === 'on', sortBy: data.get('sortBy') ?? 'mixed' });
+    updateGradingSettings({ currentRater: data.get('rater'), blind: data.get('blind') === 'on', includeSamples: data.get('includeSamples') === 'on', aiAsRater: data.get('aiAsRater') === 'on', sortBy: data.get('sortBy') ?? 'mixed' });
     draw();
     root.querySelector('[data-grading-status]').textContent = '설정을 저장했습니다.';
   };

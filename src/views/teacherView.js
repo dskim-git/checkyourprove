@@ -10,8 +10,10 @@ import { RESEARCH_STAGES } from '../data/research.js';
 import { SAMPLE_ACTIVITY } from '../data/sampleRecords.js';
 import { getClassroom, saveClassroom } from '../state/classroomStore.js';
 import {
-  activeSessionId, addClass, addSession, findSession, removeClass, removeSession, renameClass, sessionLabel, sessionsByClass, setActiveSession,
+  activeSessionId, addClass, addSession, ensureSessionCode, findSession, formatCode, regenerateSessionCode, removeClass, removeSession, renameClass,
+  sessionLabel, sessionsByClass, setActiveSession, setSessionCodeOpen,
 } from '../state/sessionStore.js';
+import { sessionMembers } from '../state/accountStore.js';
 import {
   findStage, getConsent, getResearch, getSurveyResponse, hasResearchRecord, inkOf, propositionIdsFor, resetResearch, stageStatus,
 } from '../state/researchStore.js';
@@ -68,6 +70,7 @@ export function renderTeacher(root) {
         <a class="button button--secondary" href="#/teacher/analysis">연구 분석</a>
         <a class="button button--secondary" href="#/teacher/interviews">면담</a>
         <a class="button button--secondary" href="#/teacher/recordings">녹음 관리</a>
+        <a class="button button--secondary" href="#/teacher/admin">관리자</a>
         <a class="button button--secondary" href="#/teacher/rubric">채점 루브릭</a>
         <a class="button button--secondary" href="#/teacher/surveys">설문과 연구 동의</a>
         <a class="button button--secondary" href="#/teacher/principle">원리 활동 진행</a>
@@ -148,6 +151,17 @@ export function renderTeacher(root) {
         removeSession(sessionId);
         sessionStatus = `${sessionLabel(session)}를 지웠습니다.`;
       }
+      if (action === 'code-toggle') {
+        const session = findSession(sessionId);
+        setSessionCodeOpen(sessionId, session.codeOpen === false);
+        sessionStatus = `${sessionLabel(session)}의 세션 코드를 ${session.codeOpen === false ? '닫았습니다. 새로 들어올 수 없고, 이미 들어온 학생은 계속 활동합니다' : '열었습니다'}.`;
+      }
+      if (action === 'code-new') {
+        const session = findSession(sessionId);
+        if (!window.confirm(`${sessionLabel(session)}의 세션 코드를 새로 만들까요? 예전 코드로는 더 이상 들어올 수 없습니다(이미 들어온 학생은 그대로).`)) return;
+        regenerateSessionCode(sessionId);
+        sessionStatus = `${sessionLabel(session)}의 새 세션 코드: ${formatCode(session.code)}`;
+      }
       if (action === 'remove-class') {
         removeClass(classId);
         sessionStatus = '학급을 지웠습니다.';
@@ -188,6 +202,9 @@ function sessionPanel(status) {
         <div class="session-row__main">
           <strong class="session-row__round">${s.round}회차</strong>${active ? ' <span class="tag tag--mint">진행 중</span>' : ''}
           <span class="session-row__meta">연구 ${s.open ? escapeHtml(stageText(s)) : '닫힘'}, 명제 ${s.propositionIds.length}개, 이 브라우저 학생: ${escapeHtml(progress)}</span>
+          <span class="session-code"><span class="meta">세션 코드</span> <strong class="session-code__value num${s.codeOpen === false ? ' is-closed' : ''}" data-session-code="${s.id}">${escapeHtml(formatCode(ensureSessionCode(s)))}</strong>${s.codeOpen === false ? ' <span class="tag tag--warn">코드 닫힘</span>' : ''} <span class="meta">들어온 사람 ${sessionMembers(s.id).length}명</span>
+            <button type="button" class="button button--ghost button--small" data-session-action="code-toggle" data-session-id="${s.id}">${s.codeOpen === false ? '코드 열기' : '코드 닫기'}</button>
+            <button type="button" class="button button--ghost button--small" data-session-action="code-new" data-session-id="${s.id}">코드 다시 만들기</button></span>
         </div>
         <div class="session-actions">${active ? '<span class="meta">학생 화면에 연결됨</span>' : `<button type="button" class="button button--secondary button--small" data-session-action="activate" data-session-id="${s.id}">진행 중으로</button>
           <button type="button" class="button button--ghost button--small" data-session-action="remove" data-session-id="${s.id}">지우기</button>`}</div>

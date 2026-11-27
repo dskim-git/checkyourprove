@@ -1,7 +1,8 @@
 // AI와 탐구하기: 연구 참여 동의 (구현 4)
 // 동의하면 사전·사후 설문을 하고 기록이 연구에 쓰인다. 동의하지 않아도 1~4단계 활동은 똑같이 하고, 기록은 연구에서 빠진다.
 // 언제든 이 화면에서 마음을 바꿀 수 있고, 바꾼 기록이 남는다.
-// TODO: 보호자 동의, 동의서 판(version) 관리, 서면 동의와의 연결은 데이터 수집 명세(로드맵 3단계)에서 정한다.
+// 동의서는 판(version)으로 관리하고, 관리자가 연구 윤리 설정에서 IRB 양식·학교 양식을 넣을 수 있다(로드맵 3단계).
+// "# "로 시작하는 줄은 소제목. 보호자 동의는 종이로 받고 관리자가 연결표에 날짜를 적는다.
 
 import { getClassroom } from '../../state/classroomStore.js';
 import { answerConsent, getConsent } from '../../state/researchStore.js';
@@ -23,7 +24,7 @@ export function renderConsent(root) {
         <p class="grade-who"><span class="tag">${escapeHtml(classroom.sessionLabel)}</span></p>
       </header>
       <section class="consent-doc" aria-label="동의서 내용">
-        ${doc.body.split('\n').filter(Boolean).map((line) => `<p>${escapeHtml(line)}</p>`).join('')}
+        ${doc.body.split('\n').filter(Boolean).map((line) => (line.startsWith('# ') ? `<h2 class="consent-doc__h">${escapeHtml(line.slice(2))}</h2>` : `<p>${escapeHtml(line)}</p>`)).join('')}
       </section>
       ${current ? notice(consent.agreed ? 'success' : 'eye', current, `${formatDateTime(consent.at)}에 답했습니다. 아래에서 언제든 바꿀 수 있어요.`) : ''}
       <div class="consent-actions">
@@ -40,7 +41,7 @@ export function renderConsent(root) {
     if (!btn) return;
     const agreed = btn.dataset.consent === 'yes';
     const was = getConsent().agreed;
-    if (was === true && !agreed && !window.confirm('연구 참여를 그만둘까요? 활동은 그대로 할 수 있고, 내 기록은 연구에서 빠집니다.')) return;
+    if (was === true && !agreed && !window.confirm('연구 참여를 그만둘까요? 활동은 그대로 할 수 있고, 지금부터의 기록은 연구에 쓰지 않습니다. 지금까지 모은 자료는 연구에 사용됩니다.')) return;
     answerConsent(agreed, consentDoc().version);
     window.location.hash = '#/research';
   };

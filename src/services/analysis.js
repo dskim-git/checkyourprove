@@ -18,8 +18,15 @@ export const SCORE_SOURCES = [
   { id: 'r1', label: '채점자 1' },
   { id: 'r2', label: '채점자 2' },
   { id: 'avg', label: '두 채점자 평균' },
+  { id: 'r1ai', label: '채점자 1과 AI 평균', aiRater: true },
   { id: 'ai', label: 'AI 채점(참고)' },
 ];
+
+/** 지금 고를 수 있는 점수 출처: "AI를 보조 채점자로"를 켜야 채점자 1과 AI 평균이 나오고, AI 이름이 바뀐다 */
+export function scoreSources(g = getGrading()) {
+  return SCORE_SOURCES.filter((s) => !s.aiRater || g.aiAsRater).map((s) => (s.id === 'ai' && g.aiAsRater ? { ...s, label: 'AI 채점(보조 채점자)' } : s));
+}
+export const sourceLabel = (id) => scoreSources({ aiAsRater: true }).find((s) => s.id === id)?.label ?? id;
 
 const sum = (criteria) => Object.values(criteria).reduce((s, v) => s + Number(v), 0);
 const round1 = (v) => (v == null || Number.isNaN(v) ? null : Math.round(v * 10) / 10);
@@ -68,12 +75,12 @@ export function scoreFor(student, stage, problemId, source) {
     const s = g.scores?.[raterId]?.[key];
     return s ? { total: sum(s.criteria), criteria: s.criteria, completeness: s.completeness, actualMethod: s.actualMethod, raw: s } : null;
   };
-  if (source === 'avg') {
+  if (source === 'avg' || source === 'r1ai') {
     const a = pick('r1');
-    const b = pick('r2');
+    const b = source === 'r1ai' ? scoreFor(student, stage, problemId, 'ai') : pick('r2');
     if (!a || !b) return null;
     const criteria = Object.fromEntries(DEFAULT_RUBRIC.map((c) => [c.id, ((a.criteria[c.id] ?? 0) + (b.criteria[c.id] ?? 0)) / 2]));
-    return { total: sum(criteria), criteria, completeness: a.completeness === b.completeness ? a.completeness : null, actualMethod: a.actualMethod === b.actualMethod ? a.actualMethod : null, by: '평균', raw: a.raw };
+    return { total: sum(criteria), criteria, completeness: a.completeness === b.completeness ? a.completeness : null, actualMethod: a.actualMethod === b.actualMethod ? a.actualMethod : null, by: source === 'r1ai' ? '채점자 1과 AI 평균' : '평균', raw: a.raw };
   }
   const s = pick(source);
   return s ? { ...s, by: g.raters.find((r) => r.id === source)?.name ?? source } : null;
@@ -237,7 +244,7 @@ export function analysisCsv(analyses, source) {
     ['학생 id', (a) => a.student.id], ['가명', (a) => a.student.pseudonym], ['예시', (a) => (a.student.sample ? 'Y' : 'N')],
     ['연구 동의', (a) => CONSENT_LABELS[consentStatus(a.student)]],
     ['원리 활동 정답 수', (a) => principleScore(a.student)?.correct], ['원리 활동 문항 수', (a) => principleScore(a.student)?.total],
-    ['세션 id', (a) => a.student.session?.id], ['학급', (a) => (a.student.session ? className(a.student.session.classId) : '')], ['회차', (a) => a.student.session?.round], ['점수 출처', () => SCORE_SOURCES.find((s) => s.id === source)?.label],
+    ['세션 id', (a) => a.student.session?.id], ['학급', (a) => (a.student.session ? className(a.student.session.classId) : '')], ['회차', (a) => a.student.session?.round], ['점수 출처', () => sourceLabel(source)],
     ['명제 id', (a, p) => p.problemId], ['명제 순서', (a, p) => p.propIndex + 1],
     ['1단계 점수', (a, p) => p.totals[1]], ['2단계 AI 점수', (a, p) => p.totals[2]], ['4단계 점수', (a, p) => p.totals[4]], ['만점', () => RUBRIC_TOTAL],
     ['향상(4-1)', (a, p) => p.improve], ['격차(2-1)', (a, p) => p.gap],

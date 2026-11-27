@@ -13,15 +13,42 @@ const sd = (xs) => {
 };
 const round2 = (v) => (v == null || Number.isNaN(v) ? null : Math.round(v * 100) / 100);
 
-/** 학생의 연구 동의 상태: 'agreed' | 'declined' | 'unanswered' | 'not-required' */
+/** 학생의 연구 동의 상태: 'agreed' | 'withdrawn'(동의했다가 철회) | 'declined' | 'unanswered' | 'not-required' */
 export function consentStatus(student) {
   if (student.sample) return 'agreed';
   if (!sessionConfig(student.session).consentRequired) return 'not-required';
-  const a = student.record.consent?.agreed;
-  return a === true ? 'agreed' : a === false ? 'declined' : 'unanswered';
+  const c = student.record.consent;
+  const a = c?.agreed;
+  if (a === true) return 'agreed';
+  if (a === false) return (c.history ?? []).some((h) => h.agreed === true) ? 'withdrawn' : 'declined';
+  return 'unanswered';
 }
-export const CONSENT_LABELS = { agreed: '동의함', declined: '참여하지 않음', unanswered: '답하지 않음', 'not-required': '동의 받지 않음' };
-export const isResearchIncluded = (student) => ['agreed', 'not-required'].includes(consentStatus(student));
+export const CONSENT_LABELS = { agreed: '동의함', withdrawn: '철회함(철회 전 자료 사용)', declined: '참여하지 않음', unanswered: '답하지 않음', 'not-required': '동의 받지 않음' };
+/** 연구 분석에 넣는가: 동의함, 동의 받지 않음, 철회함(철회 전 자료만, 2026-11-27 사용자 결정) */
+export const isResearchIncluded = (student) => ['agreed', 'not-required', 'withdrawn'].includes(consentStatus(student));
+
+/** 철회한 시각 (철회하지 않았으면 null) */
+export function withdrawnAt(student) {
+  if (consentStatus(student) !== 'withdrawn') return null;
+  const h = student.record.consent.history ?? [];
+  return [...h].reverse().find((x) => x.agreed === false)?.at ?? student.record.consent.at ?? null;
+}
+
+/**
+ * 연구에 쓸 기록: 철회한 학생은 철회 전에 제출한 것만 남긴다(단계, 설문, 원리 활동). 그 밖에는 그대로.
+ * 원본 기록은 바꾸지 않고 새 학생 객체를 돌려준다.
+ */
+export function forResearch(student) {
+  const cut = withdrawnAt(student);
+  if (!cut) return student;
+  const limit = new Date(cut).getTime();
+  const before = (t) => Boolean(t) && new Date(t).getTime() <= limit;
+  const rec = student.record;
+  const stages = Object.fromEntries(Object.entries(rec.stages ?? {}).filter(([, st]) => before(st?.submittedAt)));
+  const surveys = Object.fromEntries(Object.entries(rec.surveys ?? {}).filter(([, r]) => before(r?.submittedAt)));
+  const principle = before(rec.principle?.finishedAt) ? rec.principle : null;
+  return { ...student, withdrawnAt: cut, record: { ...rec, stages, surveys, principle } };
+}
 
 /** 학생의 사전·사후 응답 (제출한 것만) */
 export const responsesOf = (student) => {

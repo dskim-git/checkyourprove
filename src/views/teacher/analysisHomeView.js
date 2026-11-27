@@ -3,13 +3,13 @@
 // 학급 단위 분석(AI 답변 수용 정도, 학생이 찾은 부족한 점 통계, 개방형 답변 워드클라우드), 학생 목록(대시보드로 이동), CSV 내려받기.
 // TODO(구현 4): 사전·사후 설문 차이를 학급 요약에 더한다.
 
-import { analysisCsv, analyzeStudent, classSummary, SCORE_SOURCES } from '../../services/analysis.js';
+import { analysisCsv, analyzeStudent, classSummary, scoreSources, sourceLabel } from '../../services/analysis.js';
 import { getGrading, updateGradingSettings } from '../../state/gradingStore.js';
 import { researchStudents } from '../../state/researchRoster.js';
 import { escapeHtml } from '../../ui/dom.js';
 import { breadcrumb, notice } from '../../ui/components.js';
 import { handleScopeEvent, scopePicker, scopeText } from './sessionScope.js';
-import { isResearchIncluded, surveyCsv, surveyStats, surveysInUse } from '../../services/surveyAnalysis.js';
+import { forResearch, isResearchIncluded, surveyCsv, surveyStats, surveysInUse } from '../../services/surveyAnalysis.js';
 import { principleStats } from '../../services/principleAnalysis.js';
 import { surveyScale } from '../../data/surveyDefaults.js';
 import { className as classNameOf, sessionLabel } from '../../state/sessionStore.js';
@@ -20,12 +20,19 @@ const fmt = (v, digits = 1) => (v == null ? '–' : Number(v).toFixed(digits).re
 const signed = (v) => (v == null ? '–' : `${v > 0 ? '+' : ''}${fmt(v)}`);
 const rText = (r) => (r == null ? '계산 불가' : r.toFixed(2));
 
-export const sourceOf = () => getGrading().analysisSource ?? 'r1';
+/** 지금 점수 출처 ("AI를 보조 채점자로"를 끄면 채점자 1과 AI 평균은 채점자 1로) */
+export const sourceOf = () => {
+  const g = getGrading();
+  const s = g.analysisSource ?? 'r1';
+  return s === 'r1ai' && !g.aiAsRater ? 'r1' : s;
+};
 
 /** 분석 대상 학생: 포함한 세션, 1단계 제출, 연구 동의(설정하면 동의하지 않은·답하지 않은 학생도) */
 export function analysisStudents(g = getGrading()) {
   const all = researchStudents({ includeSamples: g.includeSamples, sessionIds: g.scopeSessionIds });
-  const included = all.filter((s) => g.includeNonConsent || isResearchIncluded(s));
+  // 철회한 학생은 철회 전 자료만(forResearch)
+  // 일반인의 탐구 기록은 기본으로 뺀다(로드맵 3단계 사용자 결정)
+  const included = all.filter((s) => (g.includeNonConsent || isResearchIncluded(s)) && !s.guest).map(forResearch);
   return { all, included, excluded: all.length - included.length };
 }
 
@@ -33,8 +40,8 @@ export function analysisStudents(g = getGrading()) {
 export function sourcePicker(source) {
   return `<fieldset class="choice-group source-pick" data-source-pick>
     <legend>점수 출처</legend>
-    <div class="pick-group__options">${SCORE_SOURCES.map((s) => `<label class="pick pick--tag"><input type="radio" name="analysisSource" value="${s.id}"${s.id === source ? ' checked' : ''}><span>${escapeHtml(s.label)}</span></label>`).join('')}</div>
-    <p class="field__help">${source === 'ai' ? 'AI 채점은 실제 AI가 아니라 예시 규칙으로 매긴 참고 점수입니다. 연구 분석에는 교사 채점을 쓰세요.' : source === 'avg' ? '두 채점자가 모두 채점한 증명만 평균을 냅니다.' : '이 채점자가 채점한 증명만 점수가 보입니다. 채점하지 않은 증명은 "채점 전"으로 표시됩니다.'}</p>
+    <div class="pick-group__options">${scoreSources().map((s) => `<label class="pick pick--tag"><input type="radio" name="analysisSource" value="${s.id}"${s.id === source ? ' checked' : ''}><span>${escapeHtml(s.label)}</span></label>`).join('')}</div>
+    <p class="field__help">${source === 'ai' ? 'AI 채점은 실제 AI가 아니라 예시 규칙으로 매긴 참고 점수입니다. 연구 분석에는 교사 채점을 쓰세요.' : source === 'avg' ? '두 채점자가 모두 채점한 증명만 평균을 냅니다.' : source === 'r1ai' ? 'AI를 보조 채점자로 씁니다. 채점자 1이 채점한 증명만 AI 점수와 평균을 냅니다.' : '이 채점자가 채점한 증명만 점수가 보입니다. 채점하지 않은 증명은 "채점 전"으로 표시됩니다.'}</p>
   </fieldset>`;
 }
 
@@ -156,7 +163,7 @@ export function renderAnalysisHome(root) {
   function checklistSection(analyses, source) {
     const st = checklistStats(analyses);
     if (!st.n) return '';
-    const teacher = SCORE_SOURCES.find((s) => s.id === source)?.label;
+    const teacher = sourceLabel(source);
     const rows = (list) => list.map((c) => ({
       label: c.label,
       value: c.checked,

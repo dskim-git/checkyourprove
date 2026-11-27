@@ -8,7 +8,7 @@ import {
 } from '../../data/research.js';
 import { ACTUAL_METHOD_OPTIONS, COMPLETENESS_OPTIONS, DEFAULT_RUBRIC, RUBRIC_TOTAL, STUCK_OVERCOME_OPTIONS } from '../../data/rubric.js';
 import { getProblem } from '../../data/problems/index.js';
-import { analyzeStudent, scoreFor, SCORE_SOURCES } from '../../services/analysis.js';
+import { analyzeStudent, scoreFor, sourceLabel } from '../../services/analysis.js';
 import { getGrading, updateGradingSettings } from '../../state/gradingStore.js';
 import { conversationKey, targetKey } from '../../state/researchRoster.js';
 import { escapeHtml, formatDateTime } from '../../ui/dom.js';
@@ -52,7 +52,7 @@ export function renderAnalysisStudent(root, [studentId]) {
     const a = analyzeStudent(student, source);
     const prev = students[index - 1];
     const next = students[index + 1];
-    const sourceLabel = SCORE_SOURCES.find((s) => s.id === source)?.label;
+    const srcLabel = sourceLabel(source);
 
     const scoreChart = dotPlot({
       title: '명제별 점수 (10점 만점)',
@@ -78,7 +78,7 @@ export function renderAnalysisStudent(root, [studentId]) {
       <header class="page-intro">
         <h1>${escapeHtml(student.pseudonym)}${student.sample ? ' <span class="tag tag--proto">예시</span>' : ''}</h1>
         <p class="grade-who"><span class="tag tag--strong">${escapeHtml(sessionLabel(student.session))}</span><span class="tag${consentStatus(student) === 'agreed' ? ' tag--mint' : ''}">연구 동의: ${escapeHtml(CONSENT_LABELS[consentStatus(student)])}</span></p>
-        <p class="lead">명제 ${a.props.length}개의 1~4단계 기록입니다. 점수 출처: ${escapeHtml(sourceLabel)}.</p>
+        <p class="lead">명제 ${a.props.length}개의 1~4단계 기록입니다. 점수 출처: ${escapeHtml(srcLabel)}.</p>
         <nav class="an-nav" aria-label="다른 학생">
           <a class="button button--secondary button--small" href="#/teacher/interviews/${student.id}">면담 화면${selectionOf(student.id) ? ' (면담 대상)' : ''}</a>
           ${prev ? `<a class="button button--ghost button--small" href="#/teacher/analysis/${prev.id}">이전 학생: ${escapeHtml(prev.pseudonym)}</a>` : ''}
@@ -235,7 +235,7 @@ export function renderAnalysisStudent(root, [studentId]) {
       <h3 class="an-sub">점수와 증명법, 확신</h3>
       <div class="table-wrap" role="region" aria-label="명제 ${n} 점수" tabindex="0">
         <table class="data-table grade-table">
-          <thead><tr><th scope="col">단계</th><th scope="col">점수 (${escapeHtml(SCORE_SOURCES.find((s) => s.id === source)?.label)})</th>${source === 'ai' ? '' : '<th scope="col">AI 제안</th>'}<th scope="col">완성도</th><th scope="col">학생이 고른 증명법</th><th scope="col">실제 증명법(채점)</th><th scope="col">확신 정도</th></tr></thead>
+          <thead><tr><th scope="col">단계</th><th scope="col">점수 (${escapeHtml(sourceLabel(source))})</th>${source === 'ai' ? '' : '<th scope="col">AI 제안</th>'}<th scope="col">완성도</th><th scope="col">학생이 고른 증명법</th><th scope="col">실제 증명법(채점)</th><th scope="col">확신 정도</th></tr></thead>
           <tbody>${scoreRows}</tbody>
         </table>
       </div>

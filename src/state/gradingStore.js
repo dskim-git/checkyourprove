@@ -20,6 +20,8 @@
 //                  aiSeen, beforeAi } } } — 대화 key = '학생 id~명제 id', 메시지 번호는 대화 기록의 순서(0부터)
 //   chatTagAi: { [채점자 id]: { [대화 key]: AI 태그 제안 } } = { messages: { [번호]: [{ tag, reason }] }, conversation: [{ tag, reason }],
 //              requestId, model, promptVersion, at }
+// aiAsRater(3단계, 사용자 결정 2026-11-27): 켜면 AI 채점을 보조 채점자로 쓴다(점수 출처 "채점자 1과 AI 평균", 채점자 ↔ AI 일치도).
+//   끄면 AI 채점은 참고로만 남는다(기본).
 // AI가 읽은 글 고치기 (구현 7, 사용자 결정: 필기 글자 변환은 1·2·4단계, 교사만 봄)
 //   inkReadingEdits: { [채점 대상 key]: { text, original, at, by(채점자 이름) } } — 학생 기록(item.inkReading)은 그대로 두고
 //   교사가 원본 필기와 비교해 고친 글을 따로 둔다. 채점자 모두가 같은 글을 쓴다(사실 확인이지 점수 판단이 아니므로).
@@ -49,6 +51,7 @@ const DEFAULTS = () => ({
   chatTagging: {},
   chatTagAi: {},
   inkReadingEdits: {},
+  aiAsRater: false,
 });
 
 let cache = null;

@@ -5,6 +5,7 @@
 //   session = { id, classId, round, open, propositionIds, stagesOpen, createdAt, legacy? }
 //     open: 학생 홈에서 AI와 탐구하기를 열었는가, propositionIds: 탐구할 명제, stagesOpen: 교사가 열어 준 단계(1~4)
 //     legacy: 세션 기능 전의 수업 설정·연구 기록을 옮겨 온 첫 세션(기존 저장 위치와 학생 id 'local'을 그대로 쓴다)
+//     code(세션 코드 6자리, 학생이 입력해 들어옴), codeOpen(코드로 들어오기 허용, 기본 켬) — 로드맵 3단계, 사용자 결정 2026-11-27
 //     consentRequired(연구 동의 받기), surveyId(쓸 설문), surveyPreOpen·surveyPostOpen(사전·사후 설문 열기) — 없으면 SESSION_DEFAULTS
 // 학생(이 브라우저)은 교사가 고른 "진행 중 세션"으로 활동하고, 연구 기록은 세션마다 따로 저장된다(state/researchStore.js).
 // 연구 분석·채점·태그 화면은 포함할 세션을 골라 합쳐 본다(gradingStore의 scopeSessionIds).
@@ -177,4 +178,50 @@ export function sessionsByClass({ includeSamples = false } = {}) {
   const classes = includeSamples ? [...data.classes, ...SAMPLE_CLASSES] : data.classes;
   const sessions = includeSamples ? [...data.sessions, ...SAMPLE_SESSIONS] : data.sessions;
   return classes.map((c) => ({ ...c, sessions: sessions.filter((s) => s.classId === c.id).sort((a, b) => a.round - b.round) }));
+}
+
+// ── 세션 코드 (로드맵 3단계): 학생은 교사가 알려 준 코드를 입력해 그 세션의 AI와 탐구하기에 들어온다 ──
+
+const CODE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'; // 헷갈리는 0·O·1·I 뺌
+const makeCode = () => Array.from({ length: 6 }, () => CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)]).join('');
+/** 화면 표시 (예: K7P-4QX) */
+export const formatCode = (code) => (code ? `${code.slice(0, 3)}-${code.slice(3)}` : '');
+/** 입력 정리: 대문자, 하이픈·띄어쓰기 빼기 */
+export const cleanCode = (text) => String(text ?? '').toUpperCase().replace(/[\s-]/g, '');
+
+/** 세션 코드가 없으면 만든다(겹치지 않게). 예시 세션은 코드가 없다. */
+export function ensureSessionCode(session) {
+  if (!session || session.sample) return '';
+  if (!session.code) {
+    const used = new Set(getSessions().sessions.map((s) => s.code).filter(Boolean));
+    let code;
+    do code = makeCode(); while (used.has(code));
+    session.code = code;
+    session.codeOpen ??= true;
+    saveSessions();
+  }
+  return session.code;
+}
+
+export function regenerateSessionCode(id) {
+  const s = getSessions().sessions.find((x) => x.id === id);
+  if (!s) return '';
+  delete s.code;
+  return ensureSessionCode(s);
+}
+
+export function setSessionCodeOpen(id, open) {
+  const s = getSessions().sessions.find((x) => x.id === id);
+  if (!s) return false;
+  s.codeOpen = Boolean(open);
+  return saveSessions();
+}
+
+/** 코드로 세션 찾기: { session } 또는 { error: 'none' | 'closed' } */
+export function findSessionByCode(text) {
+  const code = cleanCode(text);
+  const s = getSessions().sessions.find((x) => x.code && x.code === code);
+  if (!s) return { error: 'none' };
+  if (s.codeOpen === false) return { error: 'closed' };
+  return { session: s };
 }

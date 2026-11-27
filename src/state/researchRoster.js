@@ -8,6 +8,7 @@ import { sampleResearchStudents } from '../data/sampleResearch.js';
 import { getProblem } from '../data/problems/index.js';
 import { hasInk } from './inkModel.js';
 import { readingEditOf } from './gradingStore.js';
+import { sessionMembers } from './accountStore.js';
 import { getResearch } from './researchStore.js';
 import { findSession, getSessions, localStudentId, sessionLabel } from './sessionStore.js';
 
@@ -18,13 +19,19 @@ const sampleSessionOf = (index) => findSession(index < 3 ? 'sample-s1' : 'sample
 
 export function researchStudents({ includeSamples = true, sessionIds = null } = {}) {
   const inScope = (session) => !sessionIds || sessionIds.includes(session.id);
-  const locals = getSessions().sessions.filter(inScope).map((session) => ({
-    id: localStudentId(session),
-    pseudonym: `이 브라우저 학생 (${sessionLabel(session)})`,
-    sample: false,
-    session,
-    record: getResearch(session.id),
-  }));
+  // 세션 코드로 들어온 계정이 있으면 이름 대신 연구 번호로 보인다(로드맵 3단계). 일반인(guest)은 연구 분석에서 기본으로 뺀다.
+  const locals = getSessions().sessions.filter(inScope).map((session) => {
+    const member = sessionMembers(session.id).find((u) => u.role === 'student' || u.role === 'guest');
+    return {
+      id: localStudentId(session),
+      pseudonym: member ? `${member.researchId} (${sessionLabel(session)})` : `이 브라우저 학생 (${sessionLabel(session)})`,
+      researchId: member?.researchId ?? null,
+      guest: member?.role === 'guest',
+      sample: false,
+      session,
+      record: getResearch(session.id),
+    };
+  });
   const samples = includeSamples
     ? sampleResearchStudents().map((s, i) => ({ ...s, session: sampleSessionOf(i) })).filter((s) => inScope(s.session))
     : [];
