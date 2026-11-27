@@ -44,7 +44,7 @@ function setupHint(error) {
   if (!process.env.FIREBASE_SERVICE_ACCOUNT && !process.env.GOOGLE_APPLICATION_CREDENTIALS) return 'FIREBASE_SERVICE_ACCOUNT 환경 변수가 없음';
   if (error instanceof SyntaxError || /JSON/.test(msg)) return 'FIREBASE_SERVICE_ACCOUNT 내용이 JSON이 아님';
   if (/credential|private key|PEM|invalid_grant|UNAUTHENTICATED/i.test(msg)) return '서비스 계정 키를 쓸 수 없음';
-  if (/Cannot find|ERR_MODULE|import/i.test(msg)) return `라이브러리를 불러오지 못함, Node ${process.versions.node}`;
+  if (/Cannot find|ERR_MODULE|import|require/i.test(msg) || error?.code === 'ERR_REQUIRE_ESM') return `라이브러리를 불러오지 못함, Node ${process.versions.node}: ${msg.replace(/\s+/g, ' ').slice(0, 220)}`;
   return error?.code ? String(error.code) : 'unknown';
 }
 
