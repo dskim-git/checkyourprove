@@ -47,6 +47,7 @@ import { renderSurveyEdit } from './views/teacher/surveyEditView.js';
 import { renderPrinciplePace } from './views/teacher/principlePaceView.js';
 import { renderMethodGuide } from './views/practice/methodGuideView.js';
 import { renderNotFound } from './ui/components.js';
+import { escapeHtml } from './ui/dom.js';
 
 const ID = '([\\w-]+)';
 // tab: 아래 탭 바에서 표시할 탭 · view: 'lesson'이면 활동에 집중하도록 탭 바를 숨긴다
@@ -101,10 +102,26 @@ export function startRouter(root) {
     });
 
     root.innerHTML = '';
-    if (route) {
-      cleanup = route.render(root, params) ?? null;
-    } else {
-      renderNotFound(root);
+    try {
+      if (route) {
+        cleanup = route.render(root, params) ?? null;
+      } else {
+        renderNotFound(root);
+      }
+    } catch (error) {
+      // 화면을 그리다 오류가 나면 빈 화면 대신 오류 내용을 보여 준다(저장된 기록이 예상과 다를 때 원인을 찾기 위해)
+      console.error(error);
+      cleanup = null;
+      const where = String(error?.stack ?? '').split('\n').find((line) => line.includes('/src/')) ?? '';
+      root.innerHTML = `<div class="page">
+        <h1>화면을 열지 못했어요</h1>
+        <div class="notice notice--warn" role="alert"><div class="notice__body">
+          <p class="notice__title">${escapeHtml(error?.message ?? String(error))}</p>
+          ${where ? `<p class="meta">${escapeHtml(where.trim())}</p>` : ''}
+        </div></div>
+        <p>이 내용을 알려 주시면 원인을 찾을 수 있어요. 새로 고침(Ctrl + Shift + R)을 한 뒤에도 같으면 저장된 기록 때문일 수 있어요.</p>
+        <p><a class="button button--secondary" href="#/">홈으로</a></p>
+      </div>`;
     }
 
     document.title = route?.title ? `${route.title} - ${APP_TITLE}` : APP_TITLE;
