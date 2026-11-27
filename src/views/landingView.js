@@ -50,12 +50,10 @@ export function renderLanding(root) {
             </div>
             <p class="meta"><a href="#/demo-data">시연 데이터</a>: 발표용 기록 파일을 불러오거나 내보내요.</p>`
           : `<h2 id="landing-login" class="section-title">로그인</h2>
-            <p>구글 계정으로 로그인해요. 처음이면 한 번만 정보를 입력하고, 승인되면 바로 쓸 수 있어요.</p>
+            <p>구글 계정으로 로그인해요.<br>처음이면 한 번만 정보를 입력하고, 승인되면 바로 쓸&nbsp;수&nbsp;있어요.</p>
             <p class="field__error" role="alert"${error ? '' : ' hidden'}>${escapeHtml(error)}</p>
-            <div class="actions actions--start"><button type="button" class="button button--primary" data-action="google"${busy ? ' disabled' : ''}>${busy ? '로그인하는 중…' : '구글로 로그인'}</button></div>
-            <p class="meta">학교 구글 계정으로 로그인이 안 되면 학교에서 외부 앱 로그인을 막아 둔 것일 수 있어요. 선생님께 말해 주세요.</p>`}
+            <div class="actions actions--start"><button type="button" class="button button--primary" data-action="google"${busy ? ' disabled' : ''}>${busy ? '로그인하는 중…' : '구글로 로그인'}</button></div>`}
       </section>
-      <p class="meta">이름·학번·이메일은 관리자만 볼 수 있고, 연구 자료에는 이름 대신 연구 번호를 씁니다.</p>
     </div>`;
   };
 
