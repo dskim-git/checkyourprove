@@ -7,6 +7,7 @@ import {
   CONFIDENCE_LABELS, MORE_ACCURATE_OPTIONS, STUCK_RESOLVED_OPTIONS, methodOptionLabel, optionLabel,
 } from '../../data/research.js';
 import { ACTUAL_METHOD_OPTIONS, COMPLETENESS_OPTIONS, DEFAULT_RUBRIC, RUBRIC_TOTAL, STUCK_OVERCOME_OPTIONS } from '../../data/rubric.js';
+import { getProblem } from '../../data/problems/index.js';
 import { analyzeStudent, scoreFor, SCORE_SOURCES } from '../../services/analysis.js';
 import { getGrading, updateGradingSettings } from '../../state/gradingStore.js';
 import { conversationKey, researchStudents, targetKey } from '../../state/researchRoster.js';
@@ -17,6 +18,7 @@ import { mountInkViews } from '../../ui/inkCanvas.js';
 import { statementHtml } from '../../ui/mathText.js';
 import { readProofInk } from '../research/researchParts.js';
 import { sourceOf, sourcePicker } from './analysisHomeView.js';
+import { gradedBy, openChatPopup, openGradePopup, taggedBy } from './recordPopups.js';
 
 const fmt = (v) => (v == null ? '–' : Number.isInteger(v) ? String(v) : Number(v).toFixed(1));
 const signed = (v) => (v == null ? '–' : `${v > 0 ? '+' : ''}${fmt(v)}`);
@@ -119,7 +121,9 @@ export function renderAnalysisStudent(root, [studentId]) {
       const conf = p.confidence[stage];
       return `<tr>
         <th scope="row">${escapeHtml(label)}</th>
-        <td class="num">${sc ? `<strong>${fmt(sc.total)}</strong>` : '<span class="meta">채점 전</span>'} <a class="an-link" href="#/teacher/grading/${targetKey(student.id, stage, p.problemId)}">${sc && source !== 'ai' ? '채점 보기' : '채점하기'}</a></td>
+        <td class="num">${sc ? `<strong>${fmt(sc.total)}</strong>` : '<span class="meta">채점 전</span>'} ${gradedBy(student, stage, p.problemId).length
+          ? `<button type="button" class="an-link link-button" data-popup="grade" data-stage="${stage}" data-problem="${p.problemId}">채점 보기</button>`
+          : `<a class="an-link" href="#/teacher/grading/${targetKey(student.id, stage, p.problemId)}">채점하기</a>`}</td>
         ${source === 'ai' ? '' : `<td class="num">${ai ? fmt(ai.total) : '–'}</td>`}
         <td>${sc?.completeness ? escapeHtml(optionLabel(COMPLETENESS_OPTIONS, sc.completeness)) : '–'}</td>
         <td>${escapeHtml(chosen)}</td>
@@ -209,7 +213,9 @@ export function renderAnalysisStudent(root, [studentId]) {
           ${dl([
             ['질문', `${p.chat.questions}개${p.chat.offTopic ? `, 증명과 무관 ${p.chat.offTopic}개` : ''}`],
             ['증명 도움 답', `${p.chat.proofHelp}개${p.chat.proofHelpAt ? ` (처음 ${escapeHtml(formatDateTime(p.chat.proofHelpAt))})` : ''}`],
-            ['대화 태그', `${tagsHtml} <a class="an-link" href="#/teacher/chats/${conversationKey(student.id, p.problemId)}">대화 보기</a>`],
+            ['대화 태그', `${tagsHtml} ${taggedBy(student, p.problemId).length
+              ? `<button type="button" class="an-link link-button" data-popup="chat" data-problem="${p.problemId}">대화 보기</button>`
+              : `<a class="an-link" href="#/teacher/chats/${conversationKey(student.id, p.problemId)}">태그 붙이기</a>`}`],
             ['옮겨 적기', `${escapeHtml(transcript)}${p.transcript.teacher ? `, 교사: ${p.transcript.teacher === 'ok' ? '같음' : '오류 있음'}` : ''}`],
             ['AI 답변에서 특징적인 점', text(p.s2?.notable)],
           ])}
@@ -255,12 +261,27 @@ export function renderAnalysisStudent(root, [studentId]) {
     }
   };
 
+  // 채점·태그를 마친 항목은 화면을 옮기지 않고 팝업으로 본다.
+  let closePopup = null;
+  const onClick = (event) => {
+    const btn = event.target.closest('[data-popup]');
+    if (!btn) return;
+    const student = researchStudents({ includeSamples: getGrading().includeSamples }).find((s) => s.id === studentId);
+    const problem = getProblem(btn.dataset.problem);
+    closePopup = btn.dataset.popup === 'grade'
+      ? openGradePopup(student, Number(btn.dataset.stage), btn.dataset.problem, problem)
+      : openChatPopup(student, btn.dataset.problem, problem);
+  };
+
   draw();
   root.addEventListener('change', onChange);
+  root.addEventListener('click', onClick);
   return () => {
     disposeTips();
     disposeInk();
     root.removeEventListener('change', onChange);
+    root.removeEventListener('click', onClick);
+    closePopup?.();
   };
 }
 

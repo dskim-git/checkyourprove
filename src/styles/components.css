@@ -81,6 +81,21 @@
 .tag--warn { background: var(--color-coral-soft); color: var(--color-coral-deep); }
 .tag--mint { background: var(--color-mint-soft); color: var(--color-mint-deep); }
 
+/* 팝업 창 */
+.modal { width: calc(100% - var(--space-lg)); max-width: 64rem; max-height: calc(100dvh - var(--space-xl)); padding: 0; border: 0; border-radius: var(--radius-card); background: var(--grain), var(--color-paper); color: var(--color-ink); box-shadow: var(--shadow-lift); }
+.modal[open] { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+.modal::backdrop { background: color-mix(in oklab, var(--color-ink) 45%, transparent); }
+.modal__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); padding: var(--space-sm) var(--space-sm) var(--space-sm) var(--space-lg); border-bottom: var(--rule-hair) solid var(--color-rule); }
+.modal__title { font-size: var(--text-lg); }
+.modal__body { display: grid; gap: var(--space-md); align-content: start; padding: var(--space-md) var(--space-lg) var(--space-lg); overflow-y: auto; overscroll-behavior: contain; }
+.modal__foot { display: flex; justify-content: flex-end; padding: var(--space-sm) var(--space-lg); border-top: var(--rule-hair) solid var(--color-rule); }
+.modal__split { display: grid; gap: var(--space-lg); align-items: start; }
+.modal__split > * { align-content: start; }
+@media (min-width: 56rem) { .modal__split { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.popup-tags { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2xs); }
+.link-button { padding: 0; border: 0; background: none; color: var(--color-accent-2); font: inherit; text-decoration: underline; cursor: pointer; }
+.link-button:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+
 .status { display: inline-flex; align-items: center; gap: var(--space-2xs); font-size: var(--text-sm); color: var(--color-muted); }
 .status .icon { width: 1.1em; height: 1.1em; }
 .status--passed, .status--done { color: var(--color-mint-deep); }

@@ -1,12 +1,15 @@
 // 교사 화면: 연구 분석 개요 (구현 3-3)
-// 점수 출처 고르기, 학급 요약 수치, 격차(AI − 나)와 향상(최종 − 나)의 관계, 학생 목록(대시보드로 이동), CSV 내려받기.
+// 점수 출처 고르기, 학급 요약 수치, 격차(AI − 나)와 향상(최종 − 나)의 관계,
+// 학급 단위 분석(AI 답변 수용 정도, 학생이 찾은 부족한 점 통계, 개방형 답변 워드클라우드), 학생 목록(대시보드로 이동), CSV 내려받기.
+// TODO(구현 4): 사전·사후 설문 차이를 학급 요약에 더한다.
 
 import { analysisCsv, analyzeStudent, classSummary, SCORE_SOURCES } from '../../services/analysis.js';
 import { getGrading, updateGradingSettings } from '../../state/gradingStore.js';
 import { researchStudents } from '../../state/researchRoster.js';
 import { escapeHtml } from '../../ui/dom.js';
 import { breadcrumb, notice } from '../../ui/components.js';
-import { bindChartTips, scatter, splitBar, statTiles } from '../../ui/charts.js';
+import { barList, bindChartTips, columns, scatter, splitBar, statTiles, wordCloud } from '../../ui/charts.js';
+import { acceptanceStats, checklistStats, isNoneAnswer, OPEN_QUESTIONS, openAnswers, wordFrequencies } from '../../services/classInsights.js';
 
 const fmt = (v, digits = 1) => (v == null ? '–' : Number(v).toFixed(digits).replace(/\.0$/, ''));
 const signed = (v) => (v == null ? '–' : `${v > 0 ? '+' : ''}${fmt(v)}`);
@@ -25,6 +28,7 @@ export function sourcePicker(source) {
 
 export function renderAnalysisHome(root) {
   let disposeTips = () => {};
+  let openField = 'aiHelpful';
   const draw = () => {
     disposeTips();
     const g = getGrading();
@@ -83,6 +87,9 @@ export function renderAnalysisHome(root) {
           x: range(xs), y: range(ys), xLabel: '격차 (AI − 나)', yLabel: '향상 (최종 − 나)',
         }) : ''}
       </section>
+      ${acceptanceSection(analyses)}
+      ${checklistSection(analyses, source)}
+      ${openSection(analyses)}
       <section class="panel" aria-labelledby="an-students">
         <div class="section-head">
           <h2 id="an-students" class="section-title">학생별 요약</h2>
@@ -100,7 +107,87 @@ export function renderAnalysisHome(root) {
     disposeTips = bindChartTips(root);
   };
 
+  function acceptanceSection(analyses) {
+    const st = acceptanceStats(analyses);
+    if (!st.n) return '';
+    const pctText = (v) => (v == null ? '–' : `${v}%`);
+    return `<section class="panel" aria-labelledby="an-accept">
+      <h2 id="an-accept" class="section-title">AI 답변을 받아들인 정도</h2>
+      <p class="meta">학생 × 명제 ${st.n}개 기준입니다. 반영 비율은 4단계에서 학생이 직접 표시한 값입니다.</p>
+      ${statTiles([
+        { label: '최종 증명의 AI 반영 (평균)', value: pctText(st.meanAiShare), sub: '학생 자기 보고' },
+        { label: '"AI 증명이 더 정확하다"', value: pctText(st.aiMoreAccurate), sub: '3단계 응답 중' },
+        { label: 'AI의 증명법으로 바꿈', value: pctText(st.toAiRate), sub: '1단계에 AI와 다른 증명법을 쓴 경우 중' },
+        { label: '확신 정도 1 → 2 → 4', value: `${st.confidence[1] ?? '–'} → ${st.confidence[2] ?? '–'} → ${st.confidence[4] ?? '–'}`, sub: '나 → AI 증명 → 최종, 5점 만점' },
+      ])}
+      <div class="an-charts">
+        ${columns({
+          title: '최종 증명에서 AI 답변을 반영한 비율',
+          bins: st.histogram.map((b) => ({ label: `${100 - b.value * 10}`, count: b.count, tip: `AI 반영 ${100 - b.value * 10}%: ${b.count}개` })).reverse(),
+          axisLabel: 'AI 반영 비율 (%) — 오른쪽으로 갈수록 AI 답변을 많이 반영',
+        })}
+        ${barList({ title: '3단계: 어느 증명이 더 정확하다고 보았나요?', unit: '개', wide: true, rows: st.accurate.map((o) => ({ label: o.label, value: o.count })) })}
+        ${barList({ title: '증명법: 1단계(나) → 4단계(최종)', unit: '개', wide: true, rows: st.methodFlow.map((o) => ({ label: o.label, value: o.count })) })}
+        ${barList({ title: '3단계: 1단계의 막힌 점이 AI 증명으로 해결되었나요?', unit: '개', wide: true, rows: st.resolved.map((o) => ({ label: o.label, value: o.count })) })}
+      </div>
+    </section>`;
+  }
+
+  function checklistSection(analyses, source) {
+    const st = checklistStats(analyses);
+    if (!st.n) return '';
+    const teacher = SCORE_SOURCES.find((s) => s.id === source)?.label;
+    const rows = (list) => list.map((c) => ({
+      label: c.label,
+      value: c.checked,
+      sub: c.lacks == null ? '' : c.graded ? `${teacher}: 부족 ${c.lacks}개 / 채점 ${c.graded}개` : `${teacher}: 채점 전`,
+    }));
+    return `<section class="panel" aria-labelledby="an-check">
+      <h2 id="an-check" class="section-title">학생이 찾은 부족한 점 (3단계 체크리스트)</h2>
+      <p class="meta">3단계 비교 분석 ${st.n}개에서 학생이 "보완할 점"으로 체크한 수입니다. 막대 아래에는 짝이 되는 루브릭 기준에서 교사 채점(점수 출처)이 만점보다 낮게 준 수를 함께 보여 줍니다.</p>
+      <div class="an-charts">
+        ${barList({ title: '내 증명(1단계 초안)에서 부족하다고 본 점', unit: '개', wide: true, rows: rows(st.mine), max: st.n })}
+        ${barList({ title: 'AI 증명(2단계)에서 부족하다고 본 점', unit: '개', wide: true, rows: rows(st.ai), max: st.n })}
+      </div>
+    </section>`;
+  }
+
+  function openSection(analyses) {
+    const answers = openAnswers(analyses, openField);
+    const none = answers.filter((a) => isNoneAnswer(a.text));
+    const real = answers.filter((a) => !isNoneAnswer(a.text));
+    const words = wordFrequencies(real.map((a) => a.text));
+    const q = OPEN_QUESTIONS.find((x) => x.id === openField);
+    return `<section class="panel" aria-labelledby="an-open">
+      <h2 id="an-open" class="section-title">개방형 답변 모아 보기</h2>
+      <fieldset class="choice-group" data-open-pick>
+        <legend>문항</legend>
+        <div class="pick-group__options">${OPEN_QUESTIONS.map((o) => `<label class="pick pick--tag"><input type="radio" name="openField" value="${o.id}"${o.id === openField ? ' checked' : ''}><span>${escapeHtml(o.label)}</span></label>`).join('')}</div>
+      </fieldset>
+      <p class="meta">${escapeHtml(q.label)}: 답 ${answers.length}개 중 내용이 있는 답 ${real.length}개, "없음"이나 "찾지 못함" ${none.length}개. 낱말은 조사를 떼고 흔한 말을 빼서 센 것으로, 뜻을 정확히 가르지는 못합니다.</p>
+      <div class="an-charts">
+        <figure class="chart">
+          <figcaption class="chart__head"><span class="chart__title">많이 나온 낱말</span></figcaption>
+          ${wordCloud({ words: words.slice(0, 30), empty: '내용이 있는 답이 아직 없습니다.' })}
+        </figure>
+        ${words.length ? barList({ wide: true, title: '낱말 빈도 (상위 10개)', unit: '번', rows: words.slice(0, 10).map((w) => ({ label: w.word, value: w.count, sub: `답 ${w.docs}개에 나옴` })) }) : ''}
+      </div>
+      <details class="ref-card">
+        <summary>답 전체 보기 (${answers.length})</summary>
+        <ul class="answer-list">${answers.map((a) => `<li><span class="meta">${escapeHtml(a.who)}, 명제 ${a.prop}</span>${escapeHtml(a.text)}</li>`).join('')}</ul>
+      </details>
+    </section>`;
+  }
+
   const onChange = (event) => {
+    if (event.target.name === 'openField') {
+      openField = event.target.value;
+      const y = window.scrollY;
+      draw();
+      window.scrollTo(0, y);
+      root.querySelector(`input[name="openField"][value="${openField}"]`)?.focus();
+      return;
+    }
     if (event.target.name === 'analysisSource') updateGradingSettings({ analysisSource: event.target.value });
     if (event.target.name === 'includeSamples') updateGradingSettings({ includeSamples: event.target.checked });
     if (event.target.closest('[data-analysis-settings]')) draw();

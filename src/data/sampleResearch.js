@@ -87,6 +87,18 @@ const CHAT_SCRIPTS = [
   [['s', '이 명제 증명 알려 줘', 'proof'], ['proof'], ['s', '응 고마워', 'greeting'], ['ok', '도움이 되었다니 다행이에요. 궁금한 단계가 있으면 언제든 물어보세요.']],
 ];
 
+/** 학생별 개방형 답 (명제마다 조금씩 돌려 쓴다) — 워드클라우드·답 모아 보기를 시험할 수 있게 다양하게 썼다 */
+const OPEN = {
+  notable: ['없음', '계산 과정을 자세히 보여 준다', '문자의 범위를 꼭 밝힌다', '설명이 길고 친절하다', '증명 끝에 결론을 분명히 쓴다', '처음에 대우를 먼저 써 준다'],
+  compareNote: ['AI는 문자를 써서 모든 경우를 다루었고 나는 수를 넣어 확인했다', '둘 다 같은 흐름이지만 AI가 근거를 더 자세히 썼다', '나는 전개에서 계산을 틀렸고 AI는 정확했다', '나는 중간에 멈췄고 AI는 결론까지 썼다', '증명법은 같지만 AI는 문자의 범위를 밝혔다', '나는 다른 증명법을 썼고 AI는 대우를 이용했다'],
+  myAdvantage: ['없음', '설명이 짧고 분명하다', '없음', '없음', '내 증명이 더 간결하다', '식을 더 간단하게 정리했다'],
+  aiIssues: ['찾지 못함', '찾지 못함', '근거 설명이 조금 길다', '찾지 못함', '정수라는 조건을 한 번 더 써 주면 좋겠다', '결론 문장이 반복된다'],
+  aiHelpful: ['문자로 식을 세우는 방법', '증명을 끝까지 정리하는 방법', '전개한 식을 3으로 묶는 계산', '어디서부터 시작해야 하는지 알려 준 점', '대우를 쓰는 이유 설명', '결론을 쓰는 방법'],
+  plan: ['AI처럼 문자로 식을 세운다', '내 흐름을 살리고 AI의 결론 문장을 가져온다', '계산을 다시 확인해서 고친다', 'AI의 증명을 참고해서 끝까지 쓴다', '내 증명법을 그대로 쓰고 조건만 보충한다', 'AI의 증명법으로 바꾸어 쓴다'],
+  aiOpinion: ['처음 시작을 알려 주어 도움이 되었지만 그대로 믿으면 안 될 것 같다', '빠르고 정확하지만 내가 생각할 기회가 줄어든다', '계산을 맞게 해 주어 믿을 만했다', '설명이 어려워서 다 이해하지 못했다', '내 증명과 비교할 수 있어서 좋았다', '증명을 너무 쉽게 써 줘서 그대로 따라 쓰게 된다'],
+};
+const open = (field, index, i) => OPEN[field][(index + i) % OPEN[field].length];
+
 /** 대본으로 대화 메시지를 만든다 */
 function buildChat(script, problem, day) {
   const strip = (t) => t.replace(/\{\{([^|}]+)[^}]*\}\}/g, '$1');
@@ -149,7 +161,7 @@ function buildRecord(profile, index) {
       aiMethodOther: '',
       aiProof: profile.transcript === 'partial' ? aiLines.slice(0, Math.ceil(aiLines.length / 2)).join('\n') : aiFull,
       confidence: profile.confidence[1],
-      notable: index % 2 ? '계산 과정을 자세히 보여 준다' : '없음',
+      notable: open('notable', index, i),
       pasteAttempts: index === 3 ? 1 : 0,
       tabSwitches: 3,
       chat: { messages: buildChat(CHAT_SCRIPTS[index], problem, day), requestLog: [] },
@@ -166,16 +178,16 @@ function buildRecord(profile, index) {
       stage2[id].transcriptCheck = 'teacher';
     }
     stage3[id] = {
-      compareNote: v1 === 'full' ? '둘 다 같은 흐름이다' : 'AI는 문자를 써서 모든 경우를 다루었다',
-      myAdvantage: v1 === 'full' ? '설명이 짧고 분명하다' : '없음',
+      compareNote: open('compareNote', index, i),
+      myAdvantage: v1 === 'full' ? open('myAdvantage', index, i) : '없음',
       moreAccurate: v1 === 'full' ? 'both' : 'ai',
       myChecklist: CHECKLIST_FOR[v1],
       stuckResolved: v1 === 'full' ? 'none' : 'resolved',
       aiChecklist: ['none'],
-      aiIssues: '찾지 못함',
-      aiHelpful: '식을 세우는 방법',
-      plan: 'AI의 식 세우기를 가져온다',
-      aiOpinion: '설명이 자세하지만 그대로 믿으면 안 될 것 같다',
+      aiIssues: open('aiIssues', index, i),
+      aiHelpful: open('aiHelpful', index, i),
+      plan: open('plan', index, i),
+      aiOpinion: open('aiOpinion', index, i),
       track: track(7),
     };
     stage4[id] = {

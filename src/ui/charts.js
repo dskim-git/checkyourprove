@@ -56,15 +56,15 @@ export function dotPlot({ title, rows, max, unit = '점', series = STAGE_SERIES,
 }
 
 /** 가로 막대: rows [{ label, value, sub? }], 한 계열이라 범례 없음(제목이 말한다) */
-export function barList({ title, rows, unit = '', max = null }) {
+export function barList({ title, rows, unit = '', max = null, wide = false }) {
   const top = max ?? Math.max(1, ...rows.map((r) => r.value ?? 0));
   return `<figure class="chart">
     <figcaption class="chart__head"><span class="chart__title">${escapeHtml(title)}</span></figcaption>
-    <div class="barlist">${rows.map((r) => {
+    <div class="barlist${wide ? ' barlist--wide' : ''}">${rows.map((r) => {
       const tip = `${r.label}: ${fmt(r.value)}${unit}${r.sub ? `, ${r.sub}` : ''}`;
       return `<div class="barlist__row">
         <span class="barlist__label">${escapeHtml(r.label)}</span>
-        <div class="barlist__track"><span class="barlist__bar" style="width:${pct(r.value ?? 0, top)}" tabindex="0" role="img" aria-label="${escapeHtml(tip)}" data-tip="${escapeHtml(tip)}"></span><span class="barlist__value num">${fmt(r.value)}${escapeHtml(unit)}</span></div>
+        <div class="barlist__track"><span class="barlist__bar" style="width:${pct(r.value ?? 0, top)}"${r.value ? ` tabindex="0" role="img" aria-label="${escapeHtml(tip)}" data-tip="${escapeHtml(tip)}"` : ' aria-hidden="true"'}></span><span class="barlist__value num">${fmt(r.value)}${escapeHtml(unit)}</span></div>
         ${r.sub ? `<span class="barlist__sub meta">${escapeHtml(r.sub)}</span>` : ''}
       </div>`;
     }).join('')}</div>
@@ -149,4 +149,46 @@ export function bindChartTips(root) {
     root.removeEventListener('focusout', onOut);
     tip.remove();
   };
+}
+
+/**
+ * 세로 막대 분포 (한 계열): bins [{ label, count, tip? }]. 막대 위에 개수를 쓴다(0은 쓰지 않음).
+ */
+export function columns({ title, bins, unit = '개', note = '', axisLabel = '' }) {
+  const top = Math.max(1, ...bins.map((b) => b.count));
+  return `<figure class="chart">
+    <figcaption class="chart__head"><span class="chart__title">${escapeHtml(title)}</span></figcaption>
+    ${note ? `<p class="meta">${escapeHtml(note)}</p>` : ''}
+    <div class="columns" style="--cols:${bins.length}">
+      ${bins.map((b) => {
+        const tip = b.tip ?? `${b.label}: ${b.count}${unit}`;
+        return `<div class="columns__col">
+          <span class="columns__value num">${b.count ? b.count : ''}</span>
+          <span class="columns__bar" style="height:${(b.count / top) * 100}%"${b.count ? ` tabindex="0" role="img" aria-label="${escapeHtml(tip)}" data-tip="${escapeHtml(tip)}"` : ' aria-hidden="true"'}></span>
+          <span class="columns__label">${escapeHtml(b.label)}</span>
+        </div>`;
+      }).join('')}
+    </div>
+    ${axisLabel ? `<p class="columns__axis">${escapeHtml(axisLabel)}</p>` : ''}
+    <details class="chart-table"><summary>표로 보기</summary><div class="table-wrap"><table class="data-table data-table--compact">
+      <thead><tr><th scope="col"></th><th scope="col">${escapeHtml(unit === '개' ? '수' : unit)}</th></tr></thead>
+      <tbody>${bins.map((b) => `<tr><th scope="row">${escapeHtml(b.label)}</th><td class="num">${b.count}</td></tr>`).join('')}</tbody>
+    </table></div></details>
+  </figure>`;
+}
+
+/**
+ * 워드클라우드: words [{ word, count, docs }] — 많이 나온 낱말일수록 크고 진하다. 큰 낱말을 가운데에 놓는다.
+ * 같은 값을 빈도 막대로도 보여 준다(워드클라우드만으로는 크기 비교가 어렵다).
+ */
+export function wordCloud({ words, empty = '아직 답이 없습니다.' }) {
+  if (!words.length) return `<p class="empty-text">${escapeHtml(empty)}</p>`;
+  const max = words[0].count;
+  const min = words.at(-1).count;
+  const level = (c) => (max === min ? 3 : Math.round(((Math.sqrt(c) - Math.sqrt(min)) / (Math.sqrt(max) - Math.sqrt(min))) * 4) + 1);
+  const arranged = [];
+  words.forEach((w, i) => { if (i % 2) arranged.push(w); else arranged.unshift(w); });
+  return `<div class="wordcloud" role="list" aria-label="많이 나온 낱말">
+    ${arranged.map((w) => `<span class="wordcloud__word" role="listitem" data-level="${level(w.count)}" tabindex="0" data-tip="${escapeHtml(`${w.word}: ${w.count}번 (답 ${w.docs}개)`)}">${escapeHtml(w.word)}</span>`).join(' ')}
+  </div>`;
 }
