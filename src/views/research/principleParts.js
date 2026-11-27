@@ -21,7 +21,7 @@ export function visualHtml(v) {
 /**
  * 문항 하나. ans: 학생이 처음 고른 답({ choice, correct }) 또는 없음.
  * reveal: 교사 화면처럼 정답과 설명을 바로 보여 줄 때 true (고르는 버튼은 꺼진다)
- * showNext: 답한 뒤 "다음"(마지막 문항은 "마무리로") 버튼을 둘지
+ * showNext: 학생 화면이면 true — "이전" 버튼(늘)과 답한 뒤 "다음"(마지막 문항은 "마무리로") 버튼을 둔다
  */
 export function itemCardHtml(item, { ans = null, reveal = false, showNext = true } = {}) {
   const i = PRINCIPLE_ITEMS.indexOf(item);
@@ -49,6 +49,10 @@ export function itemCardHtml(item, { ans = null, reveal = false, showNext = true
         <p>${escapeHtml(item.explain)}</p>
         ${item.visual?.kind === 'probs' ? visualHtml(item.visual) : ''}
       </div>
-      ${showNext && ans ? `<div class="actions"><button type="button" class="button button--primary" data-action="next">${i === PRINCIPLE_ITEMS.length - 1 ? '마무리로' : '다음'}</button></div>` : ''}` : ''}
+` : ''}
+    ${showNext ? `<div class="actions pr-slide__nav">
+      <button type="button" class="button button--secondary" data-action="prev">${icons.chevronLeft}<span>이전</span></button>
+      ${ans ? `<button type="button" class="button button--primary" data-action="next">${i === PRINCIPLE_ITEMS.length - 1 ? '마무리로' : '다음'}</button>` : ''}
+    </div>` : ''}
   </section>`;
 }

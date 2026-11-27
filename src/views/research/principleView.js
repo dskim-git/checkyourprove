@@ -49,6 +49,14 @@ export function renderPrinciple(root) {
   let pacing = getPacing(sessionId);
   let unmountSlide = null;
   const locked = (i) => !rec.finishedAt && pacing.paced && i > pacing.openUpTo;
+  // 교사가 연 화면보다 두 칸 이상 앞에 있으면(교사가 처음으로 되돌리거나 열린 범위를 줄인 경우) 교사가 연 마지막 화면으로 돌아간다.
+  // 바로 다음 화면은 "기다려요"로 둔다(학생이 다음을 눌러 기다리는 중).
+  const pullBack = () => {
+    if (!locked(index) || index <= pacing.openUpTo + 1) return false;
+    index = pacing.openUpTo;
+    return true;
+  };
+  pullBack();
 
   function waitScreen() {
     return `<section class="pr-card pr-wait" aria-labelledby="pr-q">
@@ -69,7 +77,10 @@ export function renderPrinciple(root) {
         ${rec.finishedAt ? `<p class="proof-text">${escapeHtml(rec.reflection)}</p>` : `<textarea id="pr-reflect" class="field__input" rows="3">${escapeHtml(rec.reflection ?? '')}</textarea>
         <p class="field__error" data-error-for="reflect" hidden></p>`}
       </div>
-      <div class="actions">${rec.finishedAt ? '<a class="button button--primary" href="#/research">탐구 단계 목록으로</a>' : '<button type="button" class="button button--primary" data-action="finish">활동 마치기</button>'}</div>
+      <div class="actions pr-slide__nav">
+        <button type="button" class="button button--secondary" data-action="prev">${icons.chevronLeft}<span>이전</span></button>
+        ${rec.finishedAt ? '<a class="button button--primary" href="#/research">탐구 단계 목록으로</a>' : '<button type="button" class="button button--primary" data-action="finish">활동 마치기</button>'}
+      </div>
     </section>`;
   }
 
@@ -179,8 +190,11 @@ export function renderPrinciple(root) {
   const unsubscribe = subscribePacing(sessionId, (next) => {
     const before = locked(index);
     const wasPaced = pacing.paced;
+    const wasIndex = index;
     pacing = next;
-    if (before !== locked(index) || wasPaced !== pacing.paced) draw({ focus: before && !locked(index) });
+    const moved = pullBack();
+    if (moved || before !== locked(index) || wasPaced !== pacing.paced) draw({ focus: moved || (before && !locked(index)) });
+    if (moved && wasIndex !== index) window.scrollTo(0, 0);
   });
 
   draw();
