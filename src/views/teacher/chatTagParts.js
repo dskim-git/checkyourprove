@@ -7,7 +7,7 @@ import { escapeHtml } from '../../ui/dom.js';
 /** 지금 설정(예시 학생 포함, 블라인드)에 따른 대화 목록과 순서. 블라인드면 채점자별 무작위 순서이고 학생 이름을 가린다. */
 export function chatQueue(raterId) {
   const g = getGrading();
-  const list = conversations(researchStudents({ includeSamples: g.includeSamples }));
+  const list = conversations(researchStudents({ includeSamples: g.includeSamples, sessionIds: g.scopeSessionIds }));
   const byKey = new Map(list.map((c) => [c.key, c]));
   const keys = g.blind ? blindOrder(raterId, list.map((c) => `chat:${c.key}`)).map((k) => k.slice(5)) : list.map((c) => c.key);
   return { convs: keys.map((k) => byKey.get(k)), blind: g.blind };

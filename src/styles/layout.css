@@ -130,5 +130,7 @@ body[data-view='wide'] .app-foot { padding-bottom: var(--space-lg); }
 .section-title { font-size: var(--text-section); }
 .side-title { font-size: var(--text-title); }
 .empty-text { color: var(--color-muted); }
-.panel { display: grid; gap: var(--space-sm); }
-.section-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-xs); }
+.panel { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-sm); }
+.section-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-xs); min-width: 0; }
+.section-head > * { min-width: 0; max-width: 100%; }
+.section-head .tag { white-space: normal; }

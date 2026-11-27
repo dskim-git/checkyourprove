@@ -10,6 +10,7 @@ import {
 import { escapeHtml, formatDateTime } from '../../ui/dom.js';
 import { breadcrumb, notice } from '../../ui/components.js';
 import { gradingQueue, pendingChecks } from './gradingParts.js';
+import { handleScopeEvent, scopePicker } from './sessionScope.js';
 
 const percent = (v) => (v == null ? '–' : `${Math.round(v * 100)}%`);
 const kappaText = (v) => (v == null ? '계산 불가' : v.toFixed(2));
@@ -82,6 +83,7 @@ export function renderGradingHome(root) {
               <span>같은 명제·같은 단계끼리 <span class="meta" id="stage-sort-note">명제 안에서 1단계 나의 증명, 2단계 AI 증명, 4단계 최종 증명을 차례로 모아 채점합니다.${g.blind ? ' 순서만으로 단계가 드러나서 블라인드 채점을 끄면 쓸 수 있어요.' : ''}</span></span>
             </label>
           </fieldset>
+          ${scopePicker(g)}
           <p class="save-status" data-grading-status aria-live="polite"></p>
         </form>
       </section>
@@ -191,6 +193,10 @@ export function renderGradingHome(root) {
   }
 
   const onChange = (event) => {
+    if (handleScopeEvent(event, root)) {
+      draw();
+      return;
+    }
     if (event.target.matches('[data-grade-filter]')) {
       filter = event.target.value;
       draw();
@@ -205,6 +211,10 @@ export function renderGradingHome(root) {
     root.querySelector('[data-grading-status]').textContent = '설정을 저장했습니다.';
   };
   const onClick = (event) => {
+    if (handleScopeEvent(event, root)) {
+      draw();
+      return;
+    }
     if (!event.target.closest('[data-action="rename"]')) return;
     root.querySelectorAll('[data-rater-name]').forEach((input) => renameRater(input.dataset.raterName, input.value));
     saveGrading();

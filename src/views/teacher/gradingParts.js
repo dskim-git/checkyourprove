@@ -20,7 +20,7 @@ const propositionRank = (problemId) => {
  */
 export function gradingQueue(raterId) {
   const g = getGrading();
-  const students = researchStudents({ includeSamples: g.includeSamples });
+  const students = researchStudents({ includeSamples: g.includeSamples, sessionIds: g.scopeSessionIds });
   const targets = gradingTargets(students);
   const byKey = new Map(targets.map((t) => [t.key, t]));
   let ordered = (g.blind ? blindOrder(raterId, targets.map((t) => t.key)) : targets.map((t) => t.key)).map((key) => byKey.get(key));

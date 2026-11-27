@@ -7,6 +7,7 @@ import { TAG_SCOPES } from '../../data/chatTags.js';
 import { escapeHtml } from '../../ui/dom.js';
 import { breadcrumb, notice } from '../../ui/components.js';
 import { allTagIds, chatQueue, raterChoice, tagLabel } from './chatTagParts.js';
+import { handleScopeEvent, scopePicker } from './sessionScope.js';
 
 const percent = (v) => (v == null ? '–' : `${Math.round(v * 100)}%`);
 const kappaText = (v) => (v == null ? '계산 불가' : v.toFixed(2));
@@ -59,6 +60,7 @@ export function renderChatTagHome(root) {
             <input type="checkbox" name="includeSamples"${g.includeSamples ? ' checked' : ''}>
             <span>예시 학생 포함</span>
           </label>
+          ${scopePicker(g)}
         </form>
       </section>
 
@@ -135,6 +137,10 @@ export function renderChatTagHome(root) {
   }
 
   const onChange = (event) => {
+    if (handleScopeEvent(event, root)) {
+      draw();
+      return;
+    }
     const form = event.target.closest('[data-chat-settings]');
     if (!form) return;
     const data = new FormData(form);
@@ -142,7 +148,15 @@ export function renderChatTagHome(root) {
     draw();
   };
 
+  const onClick = (event) => {
+    if (handleScopeEvent(event, root)) draw();
+  };
+
   draw();
   root.addEventListener('change', onChange);
-  return () => root.removeEventListener('change', onChange);
+  root.addEventListener('click', onClick);
+  return () => {
+    root.removeEventListener('change', onChange);
+    root.removeEventListener('click', onClick);
+  };
 }

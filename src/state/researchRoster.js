@@ -1,4 +1,5 @@
-// 교사 화면용 연구 기록 모음: 이 브라우저 학생의 기록 + (켜면) 예시 학생 기록
+// 교사 화면용 연구 기록 모음: 세션마다 이 브라우저 학생의 기록 + (켜면) 예시 학생 기록
+// sessionIds를 주면 그 세션들의 학생만 모은다(연구 분석·채점·태그 화면의 "포함할 세션"). 학생마다 session을 붙인다.
 // 채점 대상 = 학생 × 명제 × 채점하는 단계(1 나의 증명, 2 AI 증명, 4 최종 증명). 제출한 단계만 채점한다.
 // TODO: 서버 연결 뒤에는 학급 학생들의 기록을 서버에서 불러온다(교사 권한 확인 후).
 
@@ -7,12 +8,26 @@ import { sampleResearchStudents } from '../data/sampleResearch.js';
 import { getProblem } from '../data/problems/index.js';
 import { hasInk } from './inkModel.js';
 import { getResearch } from './researchStore.js';
+import { findSession, getSessions, localStudentId, sessionLabel } from './sessionStore.js';
 
 export const LOCAL_STUDENT_ID = 'local';
 
-export function researchStudents({ includeSamples = true } = {}) {
-  const local = { id: LOCAL_STUDENT_ID, pseudonym: '이 브라우저 학생', sample: false, record: getResearch() };
-  return includeSamples ? [local, ...sampleResearchStudents()] : [local];
+/** 예시 학생 01~03은 "예시 1반 1회차", 04~06은 "예시 2반 1회차" */
+const sampleSessionOf = (index) => findSession(index < 3 ? 'sample-s1' : 'sample-s2');
+
+export function researchStudents({ includeSamples = true, sessionIds = null } = {}) {
+  const inScope = (session) => !sessionIds || sessionIds.includes(session.id);
+  const locals = getSessions().sessions.filter(inScope).map((session) => ({
+    id: localStudentId(session),
+    pseudonym: `이 브라우저 학생 (${sessionLabel(session)})`,
+    sample: false,
+    session,
+    record: getResearch(session.id),
+  }));
+  const samples = includeSamples
+    ? sampleResearchStudents().map((s, i) => ({ ...s, session: sampleSessionOf(i) })).filter((s) => inScope(s.session))
+    : [];
+  return [...locals, ...samples];
 }
 
 export const targetKey = (studentId, stage, problemId) => `${studentId}~${stage}~${problemId}`;

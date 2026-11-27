@@ -18,6 +18,7 @@ import { mountInkViews } from '../../ui/inkCanvas.js';
 import { statementHtml } from '../../ui/mathText.js';
 import { readProofInk } from '../research/researchParts.js';
 import { sourceOf, sourcePicker } from './analysisHomeView.js';
+import { sessionLabel } from '../../state/sessionStore.js';
 import { gradedBy, openChatPopup, openGradePopup, taggedBy } from './recordPopups.js';
 
 const fmt = (v) => (v == null ? '–' : Number.isInteger(v) ? String(v) : Number(v).toFixed(1));
@@ -35,7 +36,7 @@ export function renderAnalysisStudent(root, [studentId]) {
     disposeInk();
     const g = getGrading();
     const source = sourceOf();
-    const students = researchStudents({ includeSamples: g.includeSamples }).filter((s) => s.record.stages?.['1']?.submittedAt);
+    const students = researchStudents({ includeSamples: g.includeSamples, sessionIds: g.scopeSessionIds }).filter((s) => s.record.stages?.['1']?.submittedAt);
     const index = students.findIndex((s) => s.id === studentId);
     const student = students[index];
     if (!student) {
@@ -70,6 +71,7 @@ export function renderAnalysisStudent(root, [studentId]) {
       ${breadcrumb([{ label: '교사 화면', href: '#/teacher' }, { label: '연구 분석', href: '#/teacher/analysis' }, { label: student.pseudonym }])}
       <header class="page-intro">
         <h1>${escapeHtml(student.pseudonym)}${student.sample ? ' <span class="tag tag--proto">예시</span>' : ''}</h1>
+        <p class="grade-who"><span class="tag tag--strong">${escapeHtml(sessionLabel(student.session))}</span></p>
         <p class="lead">명제 ${a.props.length}개의 1~4단계 기록입니다. 점수 출처: ${escapeHtml(sourceLabel)}.</p>
         <nav class="an-nav" aria-label="다른 학생">
           ${prev ? `<a class="button button--ghost button--small" href="#/teacher/analysis/${prev.id}">이전 학생: ${escapeHtml(prev.pseudonym)}</a>` : ''}
@@ -266,7 +268,7 @@ export function renderAnalysisStudent(root, [studentId]) {
   const onClick = (event) => {
     const btn = event.target.closest('[data-popup]');
     if (!btn) return;
-    const student = researchStudents({ includeSamples: getGrading().includeSamples }).find((s) => s.id === studentId);
+    const student = researchStudents({ includeSamples: getGrading().includeSamples, sessionIds: getGrading().scopeSessionIds }).find((s) => s.id === studentId);
     const problem = getProblem(btn.dataset.problem);
     closePopup = btn.dataset.popup === 'grade'
       ? openGradePopup(student, Number(btn.dataset.stage), btn.dataset.problem, problem)

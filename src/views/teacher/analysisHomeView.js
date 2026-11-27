@@ -8,6 +8,8 @@ import { getGrading, updateGradingSettings } from '../../state/gradingStore.js';
 import { researchStudents } from '../../state/researchRoster.js';
 import { escapeHtml } from '../../ui/dom.js';
 import { breadcrumb, notice } from '../../ui/components.js';
+import { handleScopeEvent, scopePicker, scopeText } from './sessionScope.js';
+import { sessionLabel } from '../../state/sessionStore.js';
 import { barList, bindChartTips, columns, scatter, splitBar, statTiles, wordCloud } from '../../ui/charts.js';
 import { acceptanceStats, checklistStats, isNoneAnswer, OPEN_QUESTIONS, openAnswers, wordFrequencies } from '../../services/classInsights.js';
 
@@ -33,7 +35,7 @@ export function renderAnalysisHome(root) {
     disposeTips();
     const g = getGrading();
     const source = sourceOf();
-    const students = researchStudents({ includeSamples: g.includeSamples }).filter((s) => s.record.stages?.['1']?.submittedAt);
+    const students = researchStudents({ includeSamples: g.includeSamples, sessionIds: g.scopeSessionIds }).filter((s) => s.record.stages?.['1']?.submittedAt);
     const analyses = students.map((s) => analyzeStudent(s, source));
     const sum = classSummary(analyses);
     const scored = analyses.some((a) => a.props.some((p) => p.totals[1] != null || p.totals[4] != null));
@@ -48,6 +50,7 @@ export function renderAnalysisHome(root) {
 
     const rows = analyses.map((a) => `<tr>
       <th scope="row"><a href="#/teacher/analysis/${a.student.id}">${escapeHtml(a.student.pseudonym)}</a>${a.student.sample ? ' <span class="tag tag--proto">예시</span>' : ''}</th>
+      <td>${escapeHtml(sessionLabel(a.student.session))}</td>
       <td class="num">${fmt(a.avg[1])}</td><td class="num">${fmt(a.avg[2])}</td><td class="num">${fmt(a.avg[4])}</td>
       <td class="num">${signed(a.avg.improve)}</td><td class="num">${signed(a.avg.gap)}</td>
       <td>${a.avg.ratioMine == null ? '–' : `<span class="ratio-cell">${splitBar(Math.round(a.avg.ratioMine))}<span class="num">${Math.round(a.avg.ratioMine * 10)}%</span></span>`}</td>
@@ -68,11 +71,13 @@ export function renderAnalysisHome(root) {
         <form class="settings-form grading-settings" data-analysis-settings novalidate>
           ${sourcePicker(source)}
           <label class="check"><input type="checkbox" name="includeSamples"${g.includeSamples ? ' checked' : ''}><span>예시 학생 포함</span></label>
+          ${scopePicker(g)}
         </form>
         ${scored ? '' : notice('eye', '아직 채점한 증명이 없습니다', '증명 채점 화면에서 채점하거나, 점수 출처를 "AI 채점(참고)"으로 바꾸면 대시보드를 미리 볼 수 있습니다.')}
       </section>
       <section class="panel" aria-labelledby="an-class">
         <h2 id="an-class" class="section-title">학급 요약</h2>
+        <p class="meta">포함한 세션: ${escapeHtml(scopeText(g))}</p>
         ${statTiles([
           { label: '학생 수', value: `${sum.students}명` },
           { label: '평균 향상 (최종 − 나)', value: signed(sum.improve), sub: '점, 10점 만점' },
@@ -98,7 +103,7 @@ export function renderAnalysisHome(root) {
         <p class="meta">학생 이름을 누르면 그 학생의 대시보드가 열립니다. 점수는 명제 평균(10점 만점)입니다. CSV에는 학생 × 명제마다 모든 기록이 한 줄씩 들어갑니다.</p>
         ${analyses.length ? `<div class="table-wrap" role="region" aria-labelledby="an-students" tabindex="0">
           <table class="data-table grade-table" data-analysis-table>
-            <thead><tr><th scope="col">학생</th><th scope="col">나</th><th scope="col">AI</th><th scope="col">최종</th><th scope="col">향상</th><th scope="col">격차</th><th scope="col">나의 반영</th><th scope="col">확신 1 → 4</th><th scope="col">질문</th><th scope="col">작업 시간</th></tr></thead>
+            <thead><tr><th scope="col">학생</th><th scope="col">세션</th><th scope="col">나</th><th scope="col">AI</th><th scope="col">최종</th><th scope="col">향상</th><th scope="col">격차</th><th scope="col">나의 반영</th><th scope="col">확신 1 → 4</th><th scope="col">질문</th><th scope="col">작업 시간</th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
         </div>` : '<p class="empty-text">아직 1단계를 제출한 학생이 없습니다.</p>'}
@@ -180,6 +185,10 @@ export function renderAnalysisHome(root) {
   }
 
   const onChange = (event) => {
+    if (handleScopeEvent(event, root)) {
+      draw();
+      return;
+    }
     if (event.target.name === 'openField') {
       openField = event.target.value;
       const y = window.scrollY;
@@ -193,10 +202,14 @@ export function renderAnalysisHome(root) {
     if (event.target.closest('[data-analysis-settings]')) draw();
   };
   const onClick = (event) => {
+    if (handleScopeEvent(event, root)) {
+      draw();
+      return;
+    }
     if (!event.target.closest('[data-action="csv"]')) return;
     const g = getGrading();
     const source = sourceOf();
-    const students = researchStudents({ includeSamples: g.includeSamples }).filter((s) => s.record.stages?.['1']?.submittedAt);
+    const students = researchStudents({ includeSamples: g.includeSamples, sessionIds: g.scopeSessionIds }).filter((s) => s.record.stages?.['1']?.submittedAt);
     const csv = analysisCsv(students.map((s) => analyzeStudent(s, source)), source);
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     const link = document.createElement('a');

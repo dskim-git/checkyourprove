@@ -7,33 +7,41 @@
 //   증명 칸(1·4단계 proof, 2단계 aiProof)은 펜 필기 ink[필드]와 입력 방식 inputMode[필드]를 함께 둔다(state/inkModel.js).
 // 학생이 1단계를 처음 열 때 명제 목록을 고정한다(교사가 나중에 바꿔도 이 학생의 기록은 같은 명제로 이어진다).
 // 제출한 단계는 다시 고칠 수 없다.
+// 연구 기록은 세션(학급 × 회차)마다 따로 저장한다. 인자 없이 부르면 진행 중 세션의 기록이다(state/sessionStore.js).
 // TODO: Firestore 연동 시 학생별 문서로 옮기고, 제출 뒤 수정 금지와 단계 열림 여부를 보안 규칙·서버에서 확인한다.
 
 import { readJson, writeJson, removeKey } from './storage.js';
 import { PROOF_HELP_MIN, transcriptMatch, transcriptOk } from '../services/proofHelp.js';
 import { hasInk, inkEnough } from './inkModel.js';
+import { activeSessionId, findSession } from './sessionStore.js';
 
-const STORAGE_KEY = 'checkyourprove.prototype.research.v1';
+const LEGACY_KEY = 'checkyourprove.prototype.research.v1';
 const SNAPSHOT_LIMIT = 200;
 
-let cache = null;
+/** 세션의 저장 키 (세션 기능 전 기록을 옮긴 첫 세션은 기존 키를 그대로 쓴다) */
+const keyOf = (sessionId) => (findSession(sessionId)?.legacy ? LEGACY_KEY : `${LEGACY_KEY}.${sessionId}`);
+
+const caches = new Map();
 const now = () => new Date().toISOString();
 
-export function getResearch() {
-  cache ??= readJson(STORAGE_KEY, null) ?? { propositionIds: null, stages: {}, updatedAt: null };
-  return cache;
+export function getResearch(sessionId = activeSessionId()) {
+  if (!caches.has(sessionId)) caches.set(sessionId, readJson(keyOf(sessionId), null) ?? { propositionIds: null, stages: {}, updatedAt: null });
+  return caches.get(sessionId);
 }
 
-export function saveResearch() {
-  const record = getResearch();
+export function saveResearch(sessionId = activeSessionId()) {
+  const record = getResearch(sessionId);
   record.updatedAt = now();
-  return writeJson(STORAGE_KEY, record);
+  return writeJson(keyOf(sessionId), record);
 }
 
-export function resetResearch() {
-  cache = null;
-  removeKey(STORAGE_KEY);
+export function resetResearch(sessionId = activeSessionId()) {
+  removeKey(keyOf(sessionId));
+  caches.delete(sessionId);
 }
+
+/** 세션에 학생 기록이 있는가 (1단계를 시작했는가) */
+export const hasResearchRecord = (sessionId) => Boolean(getResearch(sessionId).propositionIds);
 
 /** 이 학생이 연구 활동에서 다루는 명제 목록 (시작 전에는 교사 설정을 따른다) */
 export function propositionIdsFor(classroom) {

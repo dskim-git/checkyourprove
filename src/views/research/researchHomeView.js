@@ -60,6 +60,7 @@ export function renderResearchHome(root) {
     ${breadcrumb(crumbs)}
     <header class="page-intro">
       <h1>AI와 탐구하기</h1>
+      <p class="grade-who"><span class="tag">${escapeHtml(classroom.sessionLabel)}</span></p>
       <p class="lead">명제 ${problems.length}개를 네 단계로 탐구합니다. 선생님이 단계를 열어 주면 시작할 수 있고, 제출한 단계는 고칠 수 없어요. AI는 2단계에서만 사용합니다.</p>
     </header>
     <details class="ref-card">
