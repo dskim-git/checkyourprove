@@ -1602,3 +1602,28 @@ button.pc-in:focus-visible { outline: 3px solid var(--color-focus); outline-offs
 .page--admin .grade-table td { white-space: normal; }
 .consent-doc__h { margin-top: var(--space-sm); font-size: var(--text-md); }
 .et-delete { font-size: var(--text-md); }
+
+/* ── 설정 화면 정리 (내 설정·교사 설정·관리자 설정, 교사 업무판, 공지) ─────── */
+.settings-tabs { margin-inline: calc(var(--space-md) * -1); padding-inline: var(--space-md); overflow-x: auto; scrollbar-width: none; border-bottom: var(--rule-hair) solid var(--color-rule); }
+.settings-tabs::-webkit-scrollbar { display: none; }
+.settings-tabs__list { display: flex; gap: var(--space-2xs); margin: 0; padding: 0; list-style: none; }
+.settings-tab { display: inline-flex; align-items: center; gap: var(--space-2xs); min-height: 44px; padding: var(--space-xs) var(--space-sm); border-bottom: 3px solid transparent; color: var(--color-muted); font-weight: var(--display-weight); text-decoration: none; white-space: nowrap; }
+.settings-tab:hover { color: var(--color-ink); }
+.settings-tab.is-on { border-bottom-color: var(--color-accent-deep); color: var(--color-ink); }
+.settings-tab:focus-visible { outline: 3px solid var(--color-focus); outline-offset: -3px; border-radius: var(--radius-input); }
+.settings-tab__badge { display: inline-grid; place-items: center; min-width: 1.4rem; height: 1.4rem; padding-inline: var(--space-3xs); border-radius: var(--radius-pill); background: var(--color-coral-soft); color: var(--color-coral-deep); font-size: var(--text-xs); }
+.task-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: var(--space-sm); margin: 0; padding: 0; list-style: none; }
+.task-tile { display: grid; gap: var(--space-3xs); height: 100%; padding: var(--space-sm) var(--space-md); border-radius: var(--radius-stock); background: var(--grain), var(--color-card); color: var(--color-ink); text-decoration: none; box-shadow: inset 0 0 0 1px var(--color-rule), 0 4px 0 0 var(--color-edge); }
+.task-tile:hover { background: var(--grain), var(--color-paper-2); }
+.task-tile:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+.task-tile__title { font-weight: var(--display-weight); }
+.task-tile__desc { color: var(--color-ink-2); font-size: var(--text-sm); }
+.today { padding: var(--space-md); border-radius: var(--radius-card); background: var(--grain), var(--color-accent-soft); }
+.today__code { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2xs) var(--space-xs); }
+.today__switches { display: grid; gap: var(--space-xs); }
+.notice-bar { display: grid; gap: var(--space-2xs); max-width: var(--app-width); margin-inline: auto; padding: var(--space-xs) var(--space-md) 0; }
+.notice-bar[hidden] { display: none; }
+.notice-bar__item { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2xs) var(--space-sm); padding: var(--space-xs) var(--space-md); border-radius: var(--radius-stock); background: var(--color-sugar-soft); }
+.notice-bar__item p { margin: 0; }
+.prefs-preview { padding: var(--space-sm) var(--space-md); border-radius: var(--radius-stock); background: var(--color-paper-2); }
+.rec-until { margin: 0; }

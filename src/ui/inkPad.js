@@ -8,6 +8,7 @@ import {
   addStroke, canUndo, eraseStrokes, growInk, INK_MAX_HEIGHT, INK_START_HEIGHT, inkClock, inkStats,
   noteFinger, strokesNear, undoInk,
 } from '../state/inkModel.js';
+import { getPrefs } from '../state/prefsStore.js';
 import { escapeHtml } from './dom.js';
 import { icons } from './icons.js';
 import { drawLive, fitCanvas, inkColor, renderInk } from './inkCanvas.js';
@@ -80,7 +81,8 @@ export function mountInkPad(el, { getInk, ensureInk, onInput, onChange }) {
   let scrolling = null; // 손가락으로 화면 움직이는 중: { id, y, moved }
   let lastPenAt = 0;
   const lastFinger = getInk()?.ops.filter((op) => op.op === 'finger').at(-1);
-  let finger = Boolean(lastFinger?.on);
+  // 손가락으로도 쓰기: 이 필기에서 마지막으로 고른 값, 없으면 내 설정의 기본값
+  let finger = lastFinger ? Boolean(lastFinger.on) : getPrefs().fingerDefault;
   if (fingerBox) fingerBox.checked = finger;
 
   const color = () => inkColor(canvas);

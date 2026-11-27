@@ -116,6 +116,16 @@ export function addClass(name) {
   return klass;
 }
 
+/** 학급의 증명 연습 설정 덮어쓰기 (값이 null이면 관리자 기본값을 따른다). 교사 설정 화면에서 바꾼다. */
+export function setClassPractice(classId, patch) {
+  const c = getSessions().classes.find((x) => x.id === classId);
+  if (!c) return false;
+  c.practice = { ...(c.practice ?? {}), ...patch };
+  Object.keys(c.practice).forEach((k) => { if (c.practice[k] == null) delete c.practice[k]; });
+  return saveSessions();
+}
+export const classPractice = (classId) => getSessions().classes.find((x) => x.id === classId)?.practice ?? {};
+
 export function renameClass(id, name) {
   const klass = getSessions().classes.find((c) => c.id === id);
   if (klass && String(name).trim()) klass.name = String(name).trim();

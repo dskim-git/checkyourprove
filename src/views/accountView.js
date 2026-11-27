@@ -8,6 +8,7 @@ import {
 } from '../state/accountStore.js';
 import { findSession, findSessionByCode, formatCode, sessionLabel, setActiveSession } from '../state/sessionStore.js';
 import { breadcrumb, notice } from '../ui/components.js';
+import { getAdmin } from '../state/adminStore.js';
 import { escapeHtml } from '../ui/dom.js';
 
 const THIS_YEAR = new Date().getFullYear();
@@ -75,7 +76,7 @@ export function renderAccount(root) {
         <form class="account-form" data-profile-form novalidate>
           <fieldset class="choice-group"><legend>가입 구분</legend><div class="pick-group__options">
             <label class="pick pick--tag"><input type="radio" name="kind" value="student"${k === 'student' ? ' checked' : ''}><span>학생</span></label>
-            <label class="pick pick--tag"><input type="radio" name="kind" value="guest"${k === 'guest' ? ' checked' : ''}><span>일반인 (교사·연수 참가자 등)</span></label>
+            ${getAdmin().signup.allowGuests || k === 'guest' ? `<label class="pick pick--tag"><input type="radio" name="kind" value="guest"${k === 'guest' ? ' checked' : ''}><span>일반인 (교사·연수 참가자 등)</span></label>` : ''}
           </div></fieldset>
           ${k === 'student'
             ? `<div class="account-grid">
@@ -110,7 +111,7 @@ export function renderAccount(root) {
           <div class="actions actions--start">
             <a class="button button--primary" href="#/practice">증명 연습하기</a>
             ${canTeach(user) ? '<a class="button button--secondary" href="#/teacher">교사 화면</a>' : ''}
-            ${isAdmin(user) ? '<a class="button button--secondary" href="#/teacher/admin">관리자: 가입 승인</a>' : ''}
+            ${isAdmin(user) ? '<a class="button button--secondary" href="#/admin">관리자 설정</a>' : ''}
             <button type="button" class="button button--ghost" data-action="signout">로그아웃</button>
           </div>
         </section>

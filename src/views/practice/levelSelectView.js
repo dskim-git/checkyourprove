@@ -3,7 +3,7 @@
 
 import { getMethod } from '../../data/methods.js';
 import { TEST_FREE_NAVIGATION } from '../../data/levels.js';
-import { getClassroom } from '../../state/classroomStore.js';
+import { practiceSettings } from '../../state/practiceSettings.js';
 import { levelStates } from '../../state/practiceProgress.js';
 import { escapeHtml } from '../../ui/dom.js';
 import { icons } from '../../ui/icons.js';
@@ -17,7 +17,7 @@ export function renderLevelSelect(root, [methodId]) {
     return null;
   }
   const states = levelStates(method.id);
-  const { unlockAll } = getClassroom();
+  const { unlockAll } = practiceSettings();
   const here = states.find((s) => s.unlocked && !s.certified);
 
   const nodes = states.map((s) => {
@@ -26,6 +26,7 @@ export function renderLevelSelect(root, [methodId]) {
     const mark = s.certified ? icons.check : s.unlocked ? `<span class="num">${s.index + 1}</span>` : icons.lock;
     const status = s.certified
       ? `인증 완료, 통과 ${s.cleared}개`
+      : s.aiOff ? 'AI를 쓰는 활동이라 지금은 잠겨 있어요(선생님 설정)'
       : s.unlocked
         ? `인증까지 통과 ${s.cleared} / ${s.required}`
         : '잠김: 이전 단계를 인증하면 열립니다';
@@ -46,7 +47,7 @@ export function renderLevelSelect(root, [methodId]) {
 
   const freeNote = TEST_FREE_NAVIGATION
     ? '테스트 버전이라 인증과 관계없이 모든 단계가 열려 있습니다. 인증 기록은 그대로 쌓입니다.'
-    : unlockAll ? '교사 화면에서 "모든 단계 열기"가 켜져 있어 모든 단계가 열려 있습니다. 인증 기록은 그대로 쌓입니다.' : '';
+    : unlockAll ? '선생님 설정에서 "모든 단계 열기"가 켜져 있어 모든 단계가 열려 있습니다. 인증 기록은 그대로 쌓입니다.' : '';
 
   root.innerHTML = `<div class="page">
     ${breadcrumb([{ label: '홈', href: '#/' }, { label: '증명 연습하기', href: '#/practice' }, { label: method.label }])}

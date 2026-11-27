@@ -3,7 +3,7 @@
 // - 고르기: 빈칸(칸 버튼)을 누르면 그 단계 아래에 보기 칩이 열리고, 고르면 칸에 내용이 그대로 들어간다.
 // - 채우기: 빈칸에 직접 쓴다.
 
-import { REVEAL_AFTER_TRIES } from '../../../data/levels.js';
+import { practiceSettings } from '../../../state/practiceSettings.js';
 import { blanksOf, parseStep } from '../../../data/proofModel.js';
 import { isSameAnswer, isSameShape } from '../../../services/textMatch.js';
 import { escapeHtml } from '../../../ui/dom.js';
@@ -94,7 +94,7 @@ export function blankActivity({ choices = false } = {}) {
           <div class="feedback" data-feedback aria-live="polite">${message ? `<p>${escapeHtml(message)}</p>` : ''}${tips.length ? `<ul class="feedback__tips">${tips.map((t) => `<li>${escapeHtml(t)}</li>`).join('')}</ul>` : ''}</div>
           ${done ? '' : `<div class="actions">
             ${triesNote(data.tries)}
-            ${data.tries >= REVEAL_AFTER_TRIES ? '<button type="button" class="button button--ghost" data-action="reveal">정답 보기</button>' : ''}
+            ${data.tries >= practiceSettings().revealAfterTries ? '<button type="button" class="button button--ghost" data-action="reveal">정답 보기</button>' : ''}
             <button type="button" class="button button--primary" data-action="check">정답 확인</button>
           </div>`}`;
       }

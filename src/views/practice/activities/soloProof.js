@@ -1,7 +1,9 @@
 // 활동 7: 나 혼자 증명하기 (AI 채점 · 현재는 더미)
 // 힌트 없이 증명을 써서 제출하면 점수로 알려 준다. 스스로 보는 시험이다.
 
-import { SOLO_PASS_SCORE } from '../../../data/levels.js';
+import { practiceSettings } from '../../../state/practiceSettings.js';
+
+const passScore = () => practiceSettings().soloPassScore;
 import { stepText } from '../../../data/proofModel.js';
 import { buildGradeRequest } from '../../../services/aiRequests.js';
 import { requestGrade } from '../../../services/mockProofChecker.js';
@@ -32,7 +34,7 @@ export default {
 
     function resultView() {
       const { score, breakdown, comment } = data.result;
-      const passed = score >= SOLO_PASS_SCORE;
+      const passed = score >= passScore();
       const rows = breakdown.map((item) => {
         const v = VERDICT[item.verdict];
         return `<tr>
@@ -44,7 +46,7 @@ export default {
       }).join('');
       return `<div class="score-card${passed ? ' is-passed' : ''}">
           <p class="score-card__score"><strong>${score}</strong><span> / 100점</span></p>
-          <p class="score-card__meta">통과 기준 ${SOLO_PASS_SCORE}점, ${passed ? '통과' : '미통과'}</p>
+          <p class="score-card__meta">통과 기준 ${passScore()}점, ${passed ? '통과' : '미통과'}</p>
           <p>${escapeHtml(comment)}</p>
         </div>
         <section aria-labelledby="my-proof-heading" class="stack-section">
@@ -69,7 +71,7 @@ export default {
         el.innerHTML = `${mockAiNote()}${resultView()}`;
         return;
       }
-      el.innerHTML = `${notice('info', '스스로 보는 시험입니다', `힌트 없이 증명을 끝까지 쓰고 제출하세요. 제출하면 고칠 수 없고, AI가 채점해 점수로 알려 줍니다. ${SOLO_PASS_SCORE}점 이상이면 통과입니다.`)}
+      el.innerHTML = `${notice('info', '스스로 보는 시험입니다', `힌트 없이 증명을 끝까지 쓰고 제출하세요. 제출하면 고칠 수 없고, AI가 채점해 점수로 알려 줍니다. ${passScore()}점 이상이면 통과입니다.`)}
         ${mockAiNote()}
         ${textArea({ id: 'solo-proof', field: 'data.draft', label: '나의 증명', value: data.draft, rows: 14, required: true, symbols: true })}
         <div class="actions">
@@ -94,7 +96,7 @@ export default {
       data.submittedAt = nowIso();
       pending = false;
       ctx.save();
-      ctx.finish({ passed: data.result.score >= SOLO_PASS_SCORE, score: data.result.score });
+      ctx.finish({ passed: data.result.score >= passScore(), score: data.result.score });
     }
 
     const onClick = (event) => {

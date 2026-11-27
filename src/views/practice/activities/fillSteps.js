@@ -1,6 +1,6 @@
 // 활동 4: 빠진 단계 채우기 (AI 점검 · 현재는 더미)
 
-import { REVEAL_AFTER_TRIES } from '../../../data/levels.js';
+import { practiceSettings } from '../../../state/practiceSettings.js';
 import { stepText } from '../../../data/proofModel.js';
 import { buildStepCheckRequest } from '../../../services/aiRequests.js';
 import { requestStepCheck } from '../../../services/mockProofChecker.js';
@@ -58,7 +58,7 @@ export default {
         ${done ? '' : `<div class="actions">
           <p class="save-status" data-save-status aria-live="polite"></p>
           ${triesNote(data.tries)}
-          ${data.tries >= REVEAL_AFTER_TRIES ? '<button type="button" class="button button--ghost" data-action="reveal">예시 단계 보기</button>' : ''}
+          ${data.tries >= practiceSettings().revealAfterTries ? '<button type="button" class="button button--ghost" data-action="reveal">예시 단계 보기</button>' : ''}
           <button type="button" class="button button--primary" data-action="check">AI에게 점검받기</button>
         </div>`}`;
       if (!done) fields = bindFields(el, attempt, saveAttempt);

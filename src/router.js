@@ -21,7 +21,10 @@
 //   #/teacher/interviews(/:student)      면담 후보와 기록 목록 / 학생 한 명의 면담
 //   #/teacher/recordings                 면담 녹음 관리(보관 기한, 듣기·내려받기·지우기)
 //   #/account                            계정(시연 로그인, 처음 정보 입력, 승인 대기, 세션 코드)
-//   #/teacher/admin(/links|/ethics)      관리자: 가입 승인·명단·역할 / 연결표 / 연구 윤리 설정(IRB)
+//   #/settings(/:tab)                    내 설정: 계정, 화면·입력, 개인정보, 도움말 (학생·일반인, 교사·관리자의 개인 설정)
+//   #/teacher/settings(/:tab)            교사 설정: 학급·세션, 탐구 진행, 증명 연습(학급별), 채점·분석 보기
+//   #/admin(/:tab)                       관리자 설정: 사용자·가입, 연결표·요청, 연구 윤리, 연구 도구, 연습 기본값, 공지·안내, 관리 기록
+//                                        (예전 주소 #/teacher/admin(/links|/ethics)도 열림)
 //   #/practice/guide                     증명법 한눈에 보기(직접·간접 증명법 설명)
 // 해시 방식은 배포 환경(Vercel)에서 별도 rewrite 설정 없이 동작한다.
 // TODO: 라우팅 방식(해시 / History API)은 AGENTS.md의 결정 필요 항목이다.
@@ -53,8 +56,12 @@ import { renderInterviewHome } from './views/teacher/interviewHomeView.js';
 import { renderInterview } from './views/teacher/interviewView.js';
 import { renderRecordings } from './views/teacher/recordingsView.js';
 import { renderAccount } from './views/accountView.js';
-import { renderAdminLinks, renderAdminUsers, renderEthics } from './views/teacher/adminView.js';
+import { renderAdmin } from './views/teacher/adminView.js';
+import { renderTeacherSettings } from './views/teacher/teacherSettingsView.js';
+import { renderSettings } from './views/settingsView.js';
 import { currentUser, displayName } from './state/accountStore.js';
+import { activeNotices } from './state/adminStore.js';
+import { dismissNotice, getPrefs } from './state/prefsStore.js';
 import { renderMethodGuide } from './views/practice/methodGuideView.js';
 import { renderNotFound } from './ui/components.js';
 import { escapeHtml } from './ui/dom.js';
@@ -90,9 +97,10 @@ const ROUTES = [
   { section: 'teacher', tab: null, view: 'wide', title: '면담', pattern: /^\/teacher\/interviews\/([\w-]+)$/, render: renderInterview },
   { section: 'teacher', tab: null, view: 'wide', title: '녹음 관리', pattern: /^\/teacher\/recordings$/, render: renderRecordings },
   { section: 'account', tab: null, title: '계정', pattern: /^\/account$/, render: renderAccount },
-  { section: 'teacher', tab: null, view: 'wide', title: '관리자', pattern: /^\/teacher\/admin$/, render: renderAdminUsers },
-  { section: 'teacher', tab: null, view: 'wide', title: '연결표', pattern: /^\/teacher\/admin\/links$/, render: renderAdminLinks },
-  { section: 'teacher', tab: null, view: 'wide', title: '연구 윤리 설정', pattern: /^\/teacher\/admin\/ethics$/, render: renderEthics },
+  { section: 'account', tab: null, title: '내 설정', pattern: /^\/settings(?:\/(account|display|privacy|help))?$/, render: renderSettings },
+  { section: 'teacher', tab: null, view: 'wide', title: '교사 설정', pattern: /^\/teacher\/settings(?:\/(sessions|research|practice|grading))?$/, render: renderTeacherSettings },
+  { section: 'teacher', tab: null, view: 'wide', title: '관리자 설정', pattern: /^\/admin(?:\/(users|links|ethics|tools|practice|notices|audit))?$/, render: renderAdmin },
+  { section: 'teacher', tab: null, view: 'wide', title: '관리자 설정', pattern: /^\/teacher\/admin(?:\/(links|ethics))?$/, render: (root, [tab]) => renderAdmin(root, [tab ?? 'users']) },
 ];
 
 const APP_TITLE = '증명 연습실';
@@ -101,6 +109,26 @@ function currentPath() {
   const hash = window.location.hash.replace(/^#/, '');
   return hash.startsWith('/') ? hash : '/';
 }
+
+/** 앱 위쪽 공지 (관리자가 올린 공지 중 내 역할에 맞고 기한이 지나지 않은 것, 닫으면 이 기기에서 숨김) */
+function drawNoticeBar(user) {
+  const bar = document.querySelector('[data-notice-bar]');
+  if (!bar) return;
+  const hidden = getPrefs().dismissedNotices;
+  const list = activeNotices(user?.role ?? null).filter((n) => !hidden.includes(n.id));
+  bar.innerHTML = list.map((n) => `<div class="notice-bar__item" role="status" data-notice-id="${escapeHtml(n.id)}">
+    <p><strong>${escapeHtml(n.title)}</strong>${n.body ? ` <span>${escapeHtml(n.body)}</span>` : ''}</p>
+    <button type="button" class="button button--ghost button--small" data-dismiss-notice aria-label="공지 닫기: ${escapeHtml(n.title)}">닫기</button>
+  </div>`).join('');
+  bar.hidden = !list.length;
+}
+
+document.addEventListener('click', (event) => {
+  const b = event.target.closest?.('[data-dismiss-notice]');
+  if (!b) return;
+  dismissNotice(b.closest('[data-notice-id]').dataset.noticeId);
+  drawNoticeBar(currentUser());
+});
 
 export function startRouter(root) {
   let cleanup = null;
@@ -144,10 +172,12 @@ export function startRouter(root) {
     document.title = route?.title ? `${route.title} - ${APP_TITLE}` : APP_TITLE;
     // 머리글의 계정 링크: 로그인했으면 이름, 아니면 "로그인"
     const chip = document.querySelector('[data-account-chip]');
+    const u = currentUser();
     if (chip) {
-      const u = currentUser();
       chip.textContent = u ? displayName(u) : '로그인';
+      chip.setAttribute('href', u ? '#/settings' : '#/account');
     }
+    drawNoticeBar(u);
     document.body.dataset.view = route?.view ?? 'app';
     document.querySelectorAll('[data-nav]').forEach((link) => {
       if (link.dataset.nav === route?.section) link.setAttribute('aria-current', 'page');

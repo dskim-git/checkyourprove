@@ -6,6 +6,7 @@
 export const TEST_FREE_NAVIGATION = true;
 
 export const SOLO_PASS_SCORE = 80;
+// 정답·예시 보기 시도 횟수와 통과 점수의 기본값. 실제 값은 state/practiceSettings.js(관리자 기본값 + 학급 설정)
 export const REVEAL_AFTER_TRIES = 3;
 
 export const LEVELS = [
@@ -62,7 +63,7 @@ export const LEVELS = [
     title: '나 혼자 증명하기',
     short: '혼자',
     summary: '도움 없이 증명을 완성해 제출하면 AI가 채점해 점수로 알려 줍니다. 스스로 보는 시험입니다.',
-    passRule: `${SOLO_PASS_SCORE}점 이상이면 통과`,
+    passRule: `통과 점수 이상이면 통과(기본 ${SOLO_PASS_SCORE}점, 선생님이 바꿀 수 있음)`,
     usesAi: true,
   },
 ];

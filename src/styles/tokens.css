@@ -50,3 +50,6 @@
   --appbar-h: 56px; --tabbar-h: 68px;
   --control-h: 52px; --control-h-s: 40px;
 }
+
+/* 내 설정 > 화면 > 대비 높이기: 흐린 글씨와 선을 진하게 (state/prefsStore.js) */
+html[data-contrast='high'] { --color-muted: oklch(32% 0.014 255); --color-ink-2: oklch(24% 0.014 255); --color-rule: oklch(62% 0.016 95); --color-edge: oklch(58% 0.04 88); }

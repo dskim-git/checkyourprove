@@ -1,7 +1,7 @@
 // 활동 5: AI와 한 단계씩 증명하기 (AI 점검 · 현재는 더미)
 // 학생이 한 단계를 쓰면 AI가 점검한다. 통과하면 증명에 차곡차곡 쌓이고, 아니면 고칠 방향을 안내한다.
 
-import { REVEAL_AFTER_TRIES } from '../../../data/levels.js';
+import { practiceSettings } from '../../../state/practiceSettings.js';
 import { stepText } from '../../../data/proofModel.js';
 import { buildStepCheckRequest } from '../../../services/aiRequests.js';
 import { requestStepCheck } from '../../../services/mockProofChecker.js';
@@ -55,7 +55,7 @@ export default {
         <div class="actions">
           <p class="save-status" data-save-status aria-live="polite"></p>
           ${triesNote(data.tries)}
-          ${data.tries >= REVEAL_AFTER_TRIES ? '<button type="button" class="button button--ghost" data-action="reveal">이 단계 예시 보기</button>' : ''}
+          ${data.tries >= practiceSettings().revealAfterTries ? '<button type="button" class="button button--ghost" data-action="reveal">이 단계 예시 보기</button>' : ''}
           <button type="button" class="button button--primary" data-action="check">AI에게 점검받기</button>
         </div>
       </div>`;

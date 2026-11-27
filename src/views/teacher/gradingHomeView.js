@@ -65,10 +65,7 @@ export function renderGradingHome(root) {
             <input type="checkbox" name="blind"${g.blind ? ' checked' : ''}>
             <span>블라인드 채점 <span class="meta">학생 이름과 단계를 가리고 채점자마다 정해진 무작위 순서로 보여 줍니다. 단계가 드러나는 추가 확인(옮겨 적기, 보완 여부)은 점수를 저장한 뒤에 열립니다.</span></span>
           </label>
-          <label class="check">
-            <input type="checkbox" name="aiAsRater"${g.aiAsRater ? ' checked' : ''}>
-            <span>AI를 보조 채점자로 쓰기 <span class="meta">켜면 연구 분석의 점수 출처에 "채점자 1과 AI 평균"이 생기고, 아래 일치도에 채점자와 AI 사이의 일치도가 더해집니다. 끄면 AI 채점은 참고로만 남습니다.</span></span>
-          </label>
+          <p class="meta">AI 보조 채점자: ${g.aiAsRater ? '켜짐(채점자와 AI의 일치도가 아래에 나옵니다)' : '꺼짐(AI 채점은 참고로만)'} · <a href="#/admin/tools">관리자 설정 &gt; 연구 도구</a>에서 바꿉니다.</p>
           <label class="check">
             <input type="checkbox" name="includeSamples"${g.includeSamples ? ' checked' : ''}>
             <span>예시 학생 포함 <span class="meta">화면 확인용 가상 학생 6명의 기록을 함께 보여 줍니다.</span></span>
@@ -234,7 +231,7 @@ export function renderGradingHome(root) {
     const form = event.target.closest('[data-grading-settings]');
     if (!form || event.target.matches('[data-rater-name]')) return;
     const data = new FormData(form);
-    updateGradingSettings({ currentRater: data.get('rater'), blind: data.get('blind') === 'on', includeSamples: data.get('includeSamples') === 'on', aiAsRater: data.get('aiAsRater') === 'on', sortBy: data.get('sortBy') ?? 'mixed' });
+    updateGradingSettings({ currentRater: data.get('rater'), blind: data.get('blind') === 'on', includeSamples: data.get('includeSamples') === 'on', sortBy: data.get('sortBy') ?? 'mixed' });
     draw();
     root.querySelector('[data-grading-status]').textContent = '설정을 저장했습니다.';
   };

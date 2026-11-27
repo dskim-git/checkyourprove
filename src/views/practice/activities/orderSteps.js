@@ -1,7 +1,7 @@
 // 활동 3: 증명 순서 맞추기 (AI 없이 자동 채점)
 // 끌어서 놓기 대신 위·아래 버튼으로 옮긴다. 키보드와 작은 화면에서도 같은 방식으로 쓸 수 있다.
 
-import { REVEAL_AFTER_TRIES } from '../../../data/levels.js';
+import { practiceSettings } from '../../../state/practiceSettings.js';
 import { stepText } from '../../../data/proofModel.js';
 import { escapeHtml } from '../../../ui/dom.js';
 import { mathText } from '../../../ui/mathText.js';
@@ -42,7 +42,7 @@ export default {
         <p class="feedback" aria-live="polite">${escapeHtml(message)}</p>
         ${done ? '' : `<div class="actions">
           ${triesNote(data.tries)}
-          ${data.tries >= REVEAL_AFTER_TRIES ? '<button type="button" class="button button--ghost" data-action="reveal">정답 보기</button>' : ''}
+          ${data.tries >= practiceSettings().revealAfterTries ? '<button type="button" class="button button--ghost" data-action="reveal">정답 보기</button>' : ''}
           <button type="button" class="button button--primary" data-action="check">순서 확인</button>
         </div>`}`;
     }

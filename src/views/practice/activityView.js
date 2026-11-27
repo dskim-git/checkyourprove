@@ -5,7 +5,7 @@ import { getMethod } from '../../data/methods.js';
 import { LEVELS, getLevel, levelIndex } from '../../data/levels.js';
 import { getProblem, problemsByMethod } from '../../data/problems/index.js';
 import { getOrCreateAttempt, saveAttempt, finishAttempt, restartAttempt, findAttempt } from '../../state/attemptStore.js';
-import { isCertified, isUnlocked } from '../../state/practiceProgress.js';
+import { aiBlocked, isCertified, isUnlocked } from '../../state/practiceProgress.js';
 import { escapeHtml } from '../../ui/dom.js';
 import { icons } from '../../ui/icons.js';
 import { breadcrumb, notice, propositionBlock, renderNotFound } from '../../ui/components.js';
@@ -41,7 +41,7 @@ export function renderActivity(root, [methodId, levelId, problemId]) {
     root.innerHTML = `<div class="page">
       ${breadcrumb(crumbs)}
       <h1>${escapeHtml(level.title)}</h1>
-      ${notice('lock', '아직 열리지 않은 단계입니다', '이전 단계를 먼저 인증하세요.')}
+      ${aiBlocked(level) ? notice('lock', '지금은 AI를 쓰는 활동이 잠겨 있어요', '선생님이 증명 연습에서 AI 쓰기를 꺼 두었습니다.') : notice('lock', '아직 열리지 않은 단계입니다', '이전 단계를 먼저 인증하세요.')}
       <p><a class="button button--secondary" href="${practiceHref(method.id)}">활동 단계 목록으로</a></p>
     </div>`;
     return null;
@@ -55,7 +55,7 @@ export function renderActivity(root, [methodId, levelId, problemId]) {
 
   /** 통과 축하: 종이 꽃가루가 화면 위에서 흩날린다(장식, 화면 읽기 프로그램에는 숨김). 동작 줄이기 설정이면 생략한다. */
   function celebrate() {
-    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    if (document.documentElement.dataset.motion === 'reduce' || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
     confetti?.remove();
     const pieces = Array.from({ length: 42 }, (_, i) => {
       const x = (i * 23.7) % 100;

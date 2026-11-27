@@ -15,6 +15,7 @@
 // 연구 기록은 세션(학급 × 회차)마다 따로 저장한다. 인자 없이 부르면 진행 중 세션의 기록이다(state/sessionStore.js).
 // TODO: Firestore 연동 시 학생별 문서로 옮기고, 제출 뒤 수정 금지와 단계 열림 여부를 보안 규칙·서버에서 확인한다.
 
+import { getPrefs } from './prefsStore.js';
 import { readJson, writeJson, removeKey } from './storage.js';
 import { PROOF_HELP_MIN, transcriptMatch, transcriptOk } from '../services/proofHelp.js';
 import { hasInk, inkEnough } from './inkModel.js';
@@ -195,6 +196,9 @@ export function inputModeFor(item, field) {
   const ink = hasInk(inkOf(item, field));
   if (ink && !text) return 'pen';
   if (text && !ink) return 'keyboard';
+  // 내 설정의 처음 입력 방식("마지막에 쓴 방식"이면 이 기록에서 마지막으로 쓴 방식)
+  const pref = getPrefs().inputMode;
+  if (pref === 'keyboard' || pref === 'pen') return pref;
   return getResearch().inputPref ?? 'keyboard';
 }
 

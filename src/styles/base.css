@@ -38,3 +38,7 @@ code, pre { font-family: var(--font-outlier); font-size: var(--text-sm); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
+/* 내 설정(화면): 움직임 줄이기, 글자 크기, 대비 높이기 — <html data-motion|data-font-scale|data-contrast> (state/prefsStore.js) */
+html[data-motion='reduce'] *, html[data-motion='reduce'] *::before, html[data-motion='reduce'] *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+html[data-font-scale='large'] { font-size: 112.5%; }
+html[data-font-scale='xlarge'] { font-size: 125%; }

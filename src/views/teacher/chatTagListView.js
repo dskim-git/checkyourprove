@@ -24,7 +24,7 @@ export function renderChatTagList(root) {
         <label class="check"><input type="checkbox" name="remove"><span>이 태그 지우기 <span class="meta">이미 붙인 기록은 남습니다.</span></span></label>
       </fieldset>`).join('');
     root.innerHTML = `<div class="page page--teacher">
-      ${breadcrumb([{ label: '교사 화면', href: '#/teacher' }, { label: 'AI 대화 태그', href: '#/teacher/chats' }, { label: '태그 목록' }])}
+      ${breadcrumb([{ label: '관리자 설정', href: '#/admin/tools' }, { label: 'AI 대화 태그 목록' }])}
       <header class="page-intro">
         <h1>대화 태그 목록</h1>
         <p class="lead">2단계 AI 대화에 붙이는 태그입니다. 이름과 설명을 고치고, 연구에 필요한 태그를 추가할 수 있습니다. 설명은 태그를 붙이는 화면에서 태그에 마우스를 올리면 보입니다.</p>

@@ -2,7 +2,9 @@
 // 보관 기한(연구 종료일) 정하기와 알림, 모든 면담 녹음의 목록(학생·세션·녹음 시각·길이·크기), 듣기·내려받기·지우기,
 // 모두 내려받기, 기한이 지나면 모두 지우기. 자동으로 지우지 않는다(사용자 결정 2026-11-27: 기한 알림 + 교사가 직접 삭제).
 
-import { retentionUntil, setRetentionUntil } from '../../state/interviewStore.js';
+import { retentionUntil } from '../../state/interviewStore.js';
+import { logAction } from '../../state/adminStore.js';
+import { currentUser, displayName } from '../../state/accountStore.js';
 import {
   deleteAllRecordings, deleteRecording, formatDuration, formatSize, listRecordings, recordingFileName, recordingsInMemory, retentionState,
 } from '../../state/recordingStore.js';
@@ -82,10 +84,8 @@ export function renderRecordings(root) {
       ${notice('warn', '프로토타입 상태입니다', `녹음 파일은 이 브라우저(이 기기)에만 저장됩니다. 다른 기기에서는 보이지 않고, 브라우저 데이터를 지우면 함께 사라집니다. 서버를 연결하면 교사만 볼 수 있는 저장소로 옮깁니다.${inMemory ? ' 지금 이 브라우저는 파일을 오래 저장할 수 없어 이 탭에만 두고 있습니다. 새로 고치기 전에 내려받으세요.' : ''}`)}
       <section class="panel" aria-labelledby="rec-retention">
         <h2 id="rec-retention" class="section-title">보관 기한</h2>
-        <form class="rec-retention" data-retention-form novalidate>
-          <div class="field field--inline"><label class="field__label" for="rec-until">연구 종료일 (이날까지 보관)</label><input type="date" class="field__input" id="rec-until" name="until" value="${escapeHtml(until ?? '')}"></div>
-        </form>
-        ${st.state === 'none' ? '<p class="meta">보관 기한을 정하면 14일 전부터 교사 화면에 알림이 나옵니다. 자동으로 지우지는 않습니다.</p>'
+        <p class="rec-until">보관 기한: <strong data-rec-until>${until ? escapeHtml(until) : '정하지 않음'}</strong> <span class="meta">· <a href="#/admin/ethics">관리자 설정 &gt; 연구 윤리</a>에서 정합니다.</span></p>
+        ${st.state === 'none' ? '<p class="meta">관리자가 보관 기한을 정하면 14일 전부터 교사 화면에 알림이 나옵니다. 자동으로 지우지는 않습니다.</p>'
           : st.state === 'over' ? notice('warn', '보관 기한이 지났습니다', list.length ? `녹음 ${list.length}개가 남아 있습니다. 필요한 파일을 내려받은 뒤 지우세요.` : '남은 녹음이 없습니다.')
             : st.state === 'soon' ? notice('eye', `보관 기한이 ${st.days}일 남았습니다`, '기한이 지나기 전에 필요한 파일을 내려받아 두세요.')
               : `<p class="meta">보관 기한까지 ${st.days}일 남았습니다. 14일 전부터 교사 화면에 알림이 나옵니다.</p>`}
@@ -118,12 +118,6 @@ export function renderRecordings(root) {
     draw(focus);
   }
 
-  const onChange = (event) => {
-    if (event.target.name !== 'until') return;
-    setRetentionUntil(event.target.value);
-    status = event.target.value ? `보관 기한을 ${event.target.value}(으)로 정했습니다.` : '보관 기한을 지웠습니다.';
-    draw('#rec-until');
-  };
 
   const onClick = async (event) => {
     if (handleAudioSkip(event)) return;
@@ -139,6 +133,7 @@ export function renderRecordings(root) {
     if (act === 'delete-all') {
       if (!window.confirm(`녹음 ${list.length}개를 모두 지울까요? 내려받지 않은 파일은 되살릴 수 없습니다.`)) return;
       await deleteAllRecordings();
+      logAction('녹음 모두 지움', `${list.length}개`, currentUser() ? displayName(currentUser()) : '미리보기');
       status = '녹음을 모두 지웠습니다.';
       return load('#rec-list');
     }
@@ -153,12 +148,10 @@ export function renderRecordings(root) {
 
   draw();
   load();
-  root.addEventListener('change', onChange);
   root.addEventListener('click', onClick);
   return () => {
     alive = false;
     revoke();
-    root.removeEventListener('change', onChange);
     root.removeEventListener('click', onClick);
   };
 }

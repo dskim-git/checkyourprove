@@ -34,7 +34,7 @@ const tenth = (v) => (v / 10).toFixed(1).replace('-', '−');
 const signed = (v) => (v < 0 ? `(${tenth(v)})` : tenth(v));
 const sumOf = (w, x) => w.reduce((s, wi, i) => s + wi * x[i], 0);
 const fire = (w, x) => (sumOf(w, x) >= THRESHOLD ? 1 : 0);
-const reduceMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+const reduceMotion = () => document.documentElement.dataset.motion === 'reduce' || (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
 
 // ── 퍼셉트론 그림 (s1, s2 공용) ──
 

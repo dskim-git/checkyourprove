@@ -20,6 +20,13 @@
 //              deleteBy('YYYY-MM-DD', IRB를 받지 않을 때 관리자가 정한 자료 삭제일) }
 
 import { readJson, writeJson } from './storage.js';
+import { getAdmin, logAction } from './adminStore.js';
+
+/** 관리 기록에 남길 "한 사람" */
+const actor = () => {
+  const u = currentUser();
+  return u ? (u.profile?.name || u.email || u.researchId) : '미리보기';
+};
 
 const STORAGE_KEY = 'checkyourprove.prototype.accounts.v1';
 const ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'; // 헷갈리는 0·O·1·I 뺌
@@ -131,10 +138,12 @@ export function submitProfile(uid, profile) {
     ? { kind: 'student', year: Number(profile.year), studentNo: norm(profile.studentNo), name: String(profile.name ?? '').trim() }
     : { kind: 'guest', name: String(profile.name ?? '').trim(), affiliation: String(profile.affiliation ?? '').trim(), reason: String(profile.reason ?? '').trim() };
   if (!p.name || (p.kind === 'student' && (!p.year || !/^\d{4,6}$/.test(p.studentNo))) || (p.kind === 'guest' && (!p.affiliation || !p.reason))) return null;
+  // 가입 규칙(관리자 설정): 일반인 가입을 받지 않으면 거절
+  if (p.kind === 'guest' && !getAdmin().signup.allowGuests && u.role !== 'admin' && u.role !== 'teacher') return null;
   u.profile = p;
   u.submittedAt = now();
   if (u.role !== 'admin' && u.role !== 'teacher') u.role = p.kind === 'student' ? 'student' : 'guest';
-  if (p.kind === 'student' && rosterMatch(p)) {
+  if (p.kind === 'student' && getAdmin().signup.rosterAutoApprove && rosterMatch(p)) {
     Object.assign(u, { status: 'approved', approvedAt: now(), approvedBy: 'roster', autoApproved: true });
   } else if (u.status !== 'approved') {
     u.status = 'pending';
@@ -148,12 +157,16 @@ export function approveUsers(uids, by = currentUser()?.uid ?? 'admin') {
     const u = findUser(uid);
     if (u && u.profile) Object.assign(u, { status: 'approved', approvedAt: now(), approvedBy: by, autoApproved: false });
   });
+  if (uids.length) logAction('가입 승인', uids.map((id) => findUser(id)?.researchId).join(', '), actor());
   return save();
 }
 
 export function rejectUser(uid) {
   const u = findUser(uid);
-  if (u) u.status = 'rejected';
+  if (u) {
+    u.status = 'rejected';
+    logAction('가입 거절', u.researchId, actor());
+  }
   return save();
 }
 
@@ -162,7 +175,9 @@ export function setRole(uid, role) {
   if (!u || !ROLES.some((r) => r.id === role)) return false;
   // 관리자는 한 명 이상 남아야 한다
   if (u.role === 'admin' && role !== 'admin' && getAccounts().users.filter((x) => x.role === 'admin').length === 1) return false;
+  const before = u.role;
   u.role = role;
+  logAction('역할 변경', `${u.researchId} ${roleLabel(before)} → ${roleLabel(role)}`, actor());
   return save();
 }
 
@@ -200,9 +215,10 @@ export function addRoster(text, defaultYear) {
     d.roster.push({ year: Number(year), studentNo, name, addedAt: now() });
     added += 1;
   });
-  // 이미 승인 대기 중인 학생 중 명단과 맞는 학생은 승인
+  if (added) logAction('학생 명단 더함', `${added}명`, actor());
+  // 이미 승인 대기 중인 학생 중 명단과 맞는 학생은 승인(명단 자동 승인을 켰을 때)
   let approved = 0;
-  d.users.filter((u) => u.status === 'pending' && u.profile?.kind === 'student' && rosterMatch(u.profile)).forEach((u) => {
+  if (getAdmin().signup.rosterAutoApprove) d.users.filter((u) => u.status === 'pending' && u.profile?.kind === 'student' && rosterMatch(u.profile)).forEach((u) => {
     Object.assign(u, { status: 'approved', approvedAt: now(), approvedBy: 'roster', autoApproved: true });
     approved += 1;
   });
@@ -237,6 +253,7 @@ export function unlinkUser(uid) {
   u.profile = u.profile ? { kind: u.profile.kind, name: '', ...(u.profile.kind === 'student' ? { year: u.profile.year, studentNo: '' } : { affiliation: '', reason: '' }) } : null;
   u.email = '';
   u.unlinkedAt = now();
+  logAction('연결 정보 지움', u.researchId, actor());
   return save();
 }
 

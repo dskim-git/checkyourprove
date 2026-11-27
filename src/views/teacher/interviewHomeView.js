@@ -2,10 +2,10 @@
 // 보기 설정(점수 출처·예시 학생·연구 동의·포함할 세션, 연구 분석과 같은 설정), 후보 기준값, 유형별 후보·선정 수,
 // 면담 대상 목록(상태·일시·동의, CSV), 추천 후보(학생별로 묶은 근거, 교사가 골라 선정), 유형 6 직접 지정(사후 설문 서술형 참고).
 
-import { THRESHOLD_FIELDS, interviewType } from '../../data/interview.js';
+import { interviewType } from '../../data/interview.js';
 import { interviewCsv, postSurveyTexts, typeCounts } from '../../services/interviewCandidates.js';
 import { getGrading, updateGradingSettings } from '../../state/gradingStore.js';
-import { interviewThresholds, resetThresholds, saveThresholds, selectionOf as getSelected, selectStudent, unselectStudent } from '../../state/interviewStore.js';
+import { interviewThresholds, selectionOf as getSelected, selectStudent, unselectStudent } from '../../state/interviewStore.js';
 import { className, sessionLabel } from '../../state/sessionStore.js';
 import { breadcrumb, notice } from '../../ui/components.js';
 import { statTiles } from '../../ui/charts.js';
@@ -55,13 +55,7 @@ export function renderInterviewHome(root) {
 
       <section class="panel" aria-labelledby="iv-criteria">
         <h2 id="iv-criteria" class="section-title">후보 기준</h2>
-        <p class="meta">10점 만점 점수 기준입니다. 값을 바꾸면 바로 다시 계산합니다.</p>
-        <form class="iv-criteria" data-threshold-form novalidate>
-          ${THRESHOLD_FIELDS.map((f) => `<div class="field iv-criteria__field">
-            <label class="field__label" for="th-${f.id}">${escapeHtml(f.label)} <span class="field__req">${f.types.map((t) => `유형 ${t.slice(1)}`).join(', ')}</span></label>
-            <span class="iv-criteria__input"><input type="number" class="field__input" id="th-${f.id}" name="${f.id}" value="${th[f.id]}" min="${f.min}" max="${f.max}" step="${f.step}" inputmode="decimal"><span class="meta">${escapeHtml(f.unit)}</span></span>
-          </div>`).join('')}
-        </form>
+        <p class="meta">10점 만점 점수 기준입니다. 기준값은 <a href="#/admin/tools">관리자 설정 &gt; 연구 도구</a>에서 바꿉니다.</p>
         <details class="ref-card">
           <summary>유형별 판정 규칙</summary>
           <ul class="answer-list">
@@ -73,7 +67,6 @@ export function renderInterviewHome(root) {
             <li><strong>유형 6</strong> 추천하지 않습니다. 아래에서 교사가 직접 지정합니다.</li>
           </ul>
         </details>
-        <div class="actions actions--start"><button type="button" class="button button--ghost button--small" data-action="reset-th">기본값으로 (보통 기준)</button></div>
       </section>
 
       <section class="panel" aria-labelledby="iv-summary">
@@ -185,14 +178,7 @@ export function renderInterviewHome(root) {
     if (t.name === 'analysisSource') updateGradingSettings({ analysisSource: t.value });
     else if (t.name === 'includeSamples') updateGradingSettings({ includeSamples: t.checked });
     else if (t.name === 'includeNonConsent') updateGradingSettings({ includeNonConsent: t.checked });
-    else if (t.closest('[data-threshold-form]')) {
-      const v = Number(t.value);
-      if (t.value === '' || Number.isNaN(v)) return;
-      saveThresholds({ [t.name]: Math.min(Number(t.max), Math.max(Number(t.min), v)) });
-      redraw();
-      root.querySelector(`[name="${t.name}"]`)?.focus();
-      return;
-    } else if (t.name === 'ivFilter') {
+    else if (t.name === 'ivFilter') {
       filter = t.value;
       redraw();
       root.querySelector(`input[name="ivFilter"][value="${filter}"]`)?.focus();
@@ -206,10 +192,6 @@ export function renderInterviewHome(root) {
     const btn = event.target.closest('[data-action]');
     if (!btn) return;
     const action = btn.dataset.action;
-    if (action === 'reset-th') {
-      resetThresholds();
-      return redraw();
-    }
     if (action === 'csv') {
       const { all } = interviewRows();
       const sel = all.filter((s) => getSelected(s.id)).map((s) => interviewRow(s));

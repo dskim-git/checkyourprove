@@ -2,12 +2,12 @@
 
 import { LEVELS, TEST_FREE_NAVIGATION } from '../data/levels.js';
 import { problemsByMethod } from '../data/problems/index.js';
-import { getClassroom } from './classroomStore.js';
+import { practiceSettings } from './practiceSettings.js';
 import { findAttempt } from './attemptStore.js';
 
 export function requiredClears(methodId) {
   const total = problemsByMethod(methodId).length;
-  return Math.min(getClassroom().requiredClears, total);
+  return Math.min(practiceSettings().requiredClears, total);
 }
 
 /** 명제 하나의 이 활동 단계 상태 */
@@ -32,8 +32,12 @@ export function isCertified(methodId, levelId) {
   return clearedCount(methodId, levelId) >= requiredClears(methodId);
 }
 
+/** AI를 쓰는 활동인데 연습 모드 AI가 꺼져 있는가 */
+export const aiBlocked = (level) => Boolean(level?.usesAi) && !practiceSettings().practiceAi;
+
 export function isUnlocked(methodId, index) {
-  if (index === 0 || TEST_FREE_NAVIGATION || getClassroom().unlockAll) return true;
+  if (aiBlocked(LEVELS[index])) return false;
+  if (index === 0 || TEST_FREE_NAVIGATION || practiceSettings().unlockAll) return true;
   return isCertified(methodId, LEVELS[index - 1].id);
 }
 
@@ -49,6 +53,7 @@ export function levelStates(methodId) {
       unlocked,
       cleared: clearedCount(methodId, level.id),
       required: requiredClears(methodId),
+      aiOff: aiBlocked(level),
       state: certified ? 'certified' : unlocked ? 'open' : 'locked',
     };
   });

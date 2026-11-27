@@ -170,7 +170,7 @@ export function renderSurveyEdit(root, [id]) {
 
   function draw(status = '', focus = null) {
     root.innerHTML = `<div class="page page--teacher page--survey-edit">
-      ${breadcrumb([{ label: '교사 화면', href: '#/teacher' }, { label: '설문과 연구 동의', href: '#/teacher/surveys' }, { label: survey.title }])}
+      ${breadcrumb([{ label: '설문 문항', href: '#/teacher/surveys' }, { label: survey.title }])}
       <header class="page-intro"><h1>${escapeHtml(survey.title)}</h1></header>
       ${locked
         ? `${notice('lock', '잠긴 설문입니다', `${formatDateTime(survey.lockedAt)}에 학생 응답이 시작되어 문항을 고칠 수 없습니다. 고치려면 설문 목록에서 복사해 새 설문을 만드세요.`)}

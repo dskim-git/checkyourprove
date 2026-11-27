@@ -30,7 +30,7 @@ export function renderRubric(root) {
       </fieldset>`;
     }).join('');
     root.innerHTML = `<div class="page page--teacher">
-      ${breadcrumb([{ label: '교사 화면', href: '#/teacher' }, { label: '증명 채점', href: '#/teacher/grading' }, { label: '루브릭' }])}
+      ${breadcrumb([{ label: '관리자 설정', href: '#/admin/tools' }, { label: '채점 루브릭' }])}
       <header class="page-intro">
         <h1>채점 루브릭</h1>
         <p class="lead">1·2·4단계 증명을 같은 기준으로 채점합니다. 기준 이름과 점수 설명을 고칠 수 있지만, 점수 범위와 합계(${RUBRIC_TOTAL}점)는 바꿀 수 없습니다.</p>
