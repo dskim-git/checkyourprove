@@ -47,6 +47,7 @@ AI가 학생 대신 답을 완성해 주는 도구가 아닙니다. 모든 설�
 - **인증**: Firebase Authentication(Google 제공자, 팝업). 4-1 연결함. Firebase 프로젝트 `goprove-9d482`, Firestore 위치 asia-northeast3(서울)
 - **데이터베이스**: Cloud Firestore(오프라인 캐시 `persistentLocalCache`, 로그아웃하면 이 기기 캐시 지움). 4-1은 계정·역할·명단·연결표·설정, 나머지는 4-2·4-3
 - **라이브러리(2026-11-27 사용자 허락)**: `firebase`(앱, firebase 모드에서만 따로 나눈 파일로 받음, gzip 약 187KB), `firebase-admin`(서버 함수 전용). Google Analytics는 쓰지 않습니다(학생 사용 기록이 밖으로 나가지 않게).
+- **서버 함수 실행 환경(2026-11-27 배포에서 확인)**: `package.json`의 `engines.node`를 `24.x`로 고정합니다(firebase-admin 14는 Node 22 이상). Vercel은 `require()`로 ES 모듈을 불러오지 못해, `overrides`로 `jwks-rsa` 아래의 `jose`를 CommonJS판이 있는 5.10.0으로 고정했습니다(firebase-admin을 올릴 때 다시 확인). 서버 라이브러리는 요청 안에서 불러와, 실패하면 원인을 오류 메시지로 돌려줍니다.
 - **AI**: OpenRouter API. 반드시 서버 측 엔드포인트를 거쳐 호출합니다.
 - **배포**: Vercel (2026-11-26 Netlify에서 변경. 이유: Netlify는 배포할 때마다 크레딧이 차감되어 잦은 커밋에 불리함)
 - **서버 측 엔드포인트**: Vercel Functions(프로젝트 루트의 `api/` 폴더, `firebase-admin`으로 ID 토큰 검증·사용자 지정 클레임·서버만 쓰는 기록). 2026-11-27 사용자 결정. 이유: 이미 Vercel로 배포하고, Firebase Cloud Functions와 달리 Blaze 요금제 없이 돌아가며, 5단계 OpenRouter 중계도 같은 곳에 둡니다. 서비스 계정 키는 Vercel 환경 변수(민감 값)로만 둡니다.
