@@ -952,7 +952,13 @@ a.task-row:focus-visible { outline: 3px solid var(--color-focus); outline-offset
 .survey-q__num { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: var(--radius-pill); background: var(--color-paper-3); font-size: var(--text-sm); }
 .survey-q__answer { padding-inline-start: calc(28px + var(--space-xs)); color: var(--color-ink-2); white-space: pre-wrap; }
 .survey-progress { color: var(--color-muted); font-size: var(--text-sm); }
-.scale-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--space-2xs); }
+.scale-row { display: grid; grid-template-columns: repeat(var(--points, 5), minmax(0, 1fr)); gap: var(--space-2xs); }
+/* 6·7점 척도는 폰에서 칸이 좁아지므로 한 줄에 하나씩 */
+@media (max-width: 39.99rem) {
+  .scale-row--many { grid-template-columns: minmax(0, 1fr); }
+  .scale-row--many .pick--scale > span { flex-direction: row; align-items: center; justify-content: flex-start; gap: var(--space-sm); min-height: 48px; padding-inline: var(--space-md); text-align: start; }
+  .scale-row--many .pick--scale span span { height: auto; font-size: var(--text-sm); }
+}
 .pick--scale { display: grid; }
 .pick--scale span { height: 100%; box-sizing: border-box; flex-direction: column; justify-content: center; gap: var(--space-3xs); width: 100%; min-height: 64px; padding: var(--space-xs) var(--space-2xs); text-align: center; font-size: var(--text-xs); }
 .pick--scale span span { display: block; min-height: 0; margin: 0; padding: 0; background: none; box-shadow: none; font-weight: var(--body-weight); }
@@ -1538,3 +1544,41 @@ button.pc-in:focus-visible { outline: 3px solid var(--color-focus); outline-offs
 @media (min-width: 56rem) {
   body[data-view='wide'] .iv-layout { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); }
 }
+
+/* ── 교사: 설문 고치기의 평가도구 기능 (구현 7) ─────── */
+.sv-section { padding-top: var(--space-md); border-top: var(--rule-hair) solid var(--color-rule); }
+.sv-inst { display: grid; gap: var(--space-sm); }
+.sv-inst .field:not(.sv-inst__long) .field__input { max-width: 36rem; }
+.sv-labels, .sv-domains { display: grid; gap: var(--space-xs); margin: 0; padding: 0; list-style: none; }
+.sv-labels li { display: flex; align-items: center; gap: var(--space-sm); }
+.sv-labels__n { display: inline-grid; flex: none; place-items: center; width: 2rem; height: 2rem; border-radius: var(--radius-pill); background: var(--color-paper-2); font-weight: var(--display-weight); }
+.sv-labels .field__input { max-width: 22rem; }
+.sv-domains li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-xs) var(--space-sm); }
+.sv-domains .field__input { flex: 1 1 14rem; max-width: 26rem; }
+.sv-source__grid { display: grid; align-items: start; gap: var(--space-sm); padding-top: var(--space-xs); }
+.sv-preview { display: grid; gap: var(--space-sm); padding: var(--space-md); border-radius: var(--radius-card); background: var(--grain), var(--color-sugar-soft); }
+.sv-preview .grade-table td.sv-preview__text { min-width: 16rem; white-space: normal; }
+@media (min-width: 40rem) {
+  .sv-source__grid { grid-template-columns: 8rem minmax(0, 1fr); }
+}
+
+/* ── 교사: 면담 녹음과 녹음 관리 (구현 7) ─────── */
+.rec { display: grid; gap: var(--space-sm); }
+.rec__live { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-xs) var(--space-sm); padding: var(--space-sm) var(--space-md); border-radius: var(--radius-stock); background: var(--color-paper-2); }
+.rec__live.is-on { background: var(--color-coral-soft); color: var(--color-coral-deep); }
+.rec__live .actions { flex-basis: 100%; }
+.rec__dot { width: 0.75rem; height: 0.75rem; border-radius: var(--radius-pill); background: var(--color-muted); }
+.rec__live.is-on .rec__dot { background: var(--color-coral-deep); animation: rec-blink 1.2s steps(2, jump-none) infinite; }
+@keyframes rec-blink { 50% { opacity: 0.25; } }
+@media (prefers-reduced-motion: reduce) { .rec__live.is-on .rec__dot { animation: none; } }
+.rec__time { font-size: var(--text-lg); font-weight: var(--display-weight); }
+.rec__list { display: grid; gap: var(--space-sm); margin: 0; padding: 0; list-style: none; }
+.rec__item { display: grid; gap: var(--space-xs); padding-bottom: var(--space-sm); border-bottom: var(--rule-hair) solid var(--color-rule); }
+.rec__meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2xs) var(--space-sm); margin: 0; }
+.rec__audio { width: 100%; max-width: 28rem; height: 40px; }
+.rec__audio--row { width: 12rem; }
+.rec__row-actions { display: inline-flex; gap: var(--space-2xs); }
+.rec-alert { display: grid; gap: var(--space-xs); justify-items: start; }
+.page--recordings .grade-table td { white-space: normal; }
+.page--recordings .rec__row-actions { flex-wrap: wrap; }
+.page--recordings .grade-table tbody th[scope='row'] { position: sticky; left: 0; z-index: var(--z-base); background: var(--color-card); }

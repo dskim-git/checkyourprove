@@ -7,7 +7,7 @@ import {
 } from '../../data/rubric.js';
 import { CATEGORY_LABELS } from '../../services/researchGuardrails.js';
 import { activeChatTags, activeRubric, getGrading } from '../../state/gradingStore.js';
-import { conversationKey, targetKey } from '../../state/researchRoster.js';
+import { conversationKey, readingFor, targetKey } from '../../state/researchRoster.js';
 import { escapeHtml, formatDateTime, formatTime } from '../../ui/dom.js';
 import { mountInkViews } from '../../ui/inkCanvas.js';
 import { openModal } from '../../ui/modal.js';
@@ -66,7 +66,10 @@ export function openGradePopup(student, stage, problemId, problem) {
       <section class="grade-sub" aria-label="채점한 증명">
         <h3 class="grade-sub__title">증명 <span class="meta">(고른 증명법: ${escapeHtml(methodOptionLabel(chosen) || '–')})</span></h3>
         ${readProofInk(item?.[def.field], item?.ink?.[def.field], `${stage}|${problemId}|${def.field}`)}
-        ${item?.inkReading?.[def.field] ? `<p class="meta">AI가 읽은 글${item.inkReading[def.field].source === 'sample' ? '(예시)' : ''}</p><div class="proof-text">${escapeHtml(item.inkReading[def.field].text)}</div>` : ''}
+        ${(() => {
+          const rd = readingFor(student.id, stage, problemId, item, def.field);
+          return rd ? `<p class="meta">AI가 읽은 글${rd.source === 'sample' ? '(예시)' : ''}${rd.edited ? `, ${escapeHtml(rd.edited.by)}이(가) 고침` : ''}</p><div class="proof-text">${escapeHtml(rd.text)}</div>` : '';
+        })()}
       </section>
       <section class="grade-sub" aria-label="루브릭 점수">
         <h3 class="grade-sub__title">루브릭 점수</h3>

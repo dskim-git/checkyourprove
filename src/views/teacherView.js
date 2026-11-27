@@ -21,6 +21,7 @@ import { escapeHtml, formatDateTime, formatTime } from '../ui/dom.js';
 import { breadcrumb, notice } from '../ui/components.js';
 import { formatActive } from './research/stageView.js';
 import { PROOF_HELP_MIN } from '../services/proofHelp.js';
+import { fillRetentionAlert } from './teacher/recordingsView.js';
 
 export function renderTeacher(root) {
   let sessionStatus = '';
@@ -36,6 +37,7 @@ export function renderTeacher(root) {
     </header>
 
     ${notice('warn', '프로토타입 상태입니다', '교사 권한 확인, 실제 학생 데이터, 서버 저장은 아직 연결되지 않았습니다. 설정은 이 브라우저에만 저장되며, 아래 학생 기록은 모두 예시 데이터입니다.')}
+    <div data-retention-alert></div>
 
     ${sessionPanel(sessionStatus)}
 
@@ -65,6 +67,7 @@ export function renderTeacher(root) {
         <a class="button button--secondary" href="#/teacher/chats">AI 대화 태그</a>
         <a class="button button--secondary" href="#/teacher/analysis">연구 분석</a>
         <a class="button button--secondary" href="#/teacher/interviews">면담</a>
+        <a class="button button--secondary" href="#/teacher/recordings">녹음 관리</a>
         <a class="button button--secondary" href="#/teacher/rubric">채점 루브릭</a>
         <a class="button button--secondary" href="#/teacher/surveys">설문과 연구 동의</a>
         <a class="button button--secondary" href="#/teacher/principle">원리 활동 진행</a>
@@ -160,6 +163,7 @@ export function renderTeacher(root) {
   };
 
   draw();
+  fillRetentionAlert(root);
   root.addEventListener('change', onChange);
   root.addEventListener('submit', onSubmit);
   root.addEventListener('click', onClick);

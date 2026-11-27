@@ -20,6 +20,7 @@ import { statementHtml } from '../../ui/mathText.js';
 import { SCORE_SOURCES } from '../../services/analysis.js';
 import { sourceOf } from './analysisHomeView.js';
 import { interviewRow, interviewRows, matchList, statusChip, typeChip } from './interviewParts.js';
+import { createRecorder } from './interviewRecorder.js';
 
 const fmt = (v) => (v == null ? '–' : Number.isInteger(v) ? String(v) : Number(v).toFixed(1));
 const methodName = (id, other = '') => (id === 'other' ? `기타${other ? `(${other})` : ''}` : methodOptionLabel(id) || '–');
@@ -39,6 +40,15 @@ export function renderInterview(root, [studentId]) {
     return null;
   }
   let status = '';
+  // 녹음기는 다시 그려도 이어지도록 화면 밖에 둔다
+  const recorder = createRecorder({
+    student,
+    sessionLabel: sessionLabel(student.session),
+    allowed: () => {
+      const r = recordOf(student.id);
+      return Boolean(selectionOf(student.id) && consentComplete(r) && r?.consent?.recording);
+    },
+  });
 
   const autoQuestions = (row, types) => interviewQuestions(row.a, row.matches, types, { student });
 
@@ -81,6 +91,7 @@ export function renderInterview(root, [studentId]) {
         </div>
       </div>
     </div>`;
+    recorder.attach(root.querySelector('[data-recorder]'));
     if (focus) root.querySelector(focus)?.focus();
   };
 
@@ -178,6 +189,10 @@ export function renderInterview(root, [studentId]) {
           <label class="check"><input type="checkbox" name="consent" value="${c.id}"${r.consent?.[c.id] ? ' checked' : ''}><span>${escapeHtml(c.label)}${c.required ? ' <span class="field__req">필수</span>' : ''}${c.help ? ` <span class="meta">${escapeHtml(c.help)}</span>` : ''}</span></label>
           <input type="date" class="field__input iv-consent__date" name="consentDate" data-consent="${c.id}" value="${escapeHtml(r.consent?.[c.id] ?? '')}" aria-label="${escapeHtml(c.label)} 받은 날짜"${r.consent?.[c.id] ? '' : ' disabled'}>
         </div>`).join('')}</div>
+      </section>
+      <section class="panel iv-box" aria-labelledby="iv-rec">
+        <h2 id="iv-rec" class="section-title">면담 녹음</h2>
+        <div class="rec" data-recorder></div>
       </section>
       <section class="panel iv-box" aria-labelledby="iv-info">
         <h2 id="iv-info" class="section-title">면담 정보</h2>
@@ -345,6 +360,7 @@ export function renderInterview(root, [studentId]) {
   root.addEventListener('change', onChange);
   root.addEventListener('click', onClick);
   return () => {
+    recorder.dispose();
     root.removeEventListener('input', onInput);
     root.removeEventListener('change', onChange);
     root.removeEventListener('click', onClick);

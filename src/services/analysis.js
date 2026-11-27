@@ -6,7 +6,7 @@ import { CHECKLIST_NONE, REVISION_CHECKLIST, methodOptionLabel } from '../data/r
 import { DEFAULT_RUBRIC, GRADED_STAGES, RUBRIC_TOTAL } from '../data/rubric.js';
 import { inkStats } from '../state/inkModel.js';
 import { activeChatTags, getGrading } from '../state/gradingStore.js';
-import { conversationKey, targetKey } from '../state/researchRoster.js';
+import { conversationKey, readingFor, targetKey } from '../state/researchRoster.js';
 import { className } from '../state/sessionStore.js';
 import { CONSENT_LABELS, consentStatus } from './surveyAnalysis.js';
 import { principleScore } from './principleAnalysis.js';
@@ -46,9 +46,8 @@ export function correlation(pairs) {
 }
 
 /** 채점할 글 (필기는 AI가 읽은 글) */
-function proofTextOf(item, field) {
+function proofTextOf(item, field, reading = item?.inkReading?.[field]?.text ?? '') {
   const text = String(item?.[field] ?? '').trim();
-  const reading = item?.inkReading?.[field]?.text ?? '';
   return [text, inkStats(item?.ink?.[field]).strokes ? reading : ''].filter(Boolean).join('\n');
 }
 
@@ -60,7 +59,7 @@ export function scoreFor(student, stage, problemId, source) {
     const def = GRADED_STAGES.find((d) => d.n === stage);
     const item = student.record.stages?.[String(stage)]?.items?.[problemId];
     if (!item || !student.record.stages[String(stage)].submittedAt) return null;
-    const text = proofTextOf(item, def.field);
+    const text = proofTextOf(item, def.field, readingFor(student.id, stage, problemId, item, def.field)?.text ?? '');
     if (!text) return null;
     const result = assessProof({ problem: getProblem(problemId), proofText: text, chosenMethod: item[def.methodField] });
     return { total: sum(result.criteria), criteria: result.criteria, completeness: result.completeness, actualMethod: result.actualMethod, by: 'AI' };

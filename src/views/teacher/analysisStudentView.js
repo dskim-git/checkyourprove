@@ -19,7 +19,7 @@ import { statementHtml } from '../../ui/mathText.js';
 import { readProofInk } from '../research/researchParts.js';
 import { analysisStudents, sourceOf, sourcePicker } from './analysisHomeView.js';
 import { sessionLabel } from '../../state/sessionStore.js';
-import { SCALE_LABELS, SURVEY_DOMAINS } from '../../data/surveyDefaults.js';
+import { surveyDomains, surveyScale } from '../../data/surveyDefaults.js';
 import { CONSENT_LABELS, consentStatus, domainMeans, responsesOf } from '../../services/surveyAnalysis.js';
 import { findSurvey } from '../../state/surveyStore.js';
 import { PRINCIPLE_ITEMS, PRINCIPLE_PARTS } from '../../data/principleActivity.js';
@@ -150,6 +150,7 @@ export function renderAnalysisStudent(root, [studentId]) {
       return `<section class="panel" aria-labelledby="st-survey"><h2 id="st-survey" class="section-title">사전·사후 설문</h2><p class="empty-text">제출한 설문이 없습니다.</p></section>`;
     }
     const dm = domainMeans(survey, student);
+    const { points, labels: SCALE_LABELS } = surveyScale(survey);
     const ans = (q, r) => {
       const v = r?.answers?.[q.id];
       if (v == null || v === '') return '–';
@@ -162,7 +163,7 @@ export function renderAnalysisStudent(root, [studentId]) {
     return `<section class="panel" aria-labelledby="st-survey">
       <h2 id="st-survey" class="section-title">사전·사후 설문</h2>
       <p class="meta">${escapeHtml(survey.title)}. 사전 ${pre ? `${escapeHtml(formatDateTime(pre.submittedAt))} 제출, ${Math.round((pre.activeMs ?? 0) / 60000)}분` : '제출 전'}, 사후 ${post ? `${escapeHtml(formatDateTime(post.submittedAt))} 제출, ${Math.round((post.activeMs ?? 0) / 60000)}분` : '제출 전'}</p>
-      ${dotPlot({ title: '영역별 평균 (5점 척도, 역문항 바꿈)', series, max: 5, min: 1, ticks: [1, 2, 3, 4, 5], unit: '점', rows: SURVEY_DOMAINS.filter((d) => dm.pre?.[d.id] != null || dm.post?.[d.id] != null).map((d) => ({ label: d.label, values: { pre: dm.pre?.[d.id] ?? null, post: dm.post?.[d.id] ?? null } })) })}
+      ${dotPlot({ title: `하위 요인별 평균 (${points}점 척도, 역문항 바꿈)`, series, max: points, min: 1, ticks: Array.from({ length: points }, (_, k) => k + 1), unit: '점', rows: surveyDomains(survey).filter((d) => dm.pre?.[d.id] != null || dm.post?.[d.id] != null).map((d) => ({ label: d.label, values: { pre: dm.pre?.[d.id] ?? null, post: dm.post?.[d.id] ?? null } })) })}
       <div class="table-wrap" role="region" aria-label="설문 응답" tabindex="0">
         <table class="data-table grade-table">
           <thead><tr><th scope="col">문항</th><th scope="col">사전</th><th scope="col">사후</th><th scope="col">변화</th></tr></thead>

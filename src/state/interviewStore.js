@@ -2,6 +2,7 @@
 //
 // 기록 구조 (저장 키 checkyourprove.prototype.interviews.v1)
 //   { thresholds: { lowMax, highMin, aiShareMin, dropMin, stickWeakMax } | null(기본값),
+//     retentionUntil: 녹음 보관 기한(연구 종료일 'YYYY-MM-DD', 구현 7) | null,
 //     selected: { [학생 id]: { types: [유형 id], reasons: [{ type, problemId, text }], note(유형 6 이유), at, updatedAt } },
 //     records: { [학생 id]: record } }
 //   record = { status: 'planned'|'done'|'cancelled', scheduledAt('YYYY-MM-DDTHH:mm', 교사가 입력), interviewer,
@@ -9,7 +10,7 @@
 //              questions: [{ id, text, source: 'auto'|'teacher', type, problemId, answer }], memo,
 //              createdAt, updatedAt, doneAt, history: [{ at, status }] }
 //   학생 id는 세션마다 다르다(state/sessionStore.js localStudentId, 예시 학생은 sample-01 …).
-// 녹음·전사는 서버 연결 뒤(로드맵 4·5단계)에 record.audio로 더한다.
+// 녹음 파일은 state/recordingStore.js(IndexedDB, 학생 id로 연결). 전사는 서버 연결 뒤(로드맵 4·5단계).
 // TODO(Firebase): 면담 기록은 교사만 읽고 쓰도록 서버 규칙으로 막는다. 학생은 볼 수 없다.
 
 import { DEFAULT_INTERVIEW_THRESHOLDS, INTERVIEW_CONSENTS } from '../data/interview.js';
@@ -17,7 +18,7 @@ import { readJson, removeKey, writeJson } from './storage.js';
 
 const STORAGE_KEY = 'checkyourprove.prototype.interviews.v1';
 
-const DEFAULTS = () => ({ thresholds: null, selected: {}, records: {} });
+const DEFAULTS = () => ({ thresholds: null, retentionUntil: null, selected: {}, records: {} });
 
 let cache = null;
 
@@ -64,6 +65,15 @@ export function saveThresholds(patch) {
 
 export function resetThresholds() {
   getInterviews().thresholds = null;
+  return save();
+}
+
+// ── 녹음 보관 기한 ──
+
+export const retentionUntil = () => getInterviews().retentionUntil ?? null;
+
+export function setRetentionUntil(date) {
+  getInterviews().retentionUntil = date || null;
   return save();
 }
 

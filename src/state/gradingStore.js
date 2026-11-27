@@ -20,6 +20,9 @@
 //                  aiSeen, beforeAi } } } — 대화 key = '학생 id~명제 id', 메시지 번호는 대화 기록의 순서(0부터)
 //   chatTagAi: { [채점자 id]: { [대화 key]: AI 태그 제안 } } = { messages: { [번호]: [{ tag, reason }] }, conversation: [{ tag, reason }],
 //              requestId, model, promptVersion, at }
+// AI가 읽은 글 고치기 (구현 7, 사용자 결정: 필기 글자 변환은 1·2·4단계, 교사만 봄)
+//   inkReadingEdits: { [채점 대상 key]: { text, original, at, by(채점자 이름) } } — 학생 기록(item.inkReading)은 그대로 두고
+//   교사가 원본 필기와 비교해 고친 글을 따로 둔다. 채점자 모두가 같은 글을 쓴다(사실 확인이지 점수 판단이 아니므로).
 // 채점자는 서로의 점수를 채점 화면에서 보지 않는다. 두 채점자가 모두 채점한 증명으로 일치도를 계산한다(services/agreement.js).
 // TODO: 로그인 연결 뒤 채점자를 교사 계정으로 바꾸고, 채점 기록은 교사만 읽고 쓰도록 서버 규칙으로 막는다.
 
@@ -45,6 +48,7 @@ const DEFAULTS = () => ({
   chatTags: null,
   chatTagging: {},
   chatTagAi: {},
+  inkReadingEdits: {},
 });
 
 let cache = null;
@@ -104,6 +108,22 @@ export function resetRubric() {
 }
 
 // ── 점수 ──
+
+// ── AI가 읽은 글 고치기 ──
+
+export const readingEditOf = (key) => getGrading().inkReadingEdits?.[key] ?? null;
+
+export function saveReadingEdit(key, text, original) {
+  const g = getGrading();
+  g.inkReadingEdits ??= {};
+  g.inkReadingEdits[key] = { text, original, at: new Date().toISOString(), by: currentRater().name };
+  return saveGrading();
+}
+
+export function clearReadingEdit(key) {
+  delete getGrading().inkReadingEdits?.[key];
+  return saveGrading();
+}
 
 export const scoreOf = (raterId, key) => getGrading().scores[raterId]?.[key] ?? null;
 

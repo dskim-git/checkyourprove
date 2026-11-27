@@ -7,6 +7,7 @@ import { GRADED_STAGES } from '../data/rubric.js';
 import { sampleResearchStudents } from '../data/sampleResearch.js';
 import { getProblem } from '../data/problems/index.js';
 import { hasInk } from './inkModel.js';
+import { readingEditOf } from './gradingStore.js';
 import { getResearch } from './researchStore.js';
 import { findSession, getSessions, localStudentId, sessionLabel } from './sessionStore.js';
 
@@ -31,6 +32,14 @@ export function researchStudents({ includeSamples = true, sessionIds = null } = 
 }
 
 export const targetKey = (studentId, stage, problemId) => `${studentId}~${stage}~${problemId}`;
+
+/** 채점·분석에 쓸 "AI가 읽은 글": 교사가 고친 글이 있으면 그것(edited에 고친 기록), 없으면 AI가 읽은 글 */
+export function readingFor(studentId, stage, problemId, item, field) {
+  const orig = item?.inkReading?.[field] ?? null;
+  const edit = readingEditOf(targetKey(studentId, stage, problemId));
+  if (!edit) return orig;
+  return { ...(orig ?? {}), text: edit.text, edited: edit };
+}
 
 export function parseTargetKey(key) {
   const [studentId, stage, problemId] = String(key).split('~');
@@ -59,7 +68,7 @@ export function gradingTargets(students) {
           item,
           text: item[def.field] ?? '',
           ink: item.ink?.[def.field] ?? null,
-          reading: item.inkReading?.[def.field] ?? null,
+          reading: readingFor(student.id, def.n, problemId, item, def.field),
         });
       });
     });

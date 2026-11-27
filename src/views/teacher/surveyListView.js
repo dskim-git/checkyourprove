@@ -14,8 +14,8 @@ export function renderSurveyList(root) {
       const used = usedBy(s.id);
       return `<li class="session-row">
         <div class="session-row__main">
-          <strong>${escapeHtml(s.title)}</strong>${s.lockedAt ? ' <span class="tag">잠김</span>' : ''}${s.example ? ' <span class="tag tag--proto">예시 문항</span>' : ''}
-          <span class="session-row__meta">문항 ${s.questions.length}개${used.length ? `, 쓰는 세션: ${escapeHtml(used.map(sessionLabel).join(', '))}` : ', 쓰는 세션 없음'}${s.lockedAt ? `, ${escapeHtml(formatDateTime(s.lockedAt))}에 학생 응답이 시작되어 잠김` : ''}</span>
+          <strong>${escapeHtml(s.title)}</strong>${s.lockedAt ? ' <span class="tag">잠김</span>' : ''}${s.example ? ' <span class="tag tag--proto">추천 초안</span>' : ''}
+          <span class="session-row__meta">문항 ${s.questions.length}개${s.instrument?.name ? `, 평가도구: ${escapeHtml(s.instrument.name)}` : ""}${used.length ? `, 쓰는 세션: ${escapeHtml(used.map(sessionLabel).join(', '))}` : ', 쓰는 세션 없음'}${s.lockedAt ? `, ${escapeHtml(formatDateTime(s.lockedAt))}에 학생 응답이 시작되어 잠김` : ''}</span>
         </div>
         <div class="session-actions">
           <a class="button button--secondary button--small" href="#/teacher/surveys/${s.id}">${s.lockedAt ? '문항 보기' : '문항 고치기'}</a>

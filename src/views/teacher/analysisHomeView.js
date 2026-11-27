@@ -11,7 +11,7 @@ import { breadcrumb, notice } from '../../ui/components.js';
 import { handleScopeEvent, scopePicker, scopeText } from './sessionScope.js';
 import { isResearchIncluded, surveyCsv, surveyStats, surveysInUse } from '../../services/surveyAnalysis.js';
 import { principleStats } from '../../services/principleAnalysis.js';
-import { SCALE_LABELS } from '../../data/surveyDefaults.js';
+import { surveyScale } from '../../data/surveyDefaults.js';
 import { className as classNameOf, sessionLabel } from '../../state/sessionStore.js';
 import { barList, bindChartTips, columns, dotPlot, scatter, splitBar, statTiles, wordCloud } from '../../ui/charts.js';
 import { acceptanceStats, checklistStats, isNoneAnswer, OPEN_QUESTIONS, openAnswers, wordFrequencies } from '../../services/classInsights.js';
@@ -240,13 +240,17 @@ export function renderAnalysisHome(root) {
     const choiceItems = st.items.filter((i) => i.q.type === 'choice');
     const textItems = st.items.filter((i) => i.q.type === 'short' || i.q.type === 'long');
     const qNum = (q) => st.survey.questions.indexOf(q) + 1;
+    const { points, labels } = surveyScale(pick.survey);
+    const ticks = Array.from({ length: points }, (_, k) => k + 1);
+    const inst = pick.survey.instrument ?? {};
     return `<section class="panel" aria-labelledby="an-survey">
       <div class="section-head">
         <h2 id="an-survey" class="section-title">사전·사후 설문</h2>
         <button type="button" class="button button--secondary button--small" data-action="survey-csv">설문 CSV 내려받기</button>
       </div>
       ${use.length > 1 ? `<fieldset class="choice-group"><legend>설문</legend><div class="pick-group__options">${use.map((u) => `<label class="pick pick--tag"><input type="radio" name="surveyPick" value="${u.id}"${u.id === pick.id ? ' checked' : ''}><span>${escapeHtml(u.survey.title)} (${u.n}명)</span></label>`).join('')}</div></fieldset>` : `<p class="meta">${escapeHtml(pick.survey.title)}</p>`}
-      <p class="meta">변화와 효과 크기(dz = 변화 평균 ÷ 변화의 표준편차)는 사전·사후를 모두 낸 학생끼리 짝지어 계산합니다. 5점 척도(1 ${SCALE_LABELS[0]} ~ 5 ${SCALE_LABELS[4]}), 역문항은 6 − 점수로 바꾸어 영역 평균에 넣습니다. 학생 수가 적으면 효과 크기는 참고만 하세요.</p>
+      ${inst.name || inst.citation ? `<p class="meta">평가도구: ${escapeHtml([inst.name, inst.citation].filter(Boolean).join(', '))}</p>` : ''}
+      <p class="meta">변화와 효과 크기(dz = 변화 평균 ÷ 변화의 표준편차)는 사전·사후를 모두 낸 학생끼리 짝지어 계산합니다. ${points}점 척도(1 ${escapeHtml(labels[0])} ~ ${points} ${escapeHtml(labels[points - 1])}), 역문항은 ${points + 1} − 점수로 바꾸어 하위 요인 평균에 넣습니다. 학생 수가 적으면 효과 크기는 참고만 하세요.</p>
       ${statTiles([
         { label: '사전 응답', value: `${st.preN}명`, sub: st.minutes.pre != null ? `평균 ${fmt(st.minutes.pre)}분` : '' },
         { label: '사후 응답', value: `${st.postN}명`, sub: st.minutes.post != null ? `평균 ${fmt(st.minutes.post)}분` : '' },
@@ -254,8 +258,8 @@ export function renderAnalysisHome(root) {
         ...st.domains.map((d) => ({ label: `${d.label} 변화`, value: signed(d.diff), sub: `${fmt(d.pre)} → ${fmt(d.post)}, dz ${fmt(d.dz)}` })),
       ])}
       <div class="an-charts">
-        ${dotPlot({ title: '영역별 평균 (5점 척도)', series, max: 5, min: 1, ticks: [1, 2, 3, 4, 5], unit: '점', rows: st.domains.map((d) => ({ label: d.label, values: { pre: d.pre, post: d.post } })) })}
-        ${dotPlot({ title: '문항별 평균 (5점 척도)', series, max: 5, min: 1, ticks: [1, 2, 3, 4, 5], unit: '점', rows: scaleItems.map((i) => ({ label: `${qNum(i.q)}번${i.q.reverse ? ' (역)' : ''}`, values: { pre: i.pre, post: i.post } })) })}
+        ${dotPlot({ title: `하위 요인별 평균 (${points}점 척도)`, series, max: points, min: 1, ticks, unit: '점', rows: st.domains.map((d) => ({ label: d.label, values: { pre: d.pre, post: d.post } })) })}
+        ${dotPlot({ title: `문항별 평균 (${points}점 척도)`, series, max: points, min: 1, ticks, unit: '점', rows: scaleItems.map((i) => ({ label: `${qNum(i.q)}번${i.q.reverse ? ' (역)' : ''}`, values: { pre: i.pre, post: i.post } })) })}
       </div>
       <div class="table-wrap" role="region" aria-label="문항별 사전·사후" tabindex="0">
         <table class="data-table grade-table" data-survey-table>

@@ -11,6 +11,7 @@ import { breadcrumb, notice } from '../../ui/components.js';
 import { statTiles } from '../../ui/charts.js';
 import { escapeHtml } from '../../ui/dom.js';
 import { sourceOf, sourcePicker } from './analysisHomeView.js';
+import { fillRetentionAlert } from './recordingsView.js';
 import { handleScopeEvent, scopePicker, scopeText } from './sessionScope.js';
 import { consentSummary, interviewRow, interviewRows, matchList, statusChip, typeChip } from './interviewParts.js';
 
@@ -36,7 +37,9 @@ export function renderInterviewHome(root) {
         <h1>면담 후보와 기록</h1>
         <p class="lead">학생 × 명제마다 기록을 살펴 면담 후보를 추천합니다. 추천은 참고용이고 면담 대상은 교사가 고릅니다. 고른 학생은 면담 화면에서 기록을 보며 질문 예시와 메모를 남깁니다.</p>
       </header>
-      ${notice('warn', '프로토타입 상태입니다', '이 브라우저의 기록과 예시 학생 기록으로 계산합니다. 녹음과 음성 전사는 서버를 연결한 뒤에 더합니다.')}
+      ${notice('warn', '프로토타입 상태입니다', '이 브라우저의 기록과 예시 학생 기록으로 계산합니다. 녹음 파일은 이 브라우저에만 저장되고, 음성 전사는 서버를 연결한 뒤에 더합니다.')}
+      <div data-retention-alert></div>
+      <p><a class="button button--secondary button--small" href="#/teacher/recordings">녹음 관리</a></p>
 
       <section class="panel" aria-labelledby="iv-settings">
         <h2 id="iv-settings" class="section-title">보기 설정</h2>
@@ -257,6 +260,7 @@ export function renderInterviewHome(root) {
   };
 
   draw();
+  fillRetentionAlert(root);
   root.addEventListener('change', onChange);
   root.addEventListener('click', onClick);
   root.addEventListener('submit', onSubmit);

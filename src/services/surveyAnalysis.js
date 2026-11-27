@@ -1,7 +1,7 @@
 // 사전·사후 설문 분석 (구현 4): 문항별 사전·사후 평균과 변화, 대응표본 효과 크기, 영역별 평균, 객관식 분포, 서술형 답
 // 같은 학생의 사전·사후 응답을 짝지어(같은 가명 id) 변화를 본다. 역문항은 6 − 점수로 바꾸어 영역 평균에 넣는다.
 
-import { SURVEY_DOMAINS } from '../data/surveyDefaults.js';
+import { reverseScore, surveyDomains } from '../data/surveyDefaults.js';
 import { sessionConfig } from '../state/sessionStore.js';
 import { findSurvey } from '../state/surveyStore.js';
 
@@ -40,13 +40,13 @@ export function surveysInUse(students) {
   return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([id, n]) => ({ id, n, survey: findSurvey(id) })).filter((x) => x.survey);
 }
 
-const scoreOf = (q, v) => (v == null ? null : q.reverse ? 6 - Number(v) : Number(v));
+const scoreOf = (survey, q, v) => (v == null ? null : q.reverse ? reverseScore(survey, v) : Number(v));
 
 /** 한 학생의 영역 평균(척도 문항, 역문항 바꿈) { pre: {domain: m}, post: {...} } */
 export function domainMeans(survey, student) {
   const { pre, post } = responsesOf(student);
-  const one = (res) => (res ? Object.fromEntries(SURVEY_DOMAINS.map((d) => {
-    const xs = survey.questions.filter((q) => q.type === 'scale' && q.domain === d.id).map((q) => scoreOf(q, res.answers[q.id])).filter((v) => v != null);
+  const one = (res) => (res ? Object.fromEntries(surveyDomains(survey).map((d) => {
+    const xs = survey.questions.filter((q) => q.type === 'scale' && q.domain === d.id).map((q) => scoreOf(survey, q, res.answers[q.id])).filter((v) => v != null);
     return [d.id, round2(mean(xs))];
   })) : null);
   return { pre: one(pre), post: one(post) };
@@ -73,7 +73,7 @@ export function surveyStats(survey, students) {
     const texts = (kind) => rows.map((r) => ({ who: r.st.pseudonym, text: String(r[kind]?.answers[q.id] ?? '').trim() })).filter((x) => x.text);
     return { q, preTexts: texts('pre'), postTexts: texts('post') };
   });
-  const domains = SURVEY_DOMAINS.map((d) => {
+  const domains = surveyDomains(survey).map((d) => {
     const per = rows.map((r) => domainMeans(survey, r.st));
     const pres = per.map((m) => m.pre?.[d.id]).filter((v) => v != null);
     const posts = per.map((m) => m.post?.[d.id]).filter((v) => v != null);
@@ -97,8 +97,11 @@ const csvCell = (v) => {
 /** 설문 CSV: 학생 한 줄, 사전·사후 문항별 응답과 영역 평균 */
 export function surveyCsv(survey, students, { className }) {
   const head = ['학생 id', '가명', '예시', '세션 id', '학급', '회차', '연구 동의', '설문', '사전 제출', '사전 응답 시간(분)', '사후 제출', '사후 응답 시간(분)',
-    ...survey.questions.flatMap((q, i) => [`사전 ${i + 1}. ${q.text}`, `사후 ${i + 1}. ${q.text}`]),
-    ...SURVEY_DOMAINS.flatMap((d) => [`사전 ${d.label} 평균`, `사후 ${d.label} 평균`])];
+    ...survey.questions.flatMap((q, i) => {
+      const tag = `${i + 1}. [${surveyDomains(survey).find((d) => d.id === q.domain)?.label ?? ''}${q.reverse ? ', 역' : ''}${q.sourceNo ? `, 원 ${q.sourceNo}` : ''}] ${q.text}`;
+      return [`사전 ${tag}`, `사후 ${tag}`];
+    }),
+    ...surveyDomains(survey).flatMap((d) => [`사전 ${d.label} 평균`, `사후 ${d.label} 평균`])];
   const lines = [head.map(csvCell).join(',')];
   students.forEach((st) => {
     const { pre, post } = responsesOf(st);
@@ -108,7 +111,7 @@ export function surveyCsv(survey, students, { className }) {
     lines.push([st.id, st.pseudonym, st.sample ? 'Y' : 'N', st.session?.id, st.session ? className(st.session.classId) : '', st.session?.round, CONSENT_LABELS[consentStatus(st)], survey.title,
       pre?.submittedAt, min(pre), post?.submittedAt, min(post),
       ...survey.questions.flatMap((q) => [pre?.answers[q.id], post?.answers[q.id]]),
-      ...SURVEY_DOMAINS.flatMap((d) => [dm.pre?.[d.id], dm.post?.[d.id]])].map(csvCell).join(','));
+      ...surveyDomains(survey).flatMap((d) => [dm.pre?.[d.id], dm.post?.[d.id]])].map(csvCell).join(','));
   });
   return `﻿${lines.join('\r\n')}`;
 }

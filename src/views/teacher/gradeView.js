@@ -14,10 +14,10 @@ import {
 import { buildGradeAssistRequest } from '../../services/aiRequests.js';
 import { requestGradeAssist } from '../../services/mockGradeAssist.js';
 import { PROOF_HELP_MIN } from '../../services/proofHelp.js';
-import { activeRubric, aiGradeOf, currentRater, getGrading, saveAiGrade, saveScore, scoreOf, updateScore } from '../../state/gradingStore.js';
+import { activeRubric, aiGradeOf, clearReadingEdit, currentRater, getGrading, saveAiGrade, saveReadingEdit, saveScore, scoreOf, updateScore } from '../../state/gradingStore.js';
 import { inkStats } from '../../state/inkModel.js';
-import { itemAt } from '../../state/researchRoster.js';
-import { escapeHtml } from '../../ui/dom.js';
+import { itemAt, readingFor } from '../../state/researchRoster.js';
+import { escapeHtml, formatDateTime } from '../../ui/dom.js';
 import { breadcrumb, chatMessages, mockAiNote, notice, renderNotFound } from '../../ui/components.js';
 import { inkViewHtml, mountInkViews } from '../../ui/inkCanvas.js';
 import { statementHtml } from '../../ui/mathText.js';
@@ -38,6 +38,7 @@ export function renderGrade(root, [key]) {
   let disposeInk = () => {};
   let aiPending = false;
   let aiError = '';
+  let editingReading = false;
 
   /** AI가 채점할 글: 키보드로 쓴 글 + (필기면) AI가 읽은 글 */
   const aiInput = () => {
@@ -58,11 +59,17 @@ export function renderGrade(root, [key]) {
     const strokes = inkStats(target.ink).strokes;
     const chosen = methodText(item[stageDef.methodField], item[stageDef.otherField]);
     const reading = target.reading;
+    const edited = reading?.edited;
     const readBlock = reading
-      ? `<div class="grade-sub grade-reading">
-          <h3 class="grade-sub__title">AI가 읽은 글${reading.source === 'sample' ? ' <span class="tag tag--proto">예시</span>' : ''}</h3>
-          <p class="meta">필기를 글자로만 옮긴 것입니다. 증명 내용은 고치지 않으며, 잘못 읽을 수 있으니 위의 필기와 비교해 보세요.${reading.source === 'sample' ? ' 실제 AI가 아니라 미리 만든 예시입니다.' : ''}</p>
-          <div class="proof-text">${escapeHtml(reading.text)}</div>
+      ? `<div class="grade-sub grade-reading" data-reading>
+          <h3 class="grade-sub__title">AI가 읽은 글${reading.source === 'sample' ? ' <span class="tag tag--proto">예시</span>' : ''}${edited ? ' <span class="tag tag--mint">교사가 고침</span>' : ''}</h3>
+          <p class="meta">필기를 글자로만 옮긴 것입니다. 증명 내용은 고치지 않으며, 잘못 읽을 수 있으니 위의 필기와 비교해 보세요.${reading.source === 'sample' ? ' 실제 AI가 아니라 미리 만든 예시입니다.' : ''} 학생에게는 보이지 않습니다.</p>
+          ${editingReading
+            ? `<div class="field"><label class="field__label" for="reading-edit">읽은 글 고치기 <span class="field__req">필기에 쓴 그대로 옮기세요. 증명을 고치지 않습니다.</span></label><textarea class="field__input" id="reading-edit" name="readingEdit" rows="6">${escapeHtml(reading.text)}</textarea></div>
+              <div class="actions actions--start"><button type="button" class="button button--secondary button--small" data-action="reading-save">고친 글 저장</button><button type="button" class="button button--ghost button--small" data-action="reading-cancel">취소</button></div>`
+            : `<div class="proof-text">${escapeHtml(reading.text)}</div>
+              ${edited ? `<p class="meta">${escapeHtml(edited.by)}이(가) ${escapeHtml(formatDateTime(edited.at))}에 고침. 채점 도우미와 분석은 고친 글을 씁니다.</p><details class="ref-card"><summary>AI가 처음 읽은 글</summary><div class="proof-text">${escapeHtml(edited.original ?? '')}</div></details>` : ''}
+              <div class="actions actions--start"><button type="button" class="button button--ghost button--small" data-action="reading-edit">읽은 글 고치기</button>${edited ? '<button type="button" class="button button--ghost button--small" data-action="reading-reset">AI가 읽은 글로 되돌리기</button>' : ''}</div>`}
         </div>`
       : `<div class="grade-sub grade-reading">
           <h3 class="grade-sub__title">AI가 읽은 글</h3>
@@ -336,7 +343,32 @@ export function renderGrade(root, [key]) {
     updateScore(rater.id, target.key, readExtras());
     root.querySelector('[data-grade-status]').textContent = '추가 확인을 저장했습니다.';
   };
+  const readingAction = (action) => {
+    const item = target.item;
+    const field = target.stageDef.field;
+    const original = item.inkReading?.[field]?.text ?? '';
+    if (action === 'reading-edit') editingReading = true;
+    if (action === 'reading-cancel') editingReading = false;
+    if (action === 'reading-save') {
+      const text = root.querySelector('[name="readingEdit"]').value.trim();
+      if (!text) return;
+      if (text === original) clearReadingEdit(target.key);
+      else saveReadingEdit(target.key, text, original);
+      editingReading = false;
+    }
+    if (action === 'reading-reset') clearReadingEdit(target.key);
+    target.reading = readingFor(target.student.id, target.stage, target.problemId, item, field);
+    const y = window.scrollY;
+    draw({ focus: action === 'reading-edit' ? '#reading-edit' : '[data-action="reading-edit"]' });
+    window.scrollTo(0, y);
+  };
+
   const onClick = (event) => {
+    const rAct = event.target.closest('[data-action^="reading-"]');
+    if (rAct) {
+      readingAction(rAct.dataset.action);
+      return;
+    }
     if (event.target.closest('[data-action="ai-grade"]')) {
       runAi();
       return;

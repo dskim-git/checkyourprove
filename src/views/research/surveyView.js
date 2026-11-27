@@ -3,7 +3,7 @@
 // 응답 시간(시작·제출·화면을 보고 있던 시간), 문항별 처음 답한 시각, 답을 바꾼 횟수를 남긴다.
 // 학생이 응답을 시작하면 그 설문은 잠긴다(교사가 문항을 고칠 수 없음).
 
-import { SCALE_LABELS } from '../../data/surveyDefaults.js';
+import { surveyScale } from '../../data/surveyDefaults.js';
 import { getClassroom } from '../../state/classroomStore.js';
 import {
   ensureSurveyResponse, getSurveyResponse, postSurveyState, preStageBlocker, researchParticipating, saveResearch,
@@ -49,6 +49,7 @@ export function renderSurvey(root, [kind]) {
     saveResearch();
   }
   const questions = survey.questions;
+  const SCALE_LABELS = surveyScale(survey).labels;
 
   function questionHtml(q, i) {
     const v = res.answers[q.id];
@@ -60,7 +61,7 @@ export function renderSurvey(root, [kind]) {
     if (q.type === 'scale') {
       return `<fieldset class="survey-q" id="sq-${q.id}">
         <legend class="survey-q__text">${legend}</legend>
-        <div class="scale-row">${SCALE_LABELS.map((label, k) => `<label class="pick pick--scale"><input type="radio" name="${q.id}" value="${k + 1}"${v === k + 1 ? ' checked' : ''}><span><strong class="num">${k + 1}</strong><span>${escapeHtml(label)}</span></span></label>`).join('')}</div>
+        <div class="scale-row${SCALE_LABELS.length > 5 ? ' scale-row--many' : ''}" style="--points: ${SCALE_LABELS.length}">${SCALE_LABELS.map((label, k) => `<label class="pick pick--scale"><input type="radio" name="${q.id}" value="${k + 1}"${v === k + 1 ? ' checked' : ''}><span><strong class="num">${k + 1}</strong><span>${escapeHtml(label)}</span></span></label>`).join('')}</div>
         <p class="field__error" data-error-for="${q.id}" hidden></p>
       </fieldset>`;
     }
