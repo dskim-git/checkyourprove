@@ -44,8 +44,47 @@ function initial() {
   };
 }
 
+/**
+ * 저장된 기록의 모양을 확인하고 고친다. 세션 기능을 만드는 도중에 저장된 기록처럼 목록이 빠져 있으면
+ * 쓸 수 있는 학급·세션은 살리고, 세션이 하나도 없으면 첫 세션(1반 1회차, 기존 기록과 이어짐)을 만든다.
+ */
+function normalize(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { data: initial(), fixed: raw != null };
+  const fresh = initial();
+  const sessions = Array.isArray(raw.sessions) ? raw.sessions.filter((s) => s && typeof s === 'object' && s.id && s.classId) : [];
+  const classes = Array.isArray(raw.classes) ? raw.classes.filter((c) => c && typeof c === 'object' && c.id) : [];
+  let fixed = !Array.isArray(raw.sessions) || !Array.isArray(raw.classes) || sessions.length !== raw.sessions.length || classes.length !== raw.classes.length;
+  if (!sessions.length) {
+    sessions.push(...fresh.sessions);
+    fixed = true;
+  }
+  sessions.forEach((s) => {
+    if (!classes.some((c) => c.id === s.classId)) {
+      classes.push(s.classId === 'c-1' ? { ...fresh.classes[0] } : { id: s.classId, name: '학급' });
+      fixed = true;
+    }
+    if (!Array.isArray(s.propositionIds)) { s.propositionIds = [...fresh.sessions[0].propositionIds]; fixed = true; }
+    if (!Array.isArray(s.stagesOpen)) { s.stagesOpen = [...fresh.sessions[0].stagesOpen]; fixed = true; }
+    if (!Number.isFinite(s.round)) { s.round = 1; fixed = true; }
+  });
+  let { activeSessionId } = raw;
+  if (!sessions.some((s) => s.id === activeSessionId)) {
+    activeSessionId = sessions[0].id;
+    fixed = true;
+  }
+  return { data: { ...raw, classes, sessions, activeSessionId }, fixed };
+}
+
 export function getSessions() {
-  cache ??= readJson(STORAGE_KEY, null) ?? initial();
+  if (!cache) {
+    const raw = readJson(STORAGE_KEY, null);
+    const { data, fixed } = normalize(raw);
+    cache = data;
+    if (fixed) {
+      console.warn('세션 기록의 모양이 달라 고쳐서 저장했습니다.', raw);
+      writeJson(STORAGE_KEY, cache);
+    }
+  }
   return cache;
 }
 
