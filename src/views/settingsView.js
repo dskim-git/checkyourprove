@@ -14,6 +14,7 @@ import { getConsent, getResearch } from '../state/researchStore.js';
 import { findSession, formatCode, getSessions, sessionLabel } from '../state/sessionStore.js';
 import { getClassroom } from '../state/classroomStore.js';
 import { APP_INFO } from '../data/appInfo.js';
+import { isBrowserOnly, isDemo } from '../state/appMode.js';
 import { breadcrumb, notice } from '../ui/components.js';
 import { escapeHtml, formatDateTime } from '../ui/dom.js';
 import { settingsTabs } from '../ui/settingsTabs.js';
@@ -141,8 +142,9 @@ export function renderSettings(root, [tabParam]) {
         <dl class="read-list">
           <div><dt>이름</dt><dd>${escapeHtml(APP_INFO.name)}</dd></div>
           <div><dt>버전</dt><dd>${escapeHtml(APP_INFO.version)} (${escapeHtml(APP_INFO.stage)})</dd></div>
-          <div><dt>저장 위치</dt><dd>${escapeHtml(APP_INFO.storage)}</dd></div>
+          <div><dt>저장 위치</dt><dd>${escapeHtml(isDemo ? '시연 모드: 이 브라우저에만 (서버와 따로)' : APP_INFO.storage)}</dd></div>
         </dl>
+        ${isBrowserOnly ? '<p class="meta"><a href="#/demo-data">시연 데이터</a>: 이 브라우저의 기록을 파일로 내보내거나 불러와요.</p>' : ''}
       </section>`;
   }
 

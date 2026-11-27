@@ -11,6 +11,7 @@
 //   교사 화면에 화면별 도착 학생 수(실시간)를 보여 준다. 구현은 이 모듈의 getPacing/setPacing/subscribePacing만 바꾼다.
 
 import { readJson, writeJson } from './storage.js';
+import { storageKey } from './appMode.js';
 
 const STORAGE_KEY = 'checkyourprove.prototype.pacing.v1';
 const LOCAL_EVENT = 'checkyourprove:pacing';
@@ -41,7 +42,7 @@ export function stepOpen(sessionId, index) {
 
 /** 진행 제어가 바뀌면 cb(상태). 다른 탭(storage 이벤트)과 같은 탭(사용자 이벤트) 모두. 해제 함수를 돌려준다. */
 export function subscribePacing(sessionId, cb) {
-  const onStorage = (e) => { if (e.key === null || e.key === STORAGE_KEY) cb(getPacing(sessionId)); };
+  const onStorage = (e) => { if (e.key === null || e.key === storageKey(STORAGE_KEY)) cb(getPacing(sessionId)); };
   const onLocal = (e) => { if (e.detail?.sessionId === sessionId) cb(getPacing(sessionId)); };
   window.addEventListener('storage', onStorage);
   window.addEventListener(LOCAL_EVENT, onLocal);

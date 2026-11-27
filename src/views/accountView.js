@@ -75,6 +75,7 @@ export function renderAccount(root) {
           <button type="button" class="button button--secondary" data-demo-role="teacher">교사로 보기</button>
           <button type="button" class="button button--secondary" data-demo-role="admin">관리자로 보기</button>
         </div>
+        <p class="meta"><a href="#/demo-data">시연 데이터</a>: 이 브라우저의 기록을 파일로 내보내거나 불러와요.</p>
       </section>`;
     } else if (user.status === 'profile' || (user.status === 'pending' && kind)) {
       const k = kind ?? user.profile?.kind ?? 'student';

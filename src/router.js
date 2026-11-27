@@ -26,6 +26,7 @@
 //   #/admin(/:tab)                       관리자 설정: 사용자·가입, 연결표·요청, 연구 윤리, 연구 도구, 연습 기본값, 공지·안내, 관리 기록
 //                                        (예전 주소 #/teacher/admin(/links|/ethics)도 열림)
 //   #/practice/guide                     증명법 한눈에 보기(직접·간접 증명법 설명)
+//   #/demo-data                          시연 데이터: 이 브라우저의 기록을 파일로 내보내기·불러오기(시연 모드는 demo.html)
 // 해시 방식은 배포 환경(Vercel)에서 별도 rewrite 설정 없이 동작한다.
 // TODO: 라우팅 방식(해시 / History API)은 AGENTS.md의 결정 필요 항목이다.
 
@@ -64,6 +65,7 @@ import { icons } from './ui/icons.js';
 import { activeNotices } from './state/adminStore.js';
 import { dismissNotice, getPrefs } from './state/prefsStore.js';
 import { renderMethodGuide } from './views/practice/methodGuideView.js';
+import { renderDemoData } from './views/demoDataView.js';
 import { renderNotFound } from './ui/components.js';
 import { escapeHtml } from './ui/dom.js';
 
@@ -98,6 +100,7 @@ const ROUTES = [
   { section: 'teacher', role: 'teacher', tab: null, view: 'wide', title: '면담', pattern: /^\/teacher\/interviews\/([\w-]+)$/, render: renderInterview },
   { section: 'teacher', role: 'teacher', tab: null, view: 'wide', title: '녹음 관리', pattern: /^\/teacher\/recordings$/, render: renderRecordings },
   { section: 'account', tab: null, title: '계정', pattern: /^\/account$/, render: renderAccount },
+  { section: 'account', tab: null, title: '시연 데이터', pattern: /^\/demo-data$/, render: renderDemoData },
   { section: 'account', tab: null, title: '내 설정', pattern: /^\/settings(?:\/(account|display|privacy|help))?$/, render: renderSettings },
   { section: 'teacher', role: 'teacher', tab: null, view: 'wide', title: '교사 설정', pattern: /^\/teacher\/settings(?:\/(sessions|research|practice|grading))?$/, render: renderTeacherSettings },
   { section: 'admin', role: 'admin', tab: null, view: 'wide', title: '관리자 설정', pattern: /^\/admin(?:\/(users|links|ethics|tools|practice|notices|audit))?$/, render: renderAdmin },

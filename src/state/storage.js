@@ -1,6 +1,9 @@
 // 브라우저 임시 보관 (localStorage)
 // 프로토타입 전용. 사생활 보호 모드 등에서 저장이 막혀도 앱이 동작하도록 예외를 삼킨다.
+// 시연 모드(demo.html)에서는 저장 키 접두어가 checkyourprove.demo.로 바뀐다(state/appMode.js).
 // TODO: Firestore 연동 시 이 모듈을 사용하는 스토어(attemptStore, researchStore, classroomStore)의 구현을 교체한다.
+
+import { storageKey } from './appMode.js';
 
 // 앱 이름을 checkyourproof → checkyourprove로 바꾸기 전의 저장 키 (이미 쌓인 테스트 기록을 옮겨 온다)
 const LEGACY_PREFIX = 'checkyourproof.';
@@ -17,6 +20,7 @@ function migrateLegacy(key) {
 }
 
 export function readJson(key, fallback) {
+  key = storageKey(key);
   try {
     const raw = window.localStorage.getItem(key) ?? migrateLegacy(key);
     return raw ? JSON.parse(raw) : fallback;
@@ -26,6 +30,7 @@ export function readJson(key, fallback) {
 }
 
 export function writeJson(key, value) {
+  key = storageKey(key);
   try {
     window.localStorage.setItem(key, JSON.stringify(value));
     return true;
@@ -35,6 +40,7 @@ export function writeJson(key, value) {
 }
 
 export function removeKey(key) {
+  key = storageKey(key);
   try {
     window.localStorage.removeItem(key);
   } catch {

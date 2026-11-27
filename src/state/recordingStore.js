@@ -7,7 +7,9 @@
 // TODO(Firebase): Firebase Storage(교사만 읽고 쓰는 경로)로 옮기고 이 모듈의 함수만 바꾼다. 전사(transcript)는 서버 함수가
 //   음성 인식 API를 불러 채운다(AGENTS.md 5절 "면담 녹음과 전사").
 
-const DB_NAME = 'checkyourprove.prototype.recordings';
+import { storageKey } from './appMode.js';
+
+const DB_NAME = storageKey('checkyourprove.prototype.recordings');
 const STORE = 'recordings';
 const memory = new Map();
 let dbPromise = null;
