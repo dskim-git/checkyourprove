@@ -1,5 +1,6 @@
 // 학생 홈: 오늘의 기록(연속 학습일·통과·인증) → 이어서 하기 → 증명 연습하기 / AI와 탐구하기 / 내 기록 보기
 
+import { currentUser, displayName } from '../state/accountStore.js';
 import { METHODS, getMethod } from '../data/methods.js';
 import { LEVELS, getLevel } from '../data/levels.js';
 import { getProblem } from '../data/problems/index.js';
@@ -52,6 +53,7 @@ function continueCard() {
 }
 
 export function renderHub(root) {
+  const me = currentUser();
   const classroom = getClassroom();
   const attempts = listAttempts().length;
   const researchTile = classroom.researchOpen
@@ -75,8 +77,8 @@ export function renderHub(root) {
 
   root.innerHTML = `<div class="page page--hub">
     <header class="hub-head">
-      <h1>${escapeHtml(classroom.studentName)}님, 무엇을 해 볼까요?</h1>
-      <p class="meta">${escapeHtml(classroom.name)}. 로그인은 아직 연결되지 않아 예시 학생으로 보고 있습니다.</p>
+      <h1>${escapeHtml(me ? displayName(me) : classroom.studentName)}님, 무엇을 해 볼까요?</h1>
+      <p class="meta">${me ? `${escapeHtml(classroom.sessionLabel)}. 설정은 오른쪽 위 톱니바퀴에서 바꿀 수 있어요.` : `${escapeHtml(classroom.name)}. 로그인하지 않아 예시 학생으로 보고 있습니다. 오른쪽 위 "로그인"에서 시연용 역할로 들어갈 수 있어요.`}</p>
     </header>
     ${statStrip()}
     ${continueCard()}

@@ -1627,3 +1627,9 @@ button.pc-in:focus-visible { outline: 3px solid var(--color-focus); outline-offs
 .notice-bar__item p { margin: 0; }
 .prefs-preview { padding: var(--space-sm) var(--space-md); border-radius: var(--radius-stock); background: var(--color-paper-2); }
 .rec-until { margin: 0; }
+
+/* 교사 업무판·관리자 보드 머리 (제목 옆 설정 버튼), 관리자 보드 칸 */
+.board-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--space-sm) var(--space-md); }
+.board-head > div { display: grid; gap: var(--space-xs); }
+.board-tile__value { font-size: var(--text-xl); font-weight: var(--display-weight); }
+.board-tile.is-warn { background: var(--grain), var(--color-coral-soft); }

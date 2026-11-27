@@ -116,6 +116,33 @@ export function signInDemo(email) {
   return user;
 }
 
+/** 시연용 역할 계정 (서버 연결 전에만 쓴다. 로그인 화면의 "학생/교사/관리자로 보기") */
+export const DEMO_ACCOUNTS = {
+  student: { email: 'demo-student@demo.local', role: 'student', profile: { kind: 'student', year: new Date().getFullYear(), studentNo: '10101', name: '시연 학생' } },
+  teacher: { email: 'demo-teacher@demo.local', role: 'teacher', profile: { kind: 'guest', name: '시연 교사', affiliation: '시연', reason: '시연용 교사 계정' } },
+  admin: { email: 'demo-admin@demo.local', role: 'admin', profile: { kind: 'guest', name: '시연 관리자', affiliation: '시연', reason: '시연용 관리자 계정' } },
+};
+
+/** 시연용 역할로 로그인 (승인된 계정을 만들거나 찾는다) */
+export function signInDemoRole(role) {
+  const demo = DEMO_ACCOUNTS[role];
+  if (!demo) return null;
+  const d = getAccounts();
+  let user = d.users.find((u) => u.email === demo.email);
+  if (!user) {
+    user = {
+      uid: `u-demo-${role}`, email: demo.email, role: demo.role, status: 'approved', profile: { ...demo.profile },
+      researchId: newResearchId(), sessionIds: [], guardianConsent: null, createdAt: now(), submittedAt: now(), approvedAt: now(), approvedBy: 'demo', demo: true,
+    };
+    d.users.push(user);
+  }
+  user.role = demo.role;
+  user.status = 'approved';
+  d.currentUid = user.uid;
+  save();
+  return user;
+}
+
 export function signOut() {
   getAccounts().currentUid = null;
   save();

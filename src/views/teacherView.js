@@ -9,7 +9,7 @@ import { RESEARCH_STAGES } from '../data/research.js';
 import { SAMPLE_ACTIVITY } from '../data/sampleRecords.js';
 import { getClassroom, saveClassroom } from '../state/classroomStore.js';
 import { activeSession, ensureSessionCode, formatCode, getSessions, sessionLabel, setActiveSession } from '../state/sessionStore.js';
-import { currentUser, isAdmin, sessionMembers } from '../state/accountStore.js';
+import { sessionMembers } from '../state/accountStore.js';
 import {
   findStage, getConsent, getResearch, getSurveyResponse, inkOf, propositionIdsFor, resetResearch, stageStatus,
 } from '../state/researchStore.js';
@@ -34,13 +34,11 @@ export function renderTeacher(root) {
   const draw = () => {
     const classroom = getClassroom();
     const session = activeSession();
-    const user = currentUser();
-    const showAdmin = !user || isAdmin(user);
     root.innerHTML = `<div class="page page--teacher">
-    ${breadcrumb([{ label: '학생 화면', href: '#/' }, { label: '교사 업무판' }])}
-    <header class="page-intro">
-      <h1>교사 업무판</h1>
-      <p class="lead">오늘 수업에 필요한 일을 모았습니다. 설정은 아래 "설정"에서 바꿉니다.</p>
+    ${breadcrumb([{ label: '홈', href: '#/' }, { label: '교사 업무판' }])}
+    <header class="page-intro board-head">
+      <div><h1>교사 업무판</h1><p class="lead">오늘 수업에 필요한 일을 모았습니다.</p></div>
+      <a class="button button--secondary" href="#/teacher/settings">교사 설정</a>
     </header>
     ${notice('warn', '프로토타입 상태입니다', '교사 권한 확인, 실제 학생 데이터, 서버 저장은 아직 연결되지 않았습니다. 설정은 이 브라우저에만 저장되며, 아래 학생 기록은 모두 예시 데이터입니다.')}
     <div data-retention-alert></div>
@@ -67,14 +65,6 @@ export function renderTeacher(root) {
       <ul class="task-grid">${TASKS.map((t) => `<li><a class="task-tile" href="${t.href}"><span class="task-tile__title">${escapeHtml(t.title)}</span><span class="task-tile__desc">${escapeHtml(t.desc)}</span></a></li>`).join('')}</ul>
     </section>
 
-    <section class="panel" aria-labelledby="set-heading">
-      <h2 id="set-heading" class="section-title">설정</h2>
-      <ul class="task-grid">
-        <li><a class="task-tile" href="#/teacher/settings"><span class="task-tile__title">교사 설정</span><span class="task-tile__desc">학급·세션, 탐구 진행, 증명 연습(학급별), 채점·분석 보기</span></a></li>
-        ${showAdmin ? '<li><a class="task-tile" href="#/admin"><span class="task-tile__title">관리자 설정</span><span class="task-tile__desc">사용자·가입, 연결표·요청, 연구 윤리, 연구 도구, 연습 기본값, 공지·안내, 관리 기록</span></a></li>' : ''}
-        <li><a class="task-tile" href="#/settings"><span class="task-tile__title">내 설정</span><span class="task-tile__desc">계정, 화면·입력, 개인정보, 도움말</span></a></li>
-      </ul>
-    </section>
 
     <section class="panel" aria-labelledby="activity-heading">
       <div class="section-head">

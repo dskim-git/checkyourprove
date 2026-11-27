@@ -47,7 +47,7 @@ const chrome = (tab) => {
   const t = ADMIN_TABS.find((x) => x.id === tab);
   const open = getAdmin().requests.filter((x) => x.status === 'open').length;
   const tabs = ADMIN_TABS.map((x) => (x.id === 'links' && open ? { ...x, badge: open } : x));
-  return `${breadcrumb([{ label: '교사 업무판', href: '#/teacher' }, { label: '관리자 설정' }])}
+  return `${breadcrumb([{ label: '관리자 보드', href: '#/admin' }, { label: '관리자 설정' }])}
     <header class="page-intro"><h1>관리자 설정</h1><p class="lead">${escapeHtml(t.lead)}</p></header>
     ${settingsTabs(tabs, tab, '관리자 설정')}
     ${previewNote()}`;
@@ -624,5 +624,56 @@ export function renderAdminAudit(root) {
 /** #/admin/:tab */
 export function renderAdmin(root, [tab]) {
   const map = { users: renderAdminUsers, links: renderAdminLinks, ethics: renderEthics, tools: renderAdminTools, practice: renderAdminPractice, notices: renderAdminNotices, audit: renderAdminAudit };
+  if (!tab) return renderAdminBoard(root);
   return (map[tab] ?? renderAdminUsers)(root);
+}
+
+// ── 관리자 보드 (2026-11-27 사용자 결정): 관리자가 할 일을 한눈에, 항목을 누르면 관리자 설정의 해당 탭으로 ─────
+
+export function renderAdminBoard(root) {
+  if (guard(root, '관리자 보드')) return null;
+  const d = getAccounts();
+  const a = getAdmin();
+  const pending = d.users.filter((u) => u.status === 'pending').length;
+  const openReq = a.requests.filter((q) => q.status === 'open').length;
+  const count = (role) => d.users.filter((u) => u.role === role && u.status === 'approved').length;
+  const del = dataDeleteDate(ethics());
+  const delSt = retentionState(del);
+  const rec = retentionUntil();
+  const recSt = retentionState(rec);
+  const today = new Date().toISOString().slice(0, 10);
+  const liveNotices = a.notices.filter((n) => !n.until || n.until >= today).length;
+  const stateText = (date, st) => (!date ? '정하지 않음' : st.state === 'over' ? `${date} (지남)` : st.state === 'soon' ? `${date} (${st.days}일 남음)` : date);
+  const tile = (href, title, value, sub, warn = false) => `<li><a class="task-tile board-tile${warn ? ' is-warn' : ''}" href="${href}"><span class="task-tile__desc">${escapeHtml(title)}</span><span class="board-tile__value num">${escapeHtml(String(value))}</span><span class="task-tile__desc">${escapeHtml(sub)}</span></a></li>`;
+  root.innerHTML = `<div class="page page--teacher page--admin">
+    ${breadcrumb([{ label: '홈', href: '#/' }, { label: '관리자 보드' }])}
+    <header class="page-intro board-head">
+      <div><h1>관리자 보드</h1><p class="lead">관리자가 처리할 일을 모았습니다. 항목을 누르면 관리자 설정의 해당 탭이 열립니다.</p></div>
+      <a class="button button--secondary" href="#/admin/users">관리자 설정</a>
+    </header>
+    ${previewNote()}
+    <section class="panel" aria-labelledby="ab-todo">
+      <h2 id="ab-todo" class="section-title">할 일</h2>
+      <ul class="task-grid">
+        ${tile('#/admin/users', '가입 승인 대기', `${pending}명`, pending ? '승인하거나 거절하세요' : '기다리는 사람이 없습니다', pending > 0)}
+        ${tile('#/admin/links', '처리 전 개인정보 요청', `${openReq}건`, openReq ? '기록 삭제·탈퇴 요청' : '받은 요청이 없습니다', openReq > 0)}
+        ${tile('#/admin/ethics', '연구 자료 삭제 예정일', stateText(del, delSt), ethics().irb ? 'IRB: 연구 종료 뒤 보존' : '관리자가 정한 날', delSt.state === 'over' || delSt.state === 'soon')}
+        ${tile('#/admin/ethics', '면담 녹음 보관 기한', stateText(rec, recSt), '지나면 녹음 관리에서 지움', recSt.state === 'over' || recSt.state === 'soon')}
+      </ul>
+    </section>
+    <section class="panel" aria-labelledby="ab-now">
+      <h2 id="ab-now" class="section-title">현황</h2>
+      <ul class="task-grid">
+        ${tile('#/admin/users', '사용자', `${d.users.filter((u) => u.status === 'approved').length}명`, `학생 ${count('student')} · 교사 ${count('teacher')} · 일반인 ${count('guest')} · 관리자 ${count('admin')}`)}
+        ${tile('#/admin/users', '학생 명단', `${d.roster.length}명`, `명단 자동 승인 ${a.signup.rosterAutoApprove ? '켬' : '끔'} · 일반인 가입 ${a.signup.allowGuests ? '받음' : '안 받음'}`)}
+        ${tile('#/admin/notices', '게시 중인 공지', `${liveNotices}개`, a.contact.name ? `문의처: ${a.contact.name}` : '문의처를 아직 정하지 않았습니다')}
+        ${tile('#/admin/tools', '연구 도구', `설문 ${listSurveys().length}개`, `AI 보조 채점자 ${getGrading().aiAsRater ? '켬' : '끔'}`)}
+      </ul>
+    </section>
+    <section class="panel" aria-labelledby="ab-log">
+      <div class="section-head"><h2 id="ab-log" class="section-title">최근 관리 기록</h2><a class="an-link" href="#/admin/audit">전체 보기</a></div>
+      ${a.audit.length ? `<ul class="answer-list">${a.audit.slice(0, 5).map((x) => `<li><strong>${escapeHtml(x.action)}</strong><span class="meta">${escapeHtml(formatDateTime(x.at))}, ${escapeHtml(x.by || '–')}${x.detail ? `, ${escapeHtml(x.detail)}` : ''}</span></li>`).join('')}</ul>` : '<p class="empty-text">아직 기록이 없습니다.</p>'}
+    </section>
+  </div>`;
+  return null;
 }

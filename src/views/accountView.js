@@ -4,7 +4,7 @@
 // TODO(Firebase): signInDemo를 Firebase Auth의 Google 로그인(signInWithPopup/Redirect)으로 바꾼다.
 
 import {
-  canTeach, currentUser, displayName, ethics, isAdmin, joinSession, roleLabel, signInDemo, signOut, STATUS_LABELS, submitProfile,
+  canTeach, currentUser, displayName, ethics, isAdmin, joinSession, roleLabel, signInDemo, signInDemoRole, signOut, STATUS_LABELS, submitProfile,
 } from '../state/accountStore.js';
 import { findSession, findSessionByCode, formatCode, sessionLabel, setActiveSession } from '../state/sessionStore.js';
 import { breadcrumb, notice } from '../ui/components.js';
@@ -66,6 +66,15 @@ export function renderAccount(root) {
           <p class="field__error" data-form-error role="alert" hidden></p>
           <div class="actions actions--start"><button type="submit" class="button button--primary">구글로 로그인 (시연)</button></div>
         </form>
+      </section>
+      <section class="panel account-box" aria-labelledby="acc-demo">
+        <h2 id="acc-demo" class="section-title">시연용 역할로 보기</h2>
+        <p class="meta">서버를 연결하기 전 확인용입니다. 고른 역할의 시연 계정으로 들어가 그 역할의 화면을 봅니다(서버 연결 때 없앰).</p>
+        <div class="actions actions--start" data-demo-roles>
+          <button type="button" class="button button--secondary" data-demo-role="student">학생으로 보기</button>
+          <button type="button" class="button button--secondary" data-demo-role="teacher">교사로 보기</button>
+          <button type="button" class="button button--secondary" data-demo-role="admin">관리자로 보기</button>
+        </div>
       </section>`;
     } else if (user.status === 'profile' || (user.status === 'pending' && kind)) {
       const k = kind ?? user.profile?.kind ?? 'student';
@@ -168,6 +177,12 @@ export function renderAccount(root) {
     root.querySelector(`[name="kind"][value="${kind}"]`)?.focus();
   };
   const onClick = (event) => {
+    const demo = event.target.closest('[data-demo-role]')?.dataset.demoRole;
+    if (demo) {
+      signInDemoRole(demo);
+      window.location.hash = demo === 'admin' ? '#/admin' : demo === 'teacher' ? '#/teacher' : '#/';
+      return;
+    }
     const a = event.target.closest('[data-action]')?.dataset.action;
     if (a === 'signout') {
       signOut();

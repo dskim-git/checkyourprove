@@ -59,7 +59,8 @@ import { renderAccount } from './views/accountView.js';
 import { renderAdmin } from './views/teacher/adminView.js';
 import { renderTeacherSettings } from './views/teacher/teacherSettingsView.js';
 import { renderSettings } from './views/settingsView.js';
-import { currentUser, displayName } from './state/accountStore.js';
+import { canTeach, currentUser, displayName, isAdmin } from './state/accountStore.js';
+import { icons } from './ui/icons.js';
 import { activeNotices } from './state/adminStore.js';
 import { dismissNotice, getPrefs } from './state/prefsStore.js';
 import { renderMethodGuide } from './views/practice/methodGuideView.js';
@@ -81,26 +82,26 @@ const ROUTES = [
   { section: 'student', tab: 'research', title: '연구 참여 동의', pattern: /^\/research\/consent$/, render: renderConsent },
   { section: 'student', tab: 'research', view: 'lesson', title: 'AI는 어떻게 답할까?', pattern: /^\/research\/principle$/, render: renderPrinciple },
   { section: 'student', tab: 'research', view: 'lesson', title: '설문', pattern: /^\/research\/survey\/(pre|post)$/, render: renderSurvey },
-  { section: 'teacher', tab: null, view: 'wide', title: '교사 화면 미리보기', pattern: /^\/teacher$/, render: renderTeacher },
-  { section: 'teacher', tab: null, view: 'wide', title: '증명 채점', pattern: /^\/teacher\/grading$/, render: renderGradingHome },
-  { section: 'teacher', tab: null, view: 'wide', title: '증명 채점', pattern: /^\/teacher\/grading\/([\w~-]+)$/, render: renderGrade },
-  { section: 'teacher', tab: null, view: 'wide', title: '채점 루브릭', pattern: /^\/teacher\/rubric$/, render: renderRubric },
-  { section: 'teacher', tab: null, view: 'wide', title: 'AI 대화 태그', pattern: /^\/teacher\/chats$/, render: renderChatTagHome },
-  { section: 'teacher', tab: null, view: 'wide', title: 'AI 대화 태그', pattern: /^\/teacher\/chats\/([\w~-]+)$/, render: renderChatTag },
-  { section: 'teacher', tab: null, view: 'wide', title: '대화 태그 목록', pattern: /^\/teacher\/chat-tags$/, render: renderChatTagList },
-  { section: 'teacher', tab: null, view: 'wide', title: '연구 분석', pattern: /^\/teacher\/analysis$/, render: renderAnalysisHome },
-  { section: 'teacher', tab: null, view: 'wide', title: '연구 분석', pattern: /^\/teacher\/analysis\/([\w-]+)$/, render: renderAnalysisStudent },
-  { section: 'teacher', tab: null, view: 'wide', title: '설문과 연구 동의', pattern: /^\/teacher\/surveys$/, render: renderSurveyList },
-  { section: 'teacher', tab: null, view: 'wide', title: '원리 활동 진행', pattern: /^\/teacher\/principle$/, render: renderPrinciplePace },
-  { section: 'teacher', tab: null, view: 'wide', title: '설문 문항', pattern: /^\/teacher\/surveys\/([\w-]+)$/, render: renderSurveyEdit },
-  { section: 'teacher', tab: null, view: 'wide', title: '면담', pattern: /^\/teacher\/interviews$/, render: renderInterviewHome },
-  { section: 'teacher', tab: null, view: 'wide', title: '면담', pattern: /^\/teacher\/interviews\/([\w-]+)$/, render: renderInterview },
-  { section: 'teacher', tab: null, view: 'wide', title: '녹음 관리', pattern: /^\/teacher\/recordings$/, render: renderRecordings },
+  { section: 'teacher', role: 'teacher', tab: null, view: 'wide', title: '교사 업무판', pattern: /^\/teacher$/, render: renderTeacher },
+  { section: 'teacher', role: 'teacher', tab: null, view: 'wide', title: '증명 채점', pattern: /^\/teacher\/grading$/, render: renderGradingHome },
+  { section: 'teacher', role: 'teacher', tab: null, view: 'wide', title: '증명 채점', pattern: /^\/teacher\/grading\/([\w~-]+)$/, render: renderGrade },
+  { section: 'admin', role: 'admin', tab: null, view: 'wide', title: '채점 루브릭', pattern: /^\/teacher\/rubric$/, render: renderRubric },
+  { section: 'teacher', role: 'teacher', tab: null, view: 'wide', title: 'AI 대화 태그', pattern: /^\/teacher\/chats$/, render: renderChatTagHome },
+  { section: 'teacher', role: 'teacher', tab: null, view: 'wide', title: 'AI 대화 태그', pattern: /^\/teacher\/chats\/([\w~-]+)$/, render: renderChatTag },
+  { section: 'admin', role: 'admin', tab: null, view: 'wide', title: '대화 태그 목록', pattern: /^\/teacher\/chat-tags$/, render: renderChatTagList },
+  { section: 'teacher', role: 'teacher', tab: null, view: 'wide', title: '연구 분석', pattern: /^\/teacher\/analysis$/, render: renderAnalysisHome },
+  { section: 'teacher', role: 'teacher', tab: null, view: 'wide', title: '연구 분석', pattern: /^\/teacher\/analysis\/([\w-]+)$/, render: renderAnalysisStudent },
+  { section: 'admin', role: 'admin', tab: null, view: 'wide', title: '설문 문항', pattern: /^\/teacher\/surveys$/, render: renderSurveyList },
+  { section: 'teacher', role: 'teacher', tab: null, view: 'wide', title: '원리 활동 진행', pattern: /^\/teacher\/principle$/, render: renderPrinciplePace },
+  { section: 'admin', role: 'admin', tab: null, view: 'wide', title: '설문 문항', pattern: /^\/teacher\/surveys\/([\w-]+)$/, render: renderSurveyEdit },
+  { section: 'teacher', role: 'teacher', tab: null, view: 'wide', title: '면담', pattern: /^\/teacher\/interviews$/, render: renderInterviewHome },
+  { section: 'teacher', role: 'teacher', tab: null, view: 'wide', title: '면담', pattern: /^\/teacher\/interviews\/([\w-]+)$/, render: renderInterview },
+  { section: 'teacher', role: 'teacher', tab: null, view: 'wide', title: '녹음 관리', pattern: /^\/teacher\/recordings$/, render: renderRecordings },
   { section: 'account', tab: null, title: '계정', pattern: /^\/account$/, render: renderAccount },
   { section: 'account', tab: null, title: '내 설정', pattern: /^\/settings(?:\/(account|display|privacy|help))?$/, render: renderSettings },
-  { section: 'teacher', tab: null, view: 'wide', title: '교사 설정', pattern: /^\/teacher\/settings(?:\/(sessions|research|practice|grading))?$/, render: renderTeacherSettings },
-  { section: 'teacher', tab: null, view: 'wide', title: '관리자 설정', pattern: /^\/admin(?:\/(users|links|ethics|tools|practice|notices|audit))?$/, render: renderAdmin },
-  { section: 'teacher', tab: null, view: 'wide', title: '관리자 설정', pattern: /^\/teacher\/admin(?:\/(links|ethics))?$/, render: (root, [tab]) => renderAdmin(root, [tab ?? 'users']) },
+  { section: 'teacher', role: 'teacher', tab: null, view: 'wide', title: '교사 설정', pattern: /^\/teacher\/settings(?:\/(sessions|research|practice|grading))?$/, render: renderTeacherSettings },
+  { section: 'admin', role: 'admin', tab: null, view: 'wide', title: '관리자 설정', pattern: /^\/admin(?:\/(users|links|ethics|tools|practice|notices|audit))?$/, render: renderAdmin },
+  { section: 'admin', role: 'admin', tab: null, view: 'wide', title: '관리자 설정', pattern: /^\/teacher\/admin(?:\/(links|ethics))?$/, render: (root, [tab]) => renderAdmin(root, [tab ?? 'users']) },
 ];
 
 const APP_TITLE = '증명 연습실';
@@ -108,6 +109,39 @@ const APP_TITLE = '증명 연습실';
 function currentPath() {
   const hash = window.location.hash.replace(/^#/, '');
   return hash.startsWith('/') ? hash : '/';
+}
+
+/** 역할에 맞지 않는 화면이면 막는 글 (서버 연결 뒤에는 보안 규칙이 실제로 막는다) */
+function roleBlock(route) {
+  if (!route.role) return null;
+  const u = currentUser();
+  const ok = route.role === 'admin' ? isAdmin(u) : canTeach(u);
+  if (ok) return null;
+  const who = route.role === 'admin' ? '관리자' : '교사';
+  return `<div class="page">
+    <h1>${who}만 볼 수 있어요</h1>
+    <div class="notice notice--lock" role="note"><div class="notice__body"><p class="notice__title">${u ? `${escapeHtml(displayName(u))} 계정은 ${who} 화면을 볼 수 없어요.` : '로그인하지 않았어요.'}</p>
+      <p>${u ? '역할이 잘못되었다면 관리자에게 말해 주세요.' : `${who} 계정으로 로그인하세요. 서버 연결 전에는 로그인 화면의 "시연용 역할로 보기"를 쓸 수 있어요.`}</p></div></div>
+    <p><a class="button button--secondary" href="${u ? '#/' : '#/account'}">${u ? '홈으로' : '로그인'}</a></p>
+  </div>`;
+}
+
+/** 머리글 오른쪽: 로그인 전 [로그인] / 학생·일반인 [⚙] / 교사 [교사 업무판][⚙] / 관리자 [교사][관리자][⚙] */
+function drawAppNav(user) {
+  const nav = document.querySelector('[data-app-nav]');
+  if (!nav) return;
+  const link = (href, sec, text, extra = '') => `<a class="app-bar__link" href="${href}" data-nav="${sec}"${extra}>${text}</a>`;
+  if (!user) {
+    nav.innerHTML = link('#/account', 'account', '로그인', ' data-account-chip');
+    return;
+  }
+  const admin = isAdmin(user);
+  const teach = canTeach(user);
+  nav.innerHTML = [
+    teach ? link('#/teacher', 'teacher', admin ? '<span class="app-bar__short">교사</span><span class="app-bar__long">교사 업무판</span>' : '교사 업무판', ' aria-label="교사 업무판"') : '',
+    admin ? link('#/admin', 'admin', '<span class="app-bar__short">관리자</span><span class="app-bar__long">관리자 보드</span>', ' aria-label="관리자 보드"') : '',
+    link('#/settings', 'account', icons.gear, ` data-account-chip aria-label="내 설정 (${escapeHtml(displayName(user))})" title="내 설정"`),
+  ].join('');
 }
 
 /** 앱 위쪽 공지 (관리자가 올린 공지 중 내 역할에 맞고 기한이 지나지 않은 것, 닫으면 이 기기에서 숨김) */
@@ -148,7 +182,10 @@ export function startRouter(root) {
 
     root.innerHTML = '';
     try {
-      if (route) {
+      const blocked = route ? roleBlock(route) : null;
+      if (blocked) {
+        root.innerHTML = blocked;
+      } else if (route) {
         cleanup = route.render(root, params) ?? null;
       } else {
         renderNotFound(root);
@@ -171,12 +208,8 @@ export function startRouter(root) {
 
     document.title = route?.title ? `${route.title} - ${APP_TITLE}` : APP_TITLE;
     // 머리글의 계정 링크: 로그인했으면 이름, 아니면 "로그인"
-    const chip = document.querySelector('[data-account-chip]');
     const u = currentUser();
-    if (chip) {
-      chip.textContent = u ? displayName(u) : '로그인';
-      chip.setAttribute('href', u ? '#/settings' : '#/account');
-    }
+    drawAppNav(u);
     drawNoticeBar(u);
     document.body.dataset.view = route?.view ?? 'app';
     document.querySelectorAll('[data-nav]').forEach((link) => {

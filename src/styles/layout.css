@@ -50,14 +50,20 @@
   font-size: var(--text-sm);
   text-decoration: none;
 }
-.app-bar__link + .app-bar__link { margin-inline-start: 0; }
+.app-bar__nav { display: flex; align-items: center; gap: var(--space-3xs); margin-inline-start: auto; }
+.app-bar__nav .app-bar__link { margin-inline-start: 0; }
 .brand, .app-bar__link { white-space: nowrap; }
-/* 아주 좁은 화면: 계정 링크가 들어갈 자리를 위해 프로토타입 표시를 숨긴다 */
+.app-bar__link[data-account-chip] { min-width: 44px; justify-content: center; }
+.app-bar__link .icon { width: 1.35em; height: 1.35em; }
+.app-bar__long { display: none; }
+@media (min-width: 30rem) {
+  .app-bar__short { display: none; }
+  .app-bar__long { display: inline; }
+}
+/* 아주 좁은 화면: 버튼 자리를 위해 프로토타입 표시를 숨긴다 */
 @media (max-width: 23rem) {
   .app-bar__inner > .tag--proto { display: none; }
-  .app-bar__link[data-account-chip] { max-width: 5.5rem; }
 }
-.app-bar__link[data-account-chip] { display: inline-block; max-width: 8rem; overflow: hidden; line-height: 44px; text-overflow: ellipsis; white-space: nowrap; }
 .app-bar__link:hover { color: var(--color-ink); background: var(--color-paper-2); }
 .app-bar__link:active { background: var(--color-paper-3); }
 .app-bar__link[aria-current='page'] { color: var(--color-ink); background: var(--color-paper-3); }

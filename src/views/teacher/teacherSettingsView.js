@@ -206,7 +206,7 @@ export function renderTeacherSettings(root, [tabParam]) {
     if (tab === 'grading') body = `<section class="panel" aria-labelledby="gp-heading"><h2 id="gp-heading" class="section-title">채점·분석 보기</h2>${gradingForm()}<p class="save-status" role="status" data-tab-status>${escapeHtml(status)}</p></section>`;
     root.innerHTML = `<div class="page page--teacher page--settings">
       ${breadcrumb([{ label: '교사 업무판', href: '#/teacher' }, { label: '교사 설정' }])}
-      <header class="page-intro"><h1>교사 설정</h1><p class="lead">수업 운영에 필요한 설정입니다. 연구 도구와 가입·개인정보 설정은 <a href="#/admin">관리자 설정</a>, 글자 크기 같은 내 화면 설정은 <a href="#/settings/display">내 설정</a>에 있습니다.</p></header>
+      <header class="page-intro"><h1>교사 설정</h1><p class="lead">수업 운영에 필요한 설정입니다. 글자 크기 같은 내 화면 설정은 오른쪽 위 톱니바퀴(내 설정)에 있습니다.</p></header>
       ${settingsTabs(TEACHER_TABS, tab, '교사 설정')}
       ${body}
     </div>`;
