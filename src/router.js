@@ -61,7 +61,8 @@ import { renderAdmin } from './views/teacher/adminView.js';
 import { renderTeacherSettings } from './views/teacher/teacherSettingsView.js';
 import { renderSettings } from './views/settingsView.js';
 import { canTeach, currentUser, displayName, isAdmin } from './state/accountStore.js';
-import { isBrowserOnly } from './state/appMode.js';
+import { isBrowserOnly, isDemo, isFirebase } from './state/appMode.js';
+import { renderLanding } from './views/landingView.js';
 import { icons } from './ui/icons.js';
 import { activeNotices } from './state/adminStore.js';
 import { dismissNotice, getPrefs } from './state/prefsStore.js';
@@ -109,6 +110,21 @@ const ROUTES = [
 ];
 
 const APP_TITLE = '증명 연습실';
+
+// 첫 화면과 승인 확인(2026-11-27 사용자 요청): 서버 모드와 시연 모드에서는 로그인하지 않으면 어떤 주소든 첫 화면(앱 이름·소개·로그인),
+// 로그인했지만 승인 전(정보 입력 전·승인 대기·거절)이면 계정 화면만. 프로토타입 모드(설정값 없음, 동작 테스트)는 지금처럼 미리보기.
+const GATED = isFirebase || isDemo;
+const LANDING = { section: 'landing', tab: null, view: 'landing', title: null, render: renderLanding };
+const OPEN_WHEN_SIGNED_OUT = isDemo ? [/^\/demo-data$/] : [];
+const OPEN_BEFORE_APPROVAL = [/^\/account$/, /^\/settings/, /^\/demo-data$/];
+
+function gate(path, route) {
+  if (!GATED) return route;
+  const u = currentUser();
+  if (!u) return OPEN_WHEN_SIGNED_OUT.some((re) => re.test(path)) ? route : LANDING;
+  if (u.status !== 'approved' && !OPEN_BEFORE_APPROVAL.some((re) => re.test(path))) return ROUTES.find((r) => r.section === 'account' && r.pattern.test('/account'));
+  return route;
+}
 
 function currentPath() {
   const hash = window.location.hash.replace(/^#/, '');
@@ -203,11 +219,13 @@ export function startRouter(root) {
     const path = currentPath();
     shownSig = userSig(currentUser());
     let params = [];
-    const route = ROUTES.find((candidate) => {
+    const found = ROUTES.find((candidate) => {
       const match = path.match(candidate.pattern);
       if (match) params = match.slice(1);
       return Boolean(match);
     });
+    const route = gate(path, found);
+    if (route !== found) params = [];
 
     root.innerHTML = '';
     try {

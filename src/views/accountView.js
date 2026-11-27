@@ -8,6 +8,7 @@ import {
   submitProfile,
 } from '../state/accountStore.js';
 import { isFirebase } from '../state/appMode.js';
+import { googleErrorText } from './landingView.js';
 import { findSession, findSessionByCode, formatCode, sessionLabel, setActiveSession } from '../state/sessionStore.js';
 import { breadcrumb, notice } from '../ui/components.js';
 import { getAdmin } from '../state/adminStore.js';
@@ -205,11 +206,7 @@ export function renderAccount(root) {
         signingIn = false; // 로그인되면 서버 값이 들어와 라우터가 다시 그린다
       }).catch((error) => {
         signingIn = false;
-        const code = error?.code ?? '';
-        loginError = code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request' ? ''
-          : code === 'auth/popup-blocked' ? '팝업이 막혀 있어요. 브라우저에서 이 사이트의 팝업을 허용한 뒤 다시 눌러 주세요.'
-            : code === 'auth/unauthorized-domain' ? '이 주소에서는 로그인할 수 없어요(Firebase 승인된 도메인 확인 필요).'
-              : `로그인하지 못했어요. 잠시 뒤 다시 해 보세요. (${code || error?.message || '오류'})`;
+        loginError = googleErrorText(error);
         draw();
       });
       return;

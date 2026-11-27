@@ -1633,3 +1633,22 @@ button.pc-in:focus-visible { outline: 3px solid var(--color-focus); outline-offs
 .board-head > div { display: grid; gap: var(--space-xs); }
 .board-tile__value { font-size: var(--text-xl); font-weight: var(--display-weight); }
 .board-tile.is-warn { background: var(--grain), var(--color-coral-soft); }
+
+/* ── 첫 화면 (로그인하지 않았을 때, views/landingView.js) ─────── */
+body[data-view='landing'] .tab-bar,
+body[data-view='landing'] [data-app-nav] { display: none; }
+body[data-view='landing'] .app-main { padding-bottom: var(--space-xl); }
+.landing { gap: var(--space-lg); }
+.landing__head { display: grid; gap: var(--space-xs); padding-top: var(--space-md); }
+.landing__kicker { margin: 0; color: var(--color-muted); font-size: var(--text-sm); font-weight: var(--display-weight); }
+.landing__title { margin: 0; font-size: var(--text-3xl); letter-spacing: var(--tracking-display); }
+.landing__features { display: grid; gap: var(--space-sm); margin: 0; padding: 0; list-style: none; }
+.landing__feature { display: grid; grid-template-columns: auto 1fr; align-items: start; gap: var(--space-sm); }
+.landing__feature strong { display: block; }
+.landing__text { display: block; color: var(--color-ink-2); font-size: var(--text-sm); line-height: 1.5; }
+.landing__icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--radius-input); background: var(--color-accent); color: var(--color-accent-ink); }
+.landing__feature:nth-child(2) .landing__icon { background: var(--color-sugar); }
+.landing__feature:nth-child(3) .landing__icon { background: var(--color-mint); }
+.landing__icon .icon { width: 22px; height: 22px; }
+.landing__login { display: grid; gap: var(--space-sm); }
+.landing__login p { margin: 0; }
