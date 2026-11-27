@@ -22,6 +22,8 @@ import { sessionLabel } from '../../state/sessionStore.js';
 import { SCALE_LABELS, SURVEY_DOMAINS } from '../../data/surveyDefaults.js';
 import { CONSENT_LABELS, consentStatus, domainMeans, responsesOf } from '../../services/surveyAnalysis.js';
 import { findSurvey } from '../../state/surveyStore.js';
+import { PRINCIPLE_ITEMS, PRINCIPLE_PARTS } from '../../data/principleActivity.js';
+import { principleScore } from '../../services/principleAnalysis.js';
 import { gradedBy, openChatPopup, openGradePopup, taggedBy } from './recordPopups.js';
 
 const fmt = (v) => (v == null ? '–' : Number.isInteger(v) ? String(v) : Number(v).toFixed(1));
@@ -104,6 +106,7 @@ export function renderAnalysisStudent(root, [studentId]) {
         ${timeChart}
       </section>
 
+      ${principleBlock(student)}
       ${surveyBlock(student)}
 
       ${a.props.map((p) => propSection(student, p, source)).join('')}
@@ -114,6 +117,28 @@ export function renderAnalysisStudent(root, [studentId]) {
       return student.record.stages?.[stage]?.items?.[problemId]?.ink?.[field] ?? null;
     });
   };
+
+  /** 원리 활동 결과 */
+  function principleBlock(student) {
+    const sc = principleScore(student);
+    const pr = student.record.principle;
+    if (!sc) return `<section class="panel" aria-labelledby="st-principle"><h2 id="st-principle" class="section-title">"AI는 어떻게 답할까?" 원리 활동</h2><p class="empty-text">기록이 없습니다.</p></section>`;
+    const rows = PRINCIPLE_ITEMS.map((it, i) => {
+      const a = pr.answers?.[it.id];
+      const part = PRINCIPLE_PARTS.find((p) => p.id === it.part);
+      return `<tr><th scope="row">${i + 1}. ${escapeHtml(it.prompt)}</th><td>${escapeHtml(part.title)}</td><td>${a ? escapeHtml(it.options[a.choice]) : '–'}</td><td>${a ? (a.correct ? '<span class="tag tag--mint">맞음</span>' : `<span class="tag tag--warn">틀림</span> <span class="meta">정답: ${escapeHtml(it.options[it.answer])}</span>`) : '–'}</td><td class="num">${a?.ms != null ? `${Math.round(a.ms / 1000)}초` : '–'}</td></tr>`;
+    }).join('');
+    return `<section class="panel" aria-labelledby="st-principle">
+      <h2 id="st-principle" class="section-title">"AI는 어떻게 답할까?" 원리 활동</h2>
+      <p class="meta">${sc.finished ? '마침' : '진행 중'}, 처음 고른 답 ${sc.correct} / ${sc.total} 정답, ${sc.minutes}분. 마무리: ${escapeHtml(sc.reflection || '–')}</p>
+      <details class="ref-card"><summary>문항별 응답 보기</summary>
+        <div class="table-wrap"><table class="data-table grade-table">
+          <thead><tr><th scope="col">문항</th><th scope="col">묶음</th><th scope="col">처음 고른 답</th><th scope="col">결과</th><th scope="col">걸린 시간</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table></div>
+      </details>
+    </section>`;
+  }
 
   /** 사전·사후 설문: 영역 평균, 문항별 응답 */
   function surveyBlock(student) {

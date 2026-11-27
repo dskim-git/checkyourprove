@@ -7,6 +7,20 @@
 import { fullProofText } from './proofModel.js';
 import { handwritingInk } from './sampleHandwriting.js';
 import { DEFAULT_SURVEY, DEFAULT_SURVEY_ID } from './surveyDefaults.js';
+import { PRINCIPLE_ITEMS, PRINCIPLE_VERSION } from './principleActivity.js';
+
+/** 예시 원리 활동: 학생마다 틀리는 문항을 다르게(오류 찾기 e1, 질문 바꾸기 p1을 자주 틀리게) */
+const PRINCIPLE_WRONG = [['n2', 'e1', 'e2', 'v1'], ['e1'], ['n2', 'e1'], ['n1', 'n2', 'v1', 'e1', 'p1'], ['p2'], ['e1', 'p1', 'e3']];
+const PRINCIPLE_REFLECT = ['계산이 맞는지 직접 해 본다', '근거가 있는지 확인한다', 'AI 답을 내 증명과 비교한다', '그대로 믿지 않는다', '문자의 범위를 밝혔는지 본다', '이해 안 되는 줄을 다시 물어본다'];
+function samplePrinciple(index, day) {
+  const wrong = PRINCIPLE_WRONG[index];
+  const answers = Object.fromEntries(PRINCIPLE_ITEMS.map((it, i) => {
+    const bad = wrong.includes(it.id);
+    const choice = bad ? (it.answer + 1) % it.options.length : it.answer;
+    return [it.id, { choice, correct: !bad, at: at(day, 8, 20 + i), ms: 15000 + ((i * 7 + index * 3) % 30) * 1000 }];
+  }));
+  return { version: PRINCIPLE_VERSION, startedAt: at(day, 8, 15), finishedAt: at(day, 8, 31), activeMs: (13 + (index % 4)) * 60000, answers, reflection: PRINCIPLE_REFLECT[index] };
+}
 
 /**
  * 예시 사전·사후 설문 응답: 학생마다 출발점(level)을 두고, 사후에는 영역마다 조금씩 바뀌게 한다.
@@ -246,6 +260,7 @@ function buildRecord(profile, index) {
     },
     consent: { agreed: true, at: at(day, 7, 55), version: 'consent-proto-1', history: [{ at: at(day, 7, 55), agreed: true, version: 'consent-proto-1' }] },
     surveys: sampleSurveys(index, day),
+    principle: samplePrinciple(index, day),
     updatedAt: at(day + 2, 10, 10),
   };
 }

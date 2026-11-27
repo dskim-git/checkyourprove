@@ -14,7 +14,7 @@ import { DEFAULT_CLASSROOM } from '../data/classroom.js';
 import { DEFAULT_SURVEY_ID } from '../data/surveyDefaults.js';
 
 /** 세션의 동의·설문 기본값 (구현 4 전에 만든 세션도 이 값을 따른다) */
-export const SESSION_DEFAULTS = { consentRequired: true, surveyId: DEFAULT_SURVEY_ID, surveyPreOpen: true, surveyPostOpen: true };
+export const SESSION_DEFAULTS = { consentRequired: true, surveyId: DEFAULT_SURVEY_ID, surveyPreOpen: true, surveyPostOpen: true, principleOpen: true };
 export const sessionConfig = (session) => ({ ...SESSION_DEFAULTS, ...Object.fromEntries(Object.keys(SESSION_DEFAULTS).filter((k) => session?.[k] !== undefined).map((k) => [k, session[k]])) });
 import { readJson, writeJson } from './storage.js';
 

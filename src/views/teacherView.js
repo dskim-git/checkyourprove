@@ -116,6 +116,7 @@ export function renderTeacher(root) {
       surveyId: data.get('surveyId') || null,
       surveyPreOpen: data.get('surveyPreOpen') === 'on',
       surveyPostOpen: data.get('surveyPostOpen') === 'on',
+      principleOpen: data.get('principleOpen') === 'on',
     });
     root.querySelector('[data-research-progress]').innerHTML = researchProgress(getClassroom());
     root.querySelector('[data-session-panel]').outerHTML = sessionPanel('');
@@ -275,6 +276,7 @@ function settingsForm(classroom) {
         </div>
         <label class="check"><input type="checkbox" name="surveyPreOpen"${classroom.surveyPreOpen ? ' checked' : ''}><span>사전 설문 열기</span></label>
         <label class="check"><input type="checkbox" name="surveyPostOpen"${classroom.surveyPostOpen ? ' checked' : ''}><span>사후 설문 열기 <span class="meta">4단계를 제출한 학생만 할 수 있습니다.</span></span></label>
+        <label class="check"><input type="checkbox" name="principleOpen"${classroom.principleOpen ? ' checked' : ''}><span>"AI는 어떻게 답할까?" 원리 활동 <span class="meta">사전 설문 뒤, 1단계 전에 합니다(약 15분). 동의하지 않은 학생도 수업 활동으로 합니다.</span></span></label>
       </fieldset>
       <fieldset class="choice-group">
         <legend class="field__label">탐구할 명제</legend>

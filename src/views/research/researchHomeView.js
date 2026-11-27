@@ -4,7 +4,7 @@ import { getProblem } from '../../data/problems/index.js';
 import { RESEARCH_STAGES } from '../../data/research.js';
 import { getClassroom } from '../../state/classroomStore.js';
 import {
-  findStage, getConsent, getSurveyResponse, isItemComplete, postSurveyState, preStageBlocker, propositionIdsFor, researchParticipating, stageStatus,
+  findStage, getConsent, getPrinciple, getSurveyResponse, isItemComplete, postSurveyState, preStageBlocker, propositionIdsFor, researchParticipating, stageStatus,
 } from '../../state/researchStore.js';
 import { escapeHtml } from '../../ui/dom.js';
 import { icons } from '../../ui/icons.js';
@@ -45,6 +45,16 @@ function prepSection(classroom) {
     else if (!classroom.surveyPreOpen) row = { status: '선생님이 아직 열지 않았어요', state: 'locked' };
     else row = { href: '#/research/survey/pre', status: res ? '작성 중' : '시작할 수 있어요', state: 'here' };
     rows.push(taskRow({ title: '사전 설문', desc: '탐구를 시작하기 전 지금의 생각을 답합니다.', ...row }));
+  }
+  if (classroom.principleOpen) {
+    const pr = getPrinciple();
+    const blocker = preStageBlocker(classroom);
+    const answered = pr ? Object.keys(pr.answers).length : 0;
+    let row;
+    if (pr?.finishedAt) row = { href: '#/research/principle', status: '마침 (다시 볼 수 있어요)', state: 'done' };
+    else if (blocker && blocker.step !== 'principle') row = { status: blocker.step === 'consent' ? '연구 동의 뒤에 할 수 있어요' : '사전 설문 뒤에 할 수 있어요', state: 'locked' };
+    else row = { href: '#/research/principle', status: pr ? `${answered}문항 했어요, 이어서 하기` : '약 15분, 시작할 수 있어요', state: 'here' };
+    rows.push(taskRow({ title: 'AI는 어떻게 답할까?', desc: 'AI가 답을 만드는 원리와 AI 답을 확인하는 방법을 알아봅니다.', ...row }));
   }
   if (!rows.length) return '';
   return `<section class="task-group" aria-labelledby="prep-title"><h2 class="task-group__title" id="prep-title">시작하기 전에</h2><ol class="task-list">${rows.join('')}</ol></section>`;

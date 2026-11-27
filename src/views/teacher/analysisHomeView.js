@@ -10,6 +10,7 @@ import { escapeHtml } from '../../ui/dom.js';
 import { breadcrumb, notice } from '../../ui/components.js';
 import { handleScopeEvent, scopePicker, scopeText } from './sessionScope.js';
 import { isResearchIncluded, surveyCsv, surveyStats, surveysInUse } from '../../services/surveyAnalysis.js';
+import { principleStats } from '../../services/principleAnalysis.js';
 import { SCALE_LABELS } from '../../data/surveyDefaults.js';
 import { className as classNameOf, sessionLabel } from '../../state/sessionStore.js';
 import { barList, bindChartTips, columns, dotPlot, scatter, splitBar, statTiles, wordCloud } from '../../ui/charts.js';
@@ -107,6 +108,7 @@ export function renderAnalysisHome(root) {
       ${acceptanceSection(analyses)}
       ${checklistSection(analyses, source)}
       ${openSection(analyses)}
+      ${principleSection(pool.included)}
       ${surveySection(pool.included)}
       <section class="panel" aria-labelledby="an-students">
         <div class="section-head">
@@ -194,6 +196,33 @@ export function renderAnalysisHome(root) {
         <summary>답 전체 보기 (${answers.length})</summary>
         <ul class="answer-list">${answers.map((a) => `<li><span class="meta">${escapeHtml(a.who)}, 명제 ${a.prop}</span>${escapeHtml(a.text)}</li>`).join('')}</ul>
       </details>
+    </section>`;
+  }
+
+  function principleSection(students) {
+    const st = principleStats(students);
+    if (!st.n) {
+      return `<section class="panel" aria-labelledby="an-principle"><h2 id="an-principle" class="section-title">"AI는 어떻게 답할까?" 원리 활동</h2><p class="empty-text">아직 활동을 마친 학생이 없습니다.</p></section>`;
+    }
+    const weakest = [...st.items].filter((x) => x.rate != null).sort((a, b) => a.rate - b.rate)[0];
+    return `<section class="panel" aria-labelledby="an-principle">
+      <h2 id="an-principle" class="section-title">"AI는 어떻게 답할까?" 원리 활동</h2>
+      <p class="meta">처음 고른 답 기준입니다(학생은 고른 뒤 바로 설명을 보고 다시 고르지 않습니다).</p>
+      ${statTiles([
+        { label: '마친 학생', value: `${st.n}명`, sub: st.meanMinutes != null ? `평균 ${st.meanMinutes}분` : '' },
+        { label: '평균 정답', value: `${st.meanCorrect} / ${st.items.length}` },
+        ...st.parts.map((p) => ({ label: p.title, value: p.rate == null ? '–' : `${p.rate}%`, sub: '정답률' })),
+      ])}
+      <div class="an-charts">
+        ${barList({ title: '문항별 정답률', unit: '%', max: 100, wide: true, rows: st.items.map((x) => ({ label: `${x.num}번 ${st.parts.find((p) => p.id === x.item.part).title}`, value: x.rate ?? 0, sub: x.topWrong ? `자주 고른 오답: ${x.topWrong.option} (${x.topWrong.count}명)` : '' })) })}
+        <div class="an-block">
+          <h3 class="an-sub">가장 많이 틀린 문항</h3>
+          ${weakest ? `<p><strong>${weakest.num}. ${escapeHtml(weakest.item.prompt)}</strong></p><p class="meta">정답률 ${weakest.rate}%${weakest.topWrong ? `, 자주 고른 오답 "${escapeHtml(weakest.topWrong.option)}"` : ''}. 2단계 AI 대화 전에 다시 짚어 주면 좋습니다.</p>` : ''}
+          <h3 class="an-sub">마무리: AI 답을 쓸 때 꼭 해야 할 일</h3>
+          ${wordCloud({ words: wordFrequencies(st.reflections.map((r) => r.text)).slice(0, 20) })}
+          <details class="ref-card"><summary>답 전체 보기 (${st.reflections.length})</summary><ul class="answer-list">${st.reflections.map((r) => `<li><span class="meta">${escapeHtml(r.who)}</span>${escapeHtml(r.text)}</li>`).join('')}</ul></details>
+        </div>
+      </div>
     </section>`;
   }
 

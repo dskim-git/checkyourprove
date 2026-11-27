@@ -8,6 +8,7 @@
 //   #/research                           AI와 탐구하기(연구 모드): 명제와 4단계 지도
 //   #/research/:stage(/:index)           연구 단계 화면 (stage 1~4, index는 명제 순서)
 //   #/research/consent                   연구 참여 동의
+//   #/research/principle                 "AI는 어떻게 답할까?" 원리 활동
 //   #/research/survey/(pre|post)         사전·사후 설문
 //   #/teacher                            교사 화면 미리보기
 //   #/teacher/grading(/:key)             증명 채점 목록 / 증명 하나 채점 (key = 학생 id~단계~명제 id)
@@ -29,6 +30,7 @@ import { renderResearchHome } from './views/research/researchHomeView.js';
 import { renderResearchStage } from './views/research/stageView.js';
 import { renderConsent } from './views/research/consentView.js';
 import { renderSurvey } from './views/research/surveyView.js';
+import { renderPrinciple } from './views/research/principleView.js';
 import { renderTeacher } from './views/teacherView.js';
 import { renderGradingHome } from './views/teacher/gradingHomeView.js';
 import { renderGrade } from './views/teacher/gradeView.js';
@@ -54,6 +56,7 @@ const ROUTES = [
   { section: 'student', tab: 'research', title: 'AI와 탐구하기', pattern: /^\/research$/, render: renderResearchHome },
   { section: 'student', tab: 'research', view: 'lesson', title: 'AI와 탐구하기', pattern: /^\/research\/([1-4])(?:\/(\d+))?$/, render: renderResearchStage },
   { section: 'student', tab: 'research', title: '연구 참여 동의', pattern: /^\/research\/consent$/, render: renderConsent },
+  { section: 'student', tab: 'research', view: 'lesson', title: 'AI는 어떻게 답할까?', pattern: /^\/research\/principle$/, render: renderPrinciple },
   { section: 'student', tab: 'research', view: 'lesson', title: '설문', pattern: /^\/research\/survey\/(pre|post)$/, render: renderSurvey },
   { section: 'teacher', tab: null, view: 'wide', title: '교사 화면 미리보기', pattern: /^\/teacher$/, render: renderTeacher },
   { section: 'teacher', tab: null, view: 'wide', title: '증명 채점', pattern: /^\/teacher\/grading$/, render: renderGradingHome },

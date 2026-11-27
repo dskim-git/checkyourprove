@@ -8,7 +8,7 @@ import { readJson, writeJson, removeKey } from './storage.js';
 import { activeSession, sessionConfig, sessionLabel, updateSession } from './sessionStore.js';
 
 const STORAGE_KEY = 'checkyourprove.prototype.classroom.v1';
-const SESSION_FIELDS = ['consentRequired', 'surveyId', 'surveyPreOpen', 'surveyPostOpen'];
+const SESSION_FIELDS = ['consentRequired', 'surveyId', 'surveyPreOpen', 'surveyPostOpen', 'principleOpen'];
 const RESEARCH_FIELDS = ['researchOpen', 'researchPropositionIds', 'researchStagesOpen', ...SESSION_FIELDS];
 
 export function getClassroom() {

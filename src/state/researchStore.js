@@ -10,6 +10,8 @@
 // 연구 동의 consent = { agreed: true|false|null, at, version, history: [{ at, agreed, version }] }
 // 설문 surveys = { pre|post: { surveyId, startedAt, submittedAt, activeMs, answers: { [문항 id]: 값 }, answeredAt: { [문항 id]: 시각 }, changes } }
 //   동의하지 않은 학생은 연구용 설문을 하지 않고 1~4단계 활동만 한다(기록은 연구 분석에서 기본으로 빠진다).
+// 원리 활동 principle = { version, startedAt, finishedAt, activeMs, answers: { [문항 id]: { choice, correct, at, ms } }, reflection }
+//   동의하지 않은 학생도 수업 활동으로 한다(기록은 연구 분석에서 빠짐).
 // 연구 기록은 세션(학급 × 회차)마다 따로 저장한다. 인자 없이 부르면 진행 중 세션의 기록이다(state/sessionStore.js).
 // TODO: Firestore 연동 시 학생별 문서로 옮기고, 제출 뒤 수정 금지와 단계 열림 여부를 보안 규칙·서버에서 확인한다.
 
@@ -82,7 +84,16 @@ export function preStageBlocker(classroom, sessionId = activeSessionId()) {
   if (researchParticipating(classroom, sessionId) && classroom.surveyId && classroom.surveyPreOpen && !getSurveyResponse('pre', sessionId)?.submittedAt) {
     return { step: 'pre', label: '먼저 사전 설문을 하세요' };
   }
+  if (classroom.principleOpen && !getResearch(sessionId).principle?.finishedAt) return { step: 'principle', label: '먼저 "AI는 어떻게 답할까?" 활동을 하세요' };
   return null;
+}
+
+export const getPrinciple = (sessionId = activeSessionId()) => getResearch(sessionId).principle ?? null;
+
+export function ensurePrinciple(version, sessionId = activeSessionId()) {
+  const record = getResearch(sessionId);
+  record.principle ??= { version, startedAt: now(), finishedAt: null, activeMs: 0, answers: {}, reflection: '' };
+  return record.principle;
 }
 
 /** 사후 설문 상태: 'none'(하지 않음) | 'closed'(선생님이 열지 않음) | 'waiting'(4단계 제출 전) | 'open' | 'progress' | 'submitted' */
