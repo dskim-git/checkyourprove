@@ -66,6 +66,7 @@ export function renderTeacher(root) {
         <a class="button button--secondary" href="#/teacher/analysis">연구 분석</a>
         <a class="button button--secondary" href="#/teacher/rubric">채점 루브릭</a>
         <a class="button button--secondary" href="#/teacher/surveys">설문과 연구 동의</a>
+        <a class="button button--secondary" href="#/teacher/principle">원리 활동 진행</a>
         <button type="button" class="button button--ghost" data-action="reset-research">이 세션의 연구 기록 초기화</button>
         <p class="actions__note" id="unimplemented-note">기록 내려받기(CSV)는 연구 분석 화면에 있습니다. 면담 기능은 다음 작업에서 추가합니다.</p>
       </div>
@@ -276,7 +277,8 @@ function settingsForm(classroom) {
         </div>
         <label class="check"><input type="checkbox" name="surveyPreOpen"${classroom.surveyPreOpen ? ' checked' : ''}><span>사전 설문 열기</span></label>
         <label class="check"><input type="checkbox" name="surveyPostOpen"${classroom.surveyPostOpen ? ' checked' : ''}><span>사후 설문 열기 <span class="meta">4단계를 제출한 학생만 할 수 있습니다.</span></span></label>
-        <label class="check"><input type="checkbox" name="principleOpen"${classroom.principleOpen ? ' checked' : ''}><span>"AI는 어떻게 답할까?" 원리 활동 <span class="meta">사전 설문 뒤, 1단계 전에 합니다(약 15분). 동의하지 않은 학생도 수업 활동으로 합니다.</span></span></label>
+        <label class="check"><input type="checkbox" name="principleOpen"${classroom.principleOpen ? ' checked' : ''}><span>"AI는 어떻게 답할까?" 원리 활동 <span class="meta">사전 설문 뒤, 1단계 전에 합니다(설명 5장과 문항 11개, 약 20분). 동의하지 않은 학생도 수업 활동으로 합니다.</span></span></label>
+        <a class="an-link" href="#/teacher/principle">원리 활동 진행 화면 (설명 띄우기, 학생에게 열 화면 정하기)</a>
       </fieldset>
       <fieldset class="choice-group">
         <legend class="field__label">탐구할 명제</legend>

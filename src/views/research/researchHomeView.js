@@ -53,8 +53,8 @@ function prepSection(classroom) {
     let row;
     if (pr?.finishedAt) row = { href: '#/research/principle', status: '마침 (다시 볼 수 있어요)', state: 'done' };
     else if (blocker && blocker.step !== 'principle') row = { status: blocker.step === 'consent' ? '연구 동의 뒤에 할 수 있어요' : '사전 설문 뒤에 할 수 있어요', state: 'locked' };
-    else row = { href: '#/research/principle', status: pr ? `${answered}문항 했어요, 이어서 하기` : '약 15분, 시작할 수 있어요', state: 'here' };
-    rows.push(taskRow({ title: 'AI는 어떻게 답할까?', desc: 'AI가 답을 만드는 원리와 AI 답을 확인하는 방법을 알아봅니다.', ...row }));
+    else row = { href: '#/research/principle', status: !pr ? '약 20분, 시작할 수 있어요' : answered ? `${answered}문항 했어요, 이어서 하기` : '설명을 보는 중, 이어서 하기', state: 'here' };
+    rows.push(taskRow({ title: 'AI는 어떻게 답할까?', desc: 'AI가 답을 만드는 원리를 그림으로 보고, AI 답을 확인하는 방법을 문제로 익힙니다.', ...row }));
   }
   if (!rows.length) return '';
   return `<section class="task-group" aria-labelledby="prep-title"><h2 class="task-group__title" id="prep-title">시작하기 전에</h2><ol class="task-list">${rows.join('')}</ol></section>`;

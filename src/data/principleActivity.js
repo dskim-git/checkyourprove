@@ -4,7 +4,16 @@
 // 문항: { id, part, prompt, context?, options, answer(정답 번호), explain, visual? }
 //   visual: { kind: 'probs', items: [[낱말, 확률]] } | { kind: 'answers', items: [글] } | { kind: 'proof', lines: [글] } | { kind: 'compare', items: [{ q, a }] }
 
-export const PRINCIPLE_VERSION = 'principle-proto-1';
+export const PRINCIPLE_VERSION = 'principle-proto-2'; // proto-2: 문항 앞 설명 화면 5장(퍼셉트론 → 학습 → 신경망 → 다음 낱말 → 정리)
+
+/** 문항 앞 설명 화면(그림·움직임은 views/research/principleSlides.js) */
+export const PRINCIPLE_SLIDES = [
+  { id: 's1', title: 'AI의 가장 작은 부품, 퍼셉트론', body: '퍼셉트론은 여러 입력을 받아 입력마다 가중치(얼마나 중요한지)를 곱해 모두 더해요. 그 합이 기준보다 크거나 같으면 1, 작으면 0을 내보내요. 왼쪽 입력을 눌러 켜고 꺼 보세요.' },
+  { id: 's2', title: '배운다 = 가중치를 고친다', body: '처음에는 가중치를 아무렇게나 정해요. 지난 날들의 정답과 비교해 틀리면, 켜져 있던 입력의 가중치를 조금 올리거나 내려요. 이것을 아주 많이 되풀이하는 것이 AI의 "학습"이에요.' },
+  { id: 's3', title: '퍼셉트론을 아주 많이 이으면, 신경망', body: '퍼셉트론의 출력이 다음 퍼셉트론의 입력이 되도록 여러 층으로 이으면 신경망이 돼요. AI 언어 모델은 이런 가중치가 수천억 개나 되고, 아주 많은 글을 읽으며 가중치를 고쳤어요.' },
+  { id: 's4', title: '언어 모델은 다음 낱말을 하나씩 고른다', body: '문장을 신경망에 넣으면 다음에 올 수 있는 낱말마다 확률이 나와요. 확률에 따라 하나를 뽑아 문장 뒤에 붙이고, 늘어난 문장을 다시 넣어요. 이것을 되풀이해 글을 만들어요.' },
+  { id: 's5', title: '그래서 AI의 답을 쓸 때는', body: 'AI는 참인지 확인해서가 아니라, 배운 가중치로 계산한 확률에 따라 그럴듯한 낱말을 골라 답해요. 이제 문제로 하나씩 확인해 봐요.' },
+];
 
 export const PRINCIPLE_PARTS = [
   { id: 'next', title: '다음 낱말 맞히기', intro: 'AI는 글을 한꺼번에 떠올리지 않아요. 앞의 글을 보고 다음에 올 낱말을 하나씩 골라 이어 붙입니다.' },
@@ -119,3 +128,17 @@ export const PRINCIPLE_ITEMS = [
 
 /** 마무리 질문 (서술, 필수) */
 export const PRINCIPLE_REFLECTION = 'AI의 답을 쓸 때 꼭 해야 할 일을 한 가지 쓰세요.';
+
+/** 학생이 차례로 지나가는 화면: 설명 5장 → 문항 11개 → 마무리. 교사 진행 제어(state/pacingStore.js)는 이 순서의 번호로 연다. */
+export const PRINCIPLE_STEPS = [
+  ...PRINCIPLE_SLIDES.map((s) => ({ kind: 'slide', id: s.id, group: 'intro', title: s.title })),
+  ...PRINCIPLE_ITEMS.map((it, i) => ({ kind: 'item', id: it.id, group: it.part, title: `문항 ${i + 1}` })),
+  { kind: 'end', id: 'end', group: 'end', title: '마무리' },
+];
+
+/** 교사가 "묶음 끝까지 열기"로 한 번에 여는 단위 */
+export const PRINCIPLE_GROUPS = [
+  { id: 'intro', title: 'AI는 이렇게 답해요 (설명)' },
+  ...PRINCIPLE_PARTS.map((p, i) => ({ id: p.id, title: `${i + 1}. ${p.title}` })),
+  { id: 'end', title: '마무리' },
+];

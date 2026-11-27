@@ -17,6 +17,8 @@
 //   #/teacher/chat-tags                  대화 태그 목록 보기·고치기
 //   #/teacher/analysis(/:student)        연구 분석 개요 / 학생별 대시보드
 //   #/teacher/surveys(/:id)              설문과 연구 동의서 / 설문 문항 고치기
+//   #/teacher/principle                  원리 활동 진행(설명 띄우기, 학생에게 열 화면 정하기)
+//   #/practice/guide                     증명법 한눈에 보기(직접·간접 증명법 설명)
 // 해시 방식은 배포 환경(Vercel)에서 별도 rewrite 설정 없이 동작한다.
 // TODO: 라우팅 방식(해시 / History API)은 AGENTS.md의 결정 필요 항목이다.
 
@@ -42,6 +44,8 @@ import { renderAnalysisHome } from './views/teacher/analysisHomeView.js';
 import { renderAnalysisStudent } from './views/teacher/analysisStudentView.js';
 import { renderSurveyList } from './views/teacher/surveyListView.js';
 import { renderSurveyEdit } from './views/teacher/surveyEditView.js';
+import { renderPrinciplePace } from './views/teacher/principlePaceView.js';
+import { renderMethodGuide } from './views/practice/methodGuideView.js';
 import { renderNotFound } from './ui/components.js';
 
 const ID = '([\\w-]+)';
@@ -49,6 +53,7 @@ const ID = '([\\w-]+)';
 const ROUTES = [
   { section: 'student', tab: 'home', title: null, pattern: /^\/$/, render: renderHub },
   { section: 'student', tab: 'practice', title: '증명 연습하기', pattern: /^\/practice$/, render: renderMethodSelect },
+  { section: 'student', tab: 'practice', title: '증명법 한눈에 보기', pattern: /^\/practice\/guide$/, render: renderMethodGuide },
   { section: 'student', tab: 'practice', title: '증명 연습하기', pattern: new RegExp(`^/practice/${ID}$`), render: renderLevelSelect },
   { section: 'student', tab: 'practice', title: '증명 연습하기', pattern: new RegExp(`^/practice/${ID}/${ID}$`), render: renderProblemSelect },
   { section: 'student', tab: 'practice', view: 'lesson', title: '증명 연습하기', pattern: new RegExp(`^/practice/${ID}/${ID}/${ID}$`), render: renderActivity },
@@ -68,6 +73,7 @@ const ROUTES = [
   { section: 'teacher', tab: null, view: 'wide', title: '연구 분석', pattern: /^\/teacher\/analysis$/, render: renderAnalysisHome },
   { section: 'teacher', tab: null, view: 'wide', title: '연구 분석', pattern: /^\/teacher\/analysis\/([\w-]+)$/, render: renderAnalysisStudent },
   { section: 'teacher', tab: null, view: 'wide', title: '설문과 연구 동의', pattern: /^\/teacher\/surveys$/, render: renderSurveyList },
+  { section: 'teacher', tab: null, view: 'wide', title: '원리 활동 진행', pattern: /^\/teacher\/principle$/, render: renderPrinciplePace },
   { section: 'teacher', tab: null, view: 'wide', title: '설문 문항', pattern: /^\/teacher\/surveys\/([\w-]+)$/, render: renderSurveyEdit },
 ];
 
