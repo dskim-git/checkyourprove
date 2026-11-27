@@ -8,6 +8,7 @@ import {
 } from '../../state/recordingStore.js';
 import { breadcrumb, notice } from '../../ui/components.js';
 import { escapeHtml, formatDateTime } from '../../ui/dom.js';
+import { audioPlayerHtml, bindPlayers, handleAudioSkip } from '../../ui/audioPlayer.js';
 
 /** 보관 기한 알림 (교사 첫 화면·면담 화면 위에 붙인다). 녹음이 있고 기한이 14일 안이거나 지났을 때만. */
 export async function retentionAlertHtml() {
@@ -48,19 +49,29 @@ export function renderRecordings(root) {
     const st = retentionState(until);
     const total = list.reduce((s, r) => s + (r.size ?? 0), 0);
     const totalMs = list.reduce((s, r) => s + (r.durationMs ?? 0), 0);
-    const rows = list.map((r) => {
+    // 학생별로 묶고, 학생 안에서는 오래된 것부터 녹음 1, 2, …
+    const groups = new Map();
+    [...list].sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt))).forEach((r) => {
+      if (!groups.has(r.studentId)) groups.set(r.studentId, []);
+      groups.get(r.studentId).push(r);
+    });
+    const rows = [...groups.values()].map((recs) => {
+      const first = recs[0];
+      const head = `<tr class="grade-group"><th scope="rowgroup" colspan="8"><a href="#/teacher/interviews/${escapeHtml(first.studentId)}">${escapeHtml(first.pseudonym ?? first.studentId)}</a>${first.sample ? ' <span class="tag tag--proto">예시</span>' : ''}<span class="meta">${escapeHtml(first.sessionLabel ?? '')}, 녹음 ${recs.length}개, 모두 ${formatDuration(recs.reduce((s, r) => s + (r.durationMs ?? 0), 0))}</span></th></tr>`;
+      return head + recs.map((r, k) => {
       const url = r.blob ? URL.createObjectURL(r.blob) : '';
       if (url) urls.push(url);
       return `<tr data-rec-id="${escapeHtml(r.id)}">
-        <th scope="row"><a href="#/teacher/interviews/${escapeHtml(r.studentId)}">${escapeHtml(r.pseudonym ?? r.studentId)}</a>${r.sample ? ' <span class="tag tag--proto">예시</span>' : ''}</th>
+        <th scope="row">녹음 ${k + 1}</th>
         <td>${escapeHtml(r.sessionLabel ?? '')}</td>
         <td>${escapeHtml(formatDateTime(r.createdAt))}</td>
         <td class="num">${formatDuration(r.durationMs)}</td>
         <td class="num">${formatSize(r.size)}</td>
-        <td>${url ? `<audio class="rec__audio rec__audio--row" controls preload="none" src="${url}" aria-label="${escapeHtml(r.pseudonym ?? '')} 녹음 듣기"></audio>` : '–'}</td>
+        <td>${url ? audioPlayerHtml({ url, label: `${r.pseudonym ?? ''} 녹음 ${k + 1} 듣기`, durationMs: r.durationMs, compact: true }) : '–'}</td>
         <td>${r.transcript ? '있음' : '<span class="meta">서버 연결 뒤</span>'}</td>
         <td><span class="rec__row-actions">${url ? `<a class="button button--ghost button--small" href="${url}" download="${escapeHtml(recordingFileName(r))}">내려받기</a>` : ''}<button type="button" class="button button--ghost button--small" data-action="delete">지우기</button></span></td>
       </tr>`;
+      }).join('');
     }).join('');
     root.innerHTML = `<div class="page page--teacher page--recordings">
       ${breadcrumb([{ label: '교사 화면', href: '#/teacher' }, { label: '면담', href: '#/teacher/interviews' }, { label: '녹음 관리' }])}
@@ -87,16 +98,17 @@ export function renderRecordings(root) {
             ${st.state === 'over' && list.length ? '<button type="button" class="button button--primary button--small" data-action="delete-all">기한 지난 녹음 모두 지우기</button>' : ''}
           </span>
         </div>
-        <p class="meta">모두 ${formatDuration(totalMs)}, ${formatSize(total)}. 학생 이름을 누르면 면담 화면이 열립니다. 녹음은 면담 화면에서 합니다(학생·보호자·녹음 동의를 표시한 뒤).</p>
+        <p class="meta">모두 ${formatDuration(totalMs)}, ${formatSize(total)}. 학생별로 묶어 녹음한 순서대로 번호를 붙입니다. 학생 이름을 누르면 면담 화면이 열립니다. 녹음은 면담 화면에서 합니다(학생·보호자·녹음 동의를 표시한 뒤).</p>
         ${list.length ? `<div class="table-wrap" role="region" aria-labelledby="rec-list" tabindex="0">
           <table class="data-table grade-table" data-rec-table>
-            <thead><tr><th scope="col">학생</th><th scope="col">세션</th><th scope="col">녹음 시각</th><th scope="col">길이</th><th scope="col">크기</th><th scope="col">듣기</th><th scope="col">전사</th><th scope="col">파일</th></tr></thead>
+            <thead><tr><th scope="col">녹음</th><th scope="col">세션</th><th scope="col">녹음 시각</th><th scope="col">길이</th><th scope="col">크기</th><th scope="col">듣기</th><th scope="col">전사</th><th scope="col">파일</th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
         </div>` : '<p class="empty-text">저장된 녹음이 없습니다.</p>'}
         <p class="save-status" role="status" data-rec-status>${escapeHtml(status)}</p>
       </section>
     </div>`;
+    bindPlayers(root);
     if (focus) root.querySelector(focus)?.focus();
   }
 
@@ -114,6 +126,7 @@ export function renderRecordings(root) {
   };
 
   const onClick = async (event) => {
+    if (handleAudioSkip(event)) return;
     const b = event.target.closest('[data-action]');
     if (!b) return;
     const act = b.dataset.action;

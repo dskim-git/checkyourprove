@@ -134,6 +134,7 @@ src/
 │  │                       #       설문과 연구 동의(surveyListView), 설문 문항 고치기(surveyEditView), 원리 활동 진행(principlePaceView),
 │  │                       #       면담 후보와 기록 목록(interviewHomeView), 학생 한 명의 면담(interviewView), 면담 공용 조각(interviewParts),
 │  │                       #       면담 녹음기(interviewRecorder), 녹음 관리(recordingsView)
+│                          # (ui/) audioPlayer.js(녹음 듣기: 5초 뒤로·앞으로, 길이 읽기)
 │  └─ teacherView.js       # 교사 화면 미리보기
 └─ styles/                 # app.css(진입, Hallmark 스탬프) → tokens / base / layout / components / views
 ```
@@ -411,6 +412,7 @@ AI와 탐구하기 → 교사가 지정한 명제의 연구 모드 흐름
   - 학생 음성은 민감한 개인정보입니다. 면담·녹음 동의(보호자 동의 포함)를 따로 받고, 보존 기간과 삭제 방법을 정합니다.
   - **녹음(구현 7, 2026-11-27 사용자 결정)**: 면담 화면에서 녹음 시작·일시정지·이어서·끝내고 저장. 학생 면담·보호자·녹음 동의를 모두 표시해야 녹음 버튼이 열립니다. 녹음기는 화면이 다시 그려져도 이어지고, 화면을 떠나면 녹음 중이던 것을 저장합니다(`views/teacher/interviewRecorder.js`, MediaRecorder, 외부 라이브러리 없음).
   - **보관(사용자 결정)**: 연구 기간 동안 보관합니다. 지금은 이 브라우저의 IndexedDB(`state/recordingStore.js`)에 두고, IndexedDB를 못 쓰면 탭 메모리에 두고 알립니다. **녹음 관리 화면** `#/teacher/recordings`: 보관 기한(연구 종료일), 모든 녹음 목록(학생·세션·녹음 시각·길이·크기), 듣기·내려받기·지우기, 모두 내려받기. 기한 14일 전부터 교사 첫 화면·면담 화면에 알림이 나오고, 기한이 지나면 "기한 지난 녹음 모두 지우기"가 열립니다. **자동으로 지우지 않습니다**(교사가 내려받은 뒤 직접 지움).
+  - **듣기(2026-11-27 사용자 요청)**: 녹음마다 "5초 뒤로"·"5초 앞으로" 버튼(`ui/audioPlayer.js`). MediaRecorder로 만든 webm은 브라우저가 길이를 모를 수 있어 처음 불러올 때 끝으로 한 번 옮겨 길이를 읽게 합니다(재생 막대로 옮길 수 있게). 한 학생의 녹음은 여러 개를 따로 저장하고 오래된 것부터 "녹음 1, 2, …"로 번호를 붙이며, 면담 화면에 합계 길이, 녹음 관리에서는 학생별로 묶어 보여 줍니다.
   - `TODO`(로드맵 4단계): 녹음 파일을 Firebase Storage(교사만 읽고 쓰는 경로)로 옮깁니다. `recordingStore.js`의 함수만 바꿉니다.
   - **음성 전사 서비스(사용자 결정: 화자 구분을 지원하는 전용 음성 인식 API, 서버 함수에서 호출)**. 2026-11-27 공식 문서 기준 비교 요약:
     - 1순위 **Azure AI Speech Fast Transcription**: 한국어(ko-KR), 화자 수 지정(`maxSpeakers: 2`), 5시간 미만 파일, 시간당 약 $0.36. 오디오와 결과를 저장하지 않고 지정한 리전 안에서 처리한다고 공식 문서에 명시. Korea Central 리전 있음. 확인할 것: Korea Central에서 Fast 전사 제공 여부, 한국어 2인 화자 구분 정확도(샘플 녹음으로 시험).

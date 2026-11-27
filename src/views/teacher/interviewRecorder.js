@@ -4,6 +4,7 @@
 
 import { deleteRecording, formatDuration, formatSize, listRecordings, recordingFileName, recordingsInMemory, saveRecording } from '../../state/recordingStore.js';
 import { escapeHtml, formatDateTime, newId } from '../../ui/dom.js';
+import { audioPlayerHtml, bindPlayers, handleAudioSkip } from '../../ui/audioPlayer.js';
 
 const PREFERRED_TYPES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
 
@@ -58,12 +59,14 @@ export function createRecorder({ student, sessionLabel, allowed, onChange = () =
   function listHtml() {
     revoke();
     if (!list.length) return '<p class="empty-text">이 학생의 녹음이 없습니다.</p>';
-    return `<ul class="rec__list">${list.map((r) => {
+    // 녹음은 학생마다 여러 개를 따로 저장한다. 오래된 것부터 녹음 1, 2, …
+    return `<ul class="rec__list">${list.map((r, i) => {
       const url = r.blob ? URL.createObjectURL(r.blob) : '';
       if (url) urls.push(url);
+      const n = list.length - i;
       return `<li class="rec__item" data-rec-id="${escapeHtml(r.id)}">
-        <p class="rec__meta"><strong>${escapeHtml(formatDateTime(r.createdAt))}</strong><span class="meta">${formatDuration(r.durationMs)}, ${formatSize(r.size)}</span></p>
-        ${url ? `<audio class="rec__audio" controls preload="none" src="${url}"></audio>` : ''}
+        <p class="rec__meta"><strong>녹음 ${n}</strong><span>${escapeHtml(formatDateTime(r.createdAt))}</span><span class="meta">${formatDuration(r.durationMs)}, ${formatSize(r.size)}</span></p>
+        ${url ? audioPlayerHtml({ url, label: `녹음 ${n} 듣기`, durationMs: r.durationMs }) : ''}
         <div class="actions actions--start">
           ${url ? `<a class="button button--ghost button--small" href="${url}" download="${escapeHtml(recordingFileName(r))}">내려받기</a>` : ''}
           <button type="button" class="button button--ghost button--small" data-rec="delete">지우기</button>
@@ -77,9 +80,11 @@ export function createRecorder({ student, sessionLabel, allowed, onChange = () =
     el.innerHTML = `${message ? `<p class="field__error" role="alert">${escapeHtml(message)}</p>` : ''}
       ${controls()}
       ${inMemory ? '<p class="meta">이 브라우저는 녹음 파일을 오래 저장할 수 없어 이 탭에만 둡니다. 새로 고치기 전에 내려받으세요.</p>' : ''}
-      <h3 class="an-sub">이 학생의 녹음 (${list.length})</h3>
+      <h3 class="an-sub">이 학생의 녹음 (${list.length}${list.length > 1 ? `, 모두 ${formatDuration(list.reduce((s, r) => s + (r.durationMs ?? 0), 0))}` : ''})</h3>
+      ${list.length ? '<p class="meta">녹음할 때마다 따로 저장되어 이 학생에게 모두 모입니다. 면담을 나누어 녹음해도 됩니다.</p>' : ''}
       ${listHtml()}
       <p class="meta">음성을 글로 옮기는 전사는 서버를 연결한 뒤에 제공합니다. 모든 녹음은 <a href="#/teacher/recordings">녹음 관리</a>에서 볼 수 있습니다.</p>`;
+    bindPlayers(el);
   }
 
   function tick() {
@@ -158,6 +163,7 @@ export function createRecorder({ student, sessionLabel, allowed, onChange = () =
   }
 
   async function onClick(event) {
+    if (handleAudioSkip(event)) return;
     const b = event.target.closest('[data-rec]');
     if (!b) return;
     const act = b.dataset.rec;
