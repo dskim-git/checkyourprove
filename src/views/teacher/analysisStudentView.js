@@ -25,6 +25,7 @@ import { findSurvey } from '../../state/surveyStore.js';
 import { PRINCIPLE_ITEMS, PRINCIPLE_PARTS } from '../../data/principleActivity.js';
 import { principleScore } from '../../services/principleAnalysis.js';
 import { gradedBy, openChatPopup, openGradePopup, taggedBy } from './recordPopups.js';
+import { selectionOf } from '../../state/interviewStore.js';
 
 const fmt = (v) => (v == null ? '–' : Number.isInteger(v) ? String(v) : Number(v).toFixed(1));
 const signed = (v) => (v == null ? '–' : `${v > 0 ? '+' : ''}${fmt(v)}`);
@@ -79,6 +80,7 @@ export function renderAnalysisStudent(root, [studentId]) {
         <p class="grade-who"><span class="tag tag--strong">${escapeHtml(sessionLabel(student.session))}</span><span class="tag${consentStatus(student) === 'agreed' ? ' tag--mint' : ''}">연구 동의: ${escapeHtml(CONSENT_LABELS[consentStatus(student)])}</span></p>
         <p class="lead">명제 ${a.props.length}개의 1~4단계 기록입니다. 점수 출처: ${escapeHtml(sourceLabel)}.</p>
         <nav class="an-nav" aria-label="다른 학생">
+          <a class="button button--secondary button--small" href="#/teacher/interviews/${student.id}">면담 화면${selectionOf(student.id) ? ' (면담 대상)' : ''}</a>
           ${prev ? `<a class="button button--ghost button--small" href="#/teacher/analysis/${prev.id}">이전 학생: ${escapeHtml(prev.pseudonym)}</a>` : ''}
           ${next ? `<a class="button button--ghost button--small" href="#/teacher/analysis/${next.id}">다음 학생: ${escapeHtml(next.pseudonym)}</a>` : ''}
         </nav>

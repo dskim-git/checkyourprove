@@ -18,6 +18,7 @@
 //   #/teacher/analysis(/:student)        연구 분석 개요 / 학생별 대시보드
 //   #/teacher/surveys(/:id)              설문과 연구 동의서 / 설문 문항 고치기
 //   #/teacher/principle                  원리 활동 진행(설명 띄우기, 학생에게 열 화면 정하기)
+//   #/teacher/interviews(/:student)      면담 후보와 기록 목록 / 학생 한 명의 면담
 //   #/practice/guide                     증명법 한눈에 보기(직접·간접 증명법 설명)
 // 해시 방식은 배포 환경(Vercel)에서 별도 rewrite 설정 없이 동작한다.
 // TODO: 라우팅 방식(해시 / History API)은 AGENTS.md의 결정 필요 항목이다.
@@ -45,6 +46,8 @@ import { renderAnalysisStudent } from './views/teacher/analysisStudentView.js';
 import { renderSurveyList } from './views/teacher/surveyListView.js';
 import { renderSurveyEdit } from './views/teacher/surveyEditView.js';
 import { renderPrinciplePace } from './views/teacher/principlePaceView.js';
+import { renderInterviewHome } from './views/teacher/interviewHomeView.js';
+import { renderInterview } from './views/teacher/interviewView.js';
 import { renderMethodGuide } from './views/practice/methodGuideView.js';
 import { renderNotFound } from './ui/components.js';
 import { escapeHtml } from './ui/dom.js';
@@ -76,6 +79,8 @@ const ROUTES = [
   { section: 'teacher', tab: null, view: 'wide', title: '설문과 연구 동의', pattern: /^\/teacher\/surveys$/, render: renderSurveyList },
   { section: 'teacher', tab: null, view: 'wide', title: '원리 활동 진행', pattern: /^\/teacher\/principle$/, render: renderPrinciplePace },
   { section: 'teacher', tab: null, view: 'wide', title: '설문 문항', pattern: /^\/teacher\/surveys\/([\w-]+)$/, render: renderSurveyEdit },
+  { section: 'teacher', tab: null, view: 'wide', title: '면담', pattern: /^\/teacher\/interviews$/, render: renderInterviewHome },
+  { section: 'teacher', tab: null, view: 'wide', title: '면담', pattern: /^\/teacher\/interviews\/([\w-]+)$/, render: renderInterview },
 ];
 
 const APP_TITLE = '증명 연습실';
