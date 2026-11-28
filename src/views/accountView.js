@@ -113,7 +113,7 @@ export function renderAccount(root) {
       const p = user.profile ?? {};
       body = `<section class="panel account-box" aria-labelledby="acc-profile">
         <h2 id="acc-profile" class="section-title">처음 한 번만 정보를 입력해 주세요</h2>
-        <p class="meta">${escapeHtml(user.email)}(으)로 로그인했습니다. 입력한 정보는 관리자만 보고, 연구 자료에는 이름 대신 연구 번호를 씁니다.</p>
+        <p class="meta">${escapeHtml(user.email)}(으)로 로그인했습니다. 입력한 정보는 관리자만 볼 수 있어요.</p>
         <form class="account-form" data-profile-form novalidate>
           <fieldset class="choice-group"><legend>가입 구분</legend><div class="pick-group__options">
             <label class="pick pick--tag"><input type="radio" name="kind" value="student"${k === 'student' ? ' checked' : ''}><span>학생</span></label>
@@ -160,7 +160,6 @@ export function renderAccount(root) {
           <h2 id="acc-code" class="section-title">AI와 탐구하기 세션</h2>
           ${joined.length ? `<ul class="answer-list">${joined.map((s) => `<li><strong>${escapeHtml(sessionLabel(s))}</strong><span class="meta">코드 ${escapeHtml(formatCode(s.code))}</span></li>`).join('')}</ul>` : '<p class="meta">아직 들어간 세션이 없어요.</p>'}
           ${sessionCodeForm({ error: codeError })}
-          ${user.role === 'guest' ? '<p class="meta">일반인의 탐구 기록은 연구 분석에 넣지 않아요.</p>' : ''}
         </section>`;
     }
     const e = ethics();
@@ -168,7 +167,7 @@ export function renderAccount(root) {
       ${breadcrumb(crumbs)}
       <header class="page-intro"><h1>계정</h1></header>
       ${body}
-      <p class="meta">개인정보: 이름·학번·이메일은 관리자만 볼 수 있고, 연구 자료에는 이름 대신 연구 번호를 씁니다.${e.irb && e.approvalNo ? ` 이 연구는 기관생명윤리위원회 승인(${escapeHtml(e.approvalNo)})을 받았습니다.` : ''}</p>
+      <p class="meta">개인정보: 이름·학번·이메일은 관리자만 볼 수 있어요.</p>
     </div>`;
   };
 

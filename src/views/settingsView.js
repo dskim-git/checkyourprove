@@ -83,14 +83,16 @@ export function renderSettings(root, [tabParam]) {
 
   function privacyTab(user) {
     const classroom = getClassroom();
-    const consent = getConsent();
     const reqs = user ? requestsOf(user.uid) : [];
-    const consentText = !classroom.consentRequired ? '이 세션은 연구 동의를 받지 않아요.' : consent.agreed === true ? `연구 참여에 동의했어요 (${formatDateTime(consent.at)}).` : consent.agreed === false ? '연구에 참여하지 않아요. 그만두기 전에 모은 자료는 연구에 쓰여요.' : '아직 답하지 않았어요.';
-    return `<section class="panel" aria-labelledby="pv-consent">
-        <h2 id="pv-consent" class="section-title">연구 참여</h2>
+    // 연구 이야기는 AI와 탐구하기 세션에 들어간 사람에게만(2026-11-28 사용자 요청: 연습만 하는 사람에게는 연구를 말하지 않는다)
+    const inResearch = Boolean(user && (user.role === 'student' || user.role === 'guest') && user.sessionIds.length && classroom.sessionId);
+    const consent = inResearch ? getConsent() : null;
+    const consentText = !inResearch ? '' : !classroom.consentRequired ? '이 세션은 연구 동의를 받지 않아요.' : consent.agreed === true ? `연구 참여에 동의했어요 (${formatDateTime(consent.at)}).` : consent.agreed === false ? '연구에 참여하지 않아요. 그만두기 전에 모은 자료는 연구에 쓰여요.' : '아직 답하지 않았어요.';
+    return `${inResearch ? `<section class="panel" aria-labelledby="pv-consent">
+        <h2 id="pv-consent" class="section-title">AI와 탐구하기 연구 참여</h2>
         <p>${escapeHtml(classroom.sessionLabel)}: ${escapeHtml(consentText)}</p>
         ${classroom.consentRequired ? '<p><a class="button button--secondary" href="#/research/consent">동의 바꾸기</a></p>' : ''}
-      </section>
+      </section>` : ''}
       <section class="panel" aria-labelledby="pv-data">
         <h2 id="pv-data" class="section-title">내 기록 내려받기</h2>
         <p class="meta">이 기기에 저장된 내 증명 연습 기록과 AI와 탐구하기 기록을 파일(JSON)로 받습니다.</p>
@@ -101,7 +103,7 @@ export function renderSettings(root, [tabParam]) {
         ${user ? `<form class="settings-form admin-roster" data-request-form novalidate>
             <div class="field"><label class="field__label" for="rq-type">요청</label><select class="field__select" id="rq-type" name="type">${REQUEST_TYPES.map((t) => `<option value="${t.id}">${escapeHtml(t.label)}</option>`).join('')}</select></div>
             <div class="field"><label class="field__label" for="rq-reason">이유 <span class="field__req">(선택)</span></label><input type="text" class="field__input" id="rq-reason" name="reason"></div>
-            <p class="field__help">관리자가 확인한 뒤 처리합니다. 연구에 동의했던 기간의 자료는 연구 동의서에 적힌 대로 연구에 쓰일 수 있어요.</p>
+            <p class="field__help">관리자가 확인한 뒤 처리합니다.${inResearch ? ' AI와 탐구하기에서 연구에 동의했던 기간의 자료는 연구 동의서에 적힌 대로 연구에 쓰일 수 있어요.' : ''}</p>
             <div class="actions actions--start"><button type="submit" class="button button--secondary">요청 보내기</button></div>
           </form>
           ${reqs.length ? `<ul class="answer-list" data-my-requests>${reqs.map((q) => `<li><strong>${escapeHtml(REQUEST_TYPES.find((t) => t.id === q.type)?.label ?? q.type)}</strong><span class="meta">${escapeHtml(formatDateTime(q.at))} 보냄, ${q.status === 'done' ? `처리함${q.note ? `: ${escapeHtml(q.note)}` : ''}` : '처리 전'}</span></li>`).join('')}</ul>` : ''}`
@@ -110,9 +112,10 @@ export function renderSettings(root, [tabParam]) {
       <section class="panel" aria-labelledby="pv-info">
         <h2 id="pv-info" class="section-title">개인정보 처리 안내</h2>
         <ul class="answer-list">
-          <li>이름·학번·이메일은 관리자만 보고, 연구 자료에는 이름 대신 연구 번호를 써요.</li>
-          <li>수집하는 것: 쓴 증명(글과 필기), AI와 나눈 대화, 설문 응답, 활동 시간과 작성 과정. 위치·사진·연락처는 모으지 않아요.</li>
-          <li>연구 자료는 정해진 날짜가 지나면 지워요.${ethics().irb && ethics().approvalNo ? ` 이 연구는 기관생명윤리위원회 승인(${escapeHtml(ethics().approvalNo)})을 받았어요.` : ''}</li>
+          <li>이름·학번·이메일은 관리자만 볼 수 있어요.</li>
+          <li>저장하는 것: 증명 연습의 답과 결과, 활동 시간. 위치·사진·연락처는 모으지 않아요.</li>
+          ${inResearch ? `<li>AI와 탐구하기에서는 쓴 증명(글과 필기), AI와 나눈 대화, 설문 응답, 작성 과정을 연구 자료로 모으고, 연구 자료에는 이름 대신 연구 번호를 써요.</li>
+          <li>연구 자료는 정해진 날짜가 지나면 지워요.${ethics().irb && ethics().approvalNo ? ` 이 연구는 기관생명윤리위원회 승인(${escapeHtml(ethics().approvalNo)})을 받았어요.` : ''}</li>` : ''}
         </ul>
       </section>`;
   }
@@ -124,7 +127,7 @@ export function renderSettings(root, [tabParam]) {
         <h2 id="hp-guide" class="section-title">사용 안내</h2>
         <details class="ref-card" open><summary>학생</summary><ul class="answer-list">
           <li><strong>증명 연습하기</strong>: 증명법을 고르고 쉬운 활동부터 명제를 통과하면 인증 배지를 받아요. 몇 번 시도하면 정답·예시 보기가 나와요.</li>
-          <li><strong>AI와 탐구하기</strong>: 선생님이 알려 준 세션 코드를 입력하고, 동의 → 설문 → 원리 활동 → 1~4단계 순서로 해요. 제출한 단계는 고칠 수 없어요.</li>
+          <li><strong>AI와 탐구하기</strong>: 선생님 수업에서 열리면 들어가요(우리 반이면 자동, 아니면 선생님이 알려 준 세션 코드). 내 증명과 AI의 증명을 비교하며 다듬는 1~4단계 활동이에요.</li>
           <li><strong>펜으로 쓰기</strong>: 증명 칸에서 "펜"을 고르세요. 의견 칸은 손가락으로 눌러 키보드로 써요.</li>
         </ul></details>
         ${teacher ? `<details class="ref-card"><summary>교사</summary><ul class="answer-list">
