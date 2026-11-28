@@ -47,6 +47,7 @@ AI가 학생 대신 답을 완성해 주는 도구가 아닙니다. 모든 설�
 - **인증**: Firebase Authentication(Google 제공자, 팝업). 4-1 연결함. Firebase 프로젝트 `goprove-9d482`, Firestore 위치 asia-northeast3(서울)
 - **데이터베이스**: Cloud Firestore(오프라인 캐시 `persistentLocalCache`, 로그아웃하면 이 기기 캐시 지움). 4-1은 계정·역할·명단·연결표·설정, 4-2는 학급·세션·세션 코드·학생 연구 기록(필기는 칸마다 하위 문서)·연습 기록·관리자 설정, 4-3은 채점·태그·면담·설문·진행 제어
 - **라이브러리(2026-11-27 사용자 허락)**: `firebase`(앱, firebase 모드에서만 따로 나눈 파일로 받음, gzip 약 187KB), `firebase-admin`(서버 함수 전용). Google Analytics는 쓰지 않습니다(학생 사용 기록이 밖으로 나가지 않게).
+- **구글 로그인 첫 시도(2026-11-28 사용자 보고)**: 첫 시도에서 계정을 골라도 "로그인하는 중" 뒤 처음 화면으로 돌아가고 두 번째에 되던 문제. Firebase SDK는 로그인 결과를 받는 숨은 창(firebaseapp.com의 iframe)을 휴대폰·Safari에서만 미리 열고, 창이 닫힌 뒤 8초 안에 결과가 오지 않으면 `popup-closed-by-user`로 끝낸다. 그래서 로그인하지 않은 첫 화면에서 모든 브라우저에 그 준비를 미리 하고(`accountSync.js` `warmUpPopup`), 이 오류는 "다시 한 번 눌러 주세요"로 알리며, 로그인 단계별 시간을 콘솔(`[로그인]`)에 남긴다. 그래도 생기면 다음 수단은 authDomain을 앱 주소로 두고 `/__/auth/`를 firebaseapp.com으로 중계하는 방법(Firebase 문서 redirect-best-practices Option 3, OAuth 리디렉션 URI 추가 필요).
 - **서버 함수 실행 환경(2026-11-27 배포에서 확인)**: `package.json`의 `engines.node`를 `24.x`로 고정합니다(firebase-admin 14는 Node 22 이상). Vercel은 `require()`로 ES 모듈을 불러오지 못해, `overrides`로 `jwks-rsa` 아래의 `jose`를 CommonJS판이 있는 5.10.0으로 고정했습니다(firebase-admin을 올릴 때 다시 확인). 서버 라이브러리는 요청 안에서 불러와, 실패하면 원인을 오류 메시지로 돌려줍니다.
 - **AI**: OpenRouter API. 반드시 서버 측 엔드포인트를 거쳐 호출합니다.
 - **배포**: Vercel (2026-11-26 Netlify에서 변경. 이유: Netlify는 배포할 때마다 크레딧이 차감되어 잦은 커밋에 불리함)

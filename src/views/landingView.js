@@ -11,7 +11,9 @@ import { icons } from '../ui/icons.js';
 /** 구글 로그인 실패를 화면 글로 (닫기·취소는 빈 글) */
 export function googleErrorText(error) {
   const code = error?.code ?? '';
-  if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') return '';
+  if (code === 'auth/cancelled-popup-request') return '';
+  // 계정을 골랐는데도 결과가 늦게 와서 "창이 닫힘"으로 끝나는 경우가 있어, 조용히 넘어가지 않고 알린다
+  if (code === 'auth/popup-closed-by-user') return '로그인을 마치지 못했어요. 다시 한 번 눌러 주세요.';
   if (code === 'auth/popup-blocked') return '팝업이 막혀 있어요. 브라우저에서 이 사이트의 팝업을 허용한 뒤 다시 눌러 주세요.';
   if (code === 'auth/unauthorized-domain') return '이 주소에서는 로그인할 수 없어요(Firebase 승인된 도메인 확인 필요).';
   if (code === 'auth/network-request-failed') return '인터넷 연결을 확인한 뒤 다시 눌러 주세요.';

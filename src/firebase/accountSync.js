@@ -195,10 +195,40 @@ function subscribe() {
 
 // ── 로그인·로그아웃 ──
 
+// ── 로그인 기록(2026-11-28): 첫 로그인이 한 번에 안 되던 문제를 살피려고 단계별 시각을 콘솔에 남긴다 ──
+let loginStartedAt = 0;
+const trace = (step, extra = '') => {
+  if (!loginStartedAt) return;
+  console.info(`[로그인] ${step} +${Date.now() - loginStartedAt}ms ${extra}`);
+};
+
+/**
+ * 구글 로그인 창이 결과를 앱에 돌려줄 때 쓰는 Firebase의 숨은 창(iframe)은 처음 로그인 버튼을 누를 때에야 열린다.
+ * 그러면 첫 시도에서 계정을 골라도 결과가 앱에 늦게 닿아, SDK가 창이 닫힌 뒤 8초를 기다리다 "창이 닫힘"(popup-closed-by-user)으로
+ * 끝낼 수 있다(두 번째는 숨은 창이 이미 준비되어 됨. 2026-11-28 사용자 보고). Firebase SDK는 휴대폰·Safari에서만 이 창을 미리
+ * 준비하므로(_shouldInitProactively), 로그인하지 않은 첫 화면에서 모든 브라우저에 같은 준비 함수를 미리 부른다.
+ * SDK 내부 함수라 없거나 실패해도 로그인은 지금처럼 된다(버튼을 누를 때 SDK가 다시 준비).
+ */
+let warmed = null;
+function warmUpPopup() {
+  warmed ??= Promise.resolve()
+    .then(() => auth._popupRedirectResolver?._initialize?.(auth))
+    .catch(() => null);
+  return warmed;
+}
+
 async function signInWithGoogle() {
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: 'select_account' });
-  await signInWithPopup(auth, provider);
+  loginStartedAt = Date.now();
+  trace('구글 창 열기');
+  try {
+    await signInWithPopup(auth, provider);
+    trace('구글 창 끝남(로그인됨)');
+  } catch (error) {
+    trace('구글 창 끝남(실패)', error?.code ?? error?.message);
+    throw error;
+  }
 }
 
 async function signOutHere() {
@@ -244,9 +274,12 @@ export function initAccountSync() {
         stopAll();
         updateDataSync(null);
         publish();
+        warmUpPopup(); // 첫 화면에서 로그인 창의 숨은 창을 미리 준비
       } else {
         try {
+          trace('로그인 상태 받음');
           const data = await api('bootstrap');
+          trace('서버 계정 확인 끝남', data.claimsChanged ? '(역할 바뀜)' : '');
           const result = await user.getIdTokenResult(Boolean(data.claimsChanged));
           claimRole = result.claims.role ?? null;
           subscribe();
