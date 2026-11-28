@@ -36,6 +36,7 @@ import { retentionState } from '../../state/recordingStore.js';
 import { breadcrumb, notice } from '../../ui/components.js';
 import { escapeHtml, formatDateTime } from '../../ui/dom.js';
 import { consentTemplate } from '../../data/consentTemplates.js';
+import { renderAdminAi } from './adminAiView.js';
 
 const THIS_YEAR = new Date().getFullYear();
 export const ADMIN_TABS = [
@@ -43,6 +44,7 @@ export const ADMIN_TABS = [
   { id: 'links', label: '연결표·요청', href: '#/admin/links', lead: '연구 번호와 실제 사람을 잇는 연결표와, 학생의 개인정보 요청을 처리합니다. 관리자만 봅니다.' },
   { id: 'ethics', label: '연구 윤리', href: '#/admin/ethics', lead: 'IRB 심의 여부, 연구 정보, 자료 보존 기간, 학생 연구 동의서를 정합니다.' },
   { id: 'tools', label: '연구 도구', href: '#/admin/tools', lead: '모든 학급이 같은 도구로 자료를 모으도록 채점·태그·설문·면담 기준을 정합니다.' },
+  { id: 'ai', label: 'AI', href: '#/admin/ai', lead: 'AI를 쓰는 용도마다 OpenRouter 모델을 고르고, 요청 한도와 프롬프트(AI에게 주는 지침)를 정합니다.' },
   { id: 'practice', label: '연습 기본값', href: '#/admin/practice', lead: '증명 연습의 앱 전체 기본값입니다. 교사는 학급마다 바꿀 수 있습니다.' },
   { id: 'notices', label: '공지·안내', href: '#/admin/notices', lead: '앱 위쪽에 보일 공지와, 도움말에 보일 문의처를 정합니다.' },
   { id: 'data', label: '학급·기록', href: '#/admin/data', lead: '모든 학급과 회차, 회차에 들어온 학생과 탐구 기록을 고치거나 지웁니다. 지운 것은 되돌릴 수 없고 관리 기록에 남습니다.' },
@@ -53,7 +55,7 @@ const who = () => {
   return u ? displayName(u) : '미리보기';
 };
 /** 관리자 설정 머리 (빵 부스러기, 제목, 탭, 미리보기 안내) */
-const chrome = (tab) => {
+export const chrome = (tab) => {
   const t = ADMIN_TABS.find((x) => x.id === tab);
   const open = getAdmin().requests.filter((x) => x.status === 'open').length;
   const tabs = ADMIN_TABS.map((x) => (x.id === 'links' && open ? { ...x, badge: open } : x));
@@ -64,7 +66,7 @@ const chrome = (tab) => {
 };
 
 /** 관리자가 아니면 막는 화면 (막았으면 true) */
-function guard(root, title) {
+export function guard(root, title) {
   const user = currentUser();
   if (user && !isAdmin(user)) {
     root.innerHTML = `<div class="page page--teacher">${breadcrumb([{ label: '교사 업무판', href: '#/teacher' }, { label: title }])}<h1>${escapeHtml(title)}</h1>${notice('lock', '관리자만 볼 수 있어요', '이 화면은 관리자 계정으로 로그인해야 볼 수 있습니다.')}</div>`;
@@ -840,7 +842,7 @@ export function renderAdminAudit(root) {
 
 /** #/admin/:tab */
 export function renderAdmin(root, [tab]) {
-  const map = { users: renderAdminUsers, links: renderAdminLinks, ethics: renderEthics, tools: renderAdminTools, practice: renderAdminPractice, notices: renderAdminNotices, data: renderAdminData, audit: renderAdminAudit };
+  const map = { users: renderAdminUsers, links: renderAdminLinks, ethics: renderEthics, tools: renderAdminTools, ai: renderAdminAi, practice: renderAdminPractice, notices: renderAdminNotices, data: renderAdminData, audit: renderAdminAudit };
   if (!tab) return renderAdminBoard(root);
   return (map[tab] ?? renderAdminUsers)(root);
 }

@@ -847,6 +847,18 @@ a.prop-tabs__item:active { translate: 0 2px; }
 .seg__item.is-locked:hover { background: transparent; }
 .button.is-waiting { color: var(--color-muted); }
 .seg__count { min-width: 22px; padding: 0 var(--space-xs); border-radius: var(--radius-pill); background: var(--color-paper-3); font-size: var(--text-xs); }
+/* 관리자 설정 > AI (5-1) */
+.ai-model { display: grid; gap: var(--space-xs); margin: 0 0 var(--space-md); padding: var(--space-md); border: var(--rule-hair) solid var(--color-rule); border-radius: var(--radius-card); }
+.ai-model__title { padding: 0 var(--space-2xs); font-weight: var(--display-weight); }
+.ai-model__fields { display: grid; gap: var(--space-sm); }
+@media (min-width: 720px) { .ai-model__fields { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.ai-model__field .field__input { width: 100%; }
+.ai-limits { display: grid; gap: var(--space-sm); }
+@media (min-width: 720px) { .ai-limits { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ai-limits > p { grid-column: 1 / -1; } }
+.ai-prompt__text { width: 100%; min-height: 16rem; font-family: var(--font-outlier); font-size: var(--text-sm); line-height: 1.6; }
+.ai-prompt__default { white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--text-sm); }
+.chat__retry { display: grid; gap: var(--space-xs); }
+
 /* 교사 업무판: 증명 연습 현황의 학급 탭(학급 수만큼, 넘치면 줄바꿈) */
 .seg--tabs { display: flex; flex-wrap: wrap; }
 .seg--tabs .seg__item { flex: 0 1 auto; padding-inline: var(--space-md); }

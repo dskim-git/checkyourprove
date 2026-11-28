@@ -6,6 +6,7 @@
 // 쓰기: 연구 기록·연습 기록은 잠시 모았다가(1.2초) 바뀐 문서만 쓴다. 필기는 칸마다 ink 문서(JSON 글)로 나눠 1MB 제한을 피하고,
 //   제출과 함께 쓸 때 보안 규칙에 막히지 않게 필기를 먼저, 기록 본문을 나중에 쓴다. 화면을 떠날 때(pagehide) 바로 쓴다.
 
+import { applyRemoteAiSettings, setAiBackend } from '../state/aiStore.js';
 import {
   collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, setDoc, updateDoc, where, writeBatch,
 } from 'firebase/firestore';
@@ -262,6 +263,10 @@ function connectBackends() {
       loadOwn(id);
     },
   });
+  // 5-1: AI 요청은 서버 함수(api/ai.js). 읽기·요청은 실패해도 화면이 오류를 보여 준다
+  setAiBackend({
+    fetch: (action, payload) => (ctx ? ctx.api('/api/ai', action, payload).catch((error) => ({ error: error.message })) : Promise.resolve({ error: '로그인이 필요해요.' })),
+  });
   setResearchBackend({
     loadOwn: (id) => { loadOwn(id); },
     saveOwn: (id) => {
@@ -338,6 +343,11 @@ export function updateDataSync(next, selfUser) {
         resolve();
       }, (e) => { fail('학급')(e); resolve(); }));
     }));
+    // 5-1: AI 용도별 모델·한도(교사 설정의 학급별 한도, 관리자 AI 탭)
+    unsubs.push(onSnapshot(doc(db, 'settings', 'ai'), (snap) => {
+      applyRemoteAiSettings(snap.exists() ? snap.data() : {});
+      emit();
+    }, fail('AI 설정')));
     unsubs.push(onSnapshot(collection(db, 'staff'), (snap) => {
       applyStaff(snap.docs.map((d) => ({ uid: d.id, ...d.data() })).sort((a, b) => String(a.name).localeCompare(String(b.name))));
       emit();

@@ -6,6 +6,8 @@ import { getProblem } from '../../data/problems/index.js';
 import { getStage, MORE_ACCURATE_OPTIONS, optionLabel, RESEARCH_STAGES, STUCK_RESOLVED_OPTIONS } from '../../data/research.js';
 import { buildResearchRequest } from '../../services/aiRequests.js';
 import { requestResearchChat } from '../../services/mockAiService.js';
+import { askResearchAi, usesServerAi } from '../../state/aiStore.js';
+import { activeSession } from '../../state/sessionStore.js';
 import { PROOF_HELP_MIN, proofCoverage } from '../../services/proofHelp.js';
 import { beyondCurriculum, classifyStudentMessage, GUARDRAIL_VERSION } from '../../services/researchGuardrails.js';
 import { getClassroom } from '../../state/classroomStore.js';
@@ -80,6 +82,8 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
   let chatTab = n === 2 && hasAiReply(item) ? 'record' : 'chat';
   const CHAT_FIRST = 'AI에게 이 명제의 증명이나 증명 방법을 물어보세요. AI에게서 증명에 대한 도움을 받아야 기록할 수 있습니다.';
   let pending = false;
+  // 5-1: 서버 AI가 답하지 못했을 때의 안내(학생 메시지는 남기고 [다시 보내기])
+  let chatError = '';
   const save = () => saveResearch();
   // 필기는 획마다 바로 저장하지 않고 잠시 모아서 저장한다(기록이 커질 수 있다).
   const flushInk = () => {
@@ -167,7 +171,9 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
     if (n === 2) {
       const chatPane = `<section class="chat-pane" aria-label="AI와 대화">
           <p class="note-chip">${icons.info}<span>이 AI는 이 명제의 증명에 대한 질문에만 답하고, 고등학교 1학년 교육과정(공통수학1·공통수학2) 안에서 설명해요. 증명과 관계없는 이야기에는 답하지 않아요.</span></p>
-          ${mockAiNote('프로토타입: AI 응답은 미리 준비한 예시이며 실제 AI가 아닙니다. AI는 1단계에서 쓴 나의 증명을 볼 수 없습니다.')}
+          ${usesServerAi()
+    ? `<p class="note-chip">${icons.info}<span>AI의 답이 언제나 옳지는 않아요. 근거를 하나하나 확인하세요. AI는 1단계에서 쓴 나의 증명을 볼 수 없습니다.</span></p>`
+    : mockAiNote('프로토타입: AI 응답은 미리 준비한 예시이며 실제 AI가 아닙니다. AI는 1단계에서 쓴 나의 증명을 볼 수 없습니다.')}
           <ol class="chat__log" data-chat-log aria-label="AI 대화 기록" aria-live="polite">${chatMessages(item.chat.messages, { pending })}</ol>
           <form class="chat__form" data-chat-form novalidate>
             <label class="field__label" for="chat-input">AI에게 보낼 메시지</label>
@@ -178,6 +184,7 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
               <button type="submit" class="button button--primary" data-chat-send${pending ? ' disabled' : ''}>${pending ? 'AI가 답하는 중…' : '보내기'}</button>
             </div>
           </form>
+          ${chatError ? `<div class="chat__retry" role="alert">${notice('warn', 'AI가 답하지 못했어요', chatError)}${item.chat.messages.at(-1)?.role === 'student' ? '<p><button type="button" class="button button--secondary" data-action="retry-chat">다시 보내기</button></p>' : ''}</div>` : ''}
           <p class="field__error" id="f-chat-error" data-error-for="chat" role="alert" hidden></p>
         </section>`;
       const chatRef = item.chat.messages.length
@@ -395,41 +402,63 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
     if (note) note.hidden = false;
   };
 
-  async function sendChat(form) {
+  async function sendChat(form, { retry = false } = {}) {
     if (pending) return;
-    const input = form.querySelector('#chat-input');
-    const text = input.value.trim();
-    if (!text) {
-      input.focus();
-      return;
-    }
-    // 가드레일 분류를 함께 기록한다(교사용: 증명과 무관한 질문, 규칙 바꾸기 요청 등)
-    const verdict = classifyStudentMessage(text, problem);
-    item.chat.messages.push({ role: 'student', text, at: nowIso(), topic: verdict.category });
-    noteInput(item, 'chat');
+    if (!retry) {
+      const input = form.querySelector('#chat-input');
+      const text = input.value.trim();
+      if (!text) {
+        input.focus();
+        return;
+      }
+      // 가드레일 분류를 함께 기록한다(교사용: 증명과 무관한 질문, 규칙 바꾸기 요청 등). 서버가 다시 분류한다(5-1).
+      const verdict = classifyStudentMessage(text, problem);
+      item.chat.messages.push({ role: 'student', text, at: nowIso(), topic: verdict.category });
+      noteInput(item, 'chat');
+    } else if (item.chat.messages.at(-1)?.role !== 'student') return;
     pending = true;
+    chatError = '';
     save();
     draw({ focus: '#chat-input' });
     const request = buildResearchRequest({ problem, messages: item.chat.messages });
-    item.chat.requestLog.push({
-      requestId: request.requestId,
-      sentAt: request.sentAt,
-      model: request.model,
-      promptVersion: request.promptVersion,
-      inputKeys: Object.keys(request.input),
-      messageCount: request.input.messages.length,
-    });
-    const reply = await requestResearchChat(request);
+    const sentAt = nowIso();
+    let reply;
+    if (usesServerAi()) {
+      // 서버 모드: api/ai.js가 권한·한도·모델(회차에 고정)·프롬프트를 정하고 서버 기록(aiLogs)을 남긴다
+      reply = await askResearchAi({ sessionId: activeSession()?.id, propositionId: problem.id, messages: item.chat.messages });
+      item.chat.requestLog.push({
+        requestId: reply.logId ?? request.requestId, sentAt, model: reply.model ?? null, usedFallback: Boolean(reply.usedFallback),
+        promptVersion: reply.promptVersion ?? null, messageCount: item.chat.messages.length, ...(reply.error ? { error: reply.error } : {}), ...(retry ? { retry: true } : {}),
+      });
+      if (reply.error) {
+        pending = false;
+        chatError = reply.error;
+        save();
+        if (root.isConnected && chatTab === 'chat') draw({ focus: '[data-action="retry-chat"]' });
+        return;
+      }
+    } else {
+      item.chat.requestLog.push({
+        requestId: request.requestId,
+        sentAt: request.sentAt,
+        model: request.model,
+        promptVersion: request.promptVersion,
+        inputKeys: Object.keys(request.input),
+        messageCount: request.input.messages.length,
+      });
+      reply = await requestResearchChat(request);
+    }
     const coverage = proofCoverage(reply.text, problem);
     item.chat.messages.push({
       role: 'ai',
       text: reply.text,
       at: nowIso(),
-      requestId: request.requestId,
+      requestId: reply.logId ?? request.requestId,
+      ...(reply.model !== undefined ? { model: reply.model, usedFallback: Boolean(reply.usedFallback), promptVersion: reply.promptVersion ?? null } : {}),
       coverage,
       guard: reply.guard ?? null,
-      guardVersion: GUARDRAIL_VERSION,
-      curriculumFlags: reply.guard ? [] : beyondCurriculum(reply.text, problem),
+      guardVersion: reply.guardVersion ?? GUARDRAIL_VERSION,
+      curriculumFlags: reply.guard ? [] : (reply.curriculumFlags ?? beyondCurriculum(reply.text, problem)),
     });
     if (coverage >= PROOF_HELP_MIN) item.proofHelpAt ??= nowIso();
     pending = false;
@@ -508,6 +537,10 @@ export function renderResearchStage(root, [stageParam, indexParam = '0']) {
     const go = event.target.closest('[data-go]');
     if (go) {
       guardForward(event, Number(go.dataset.go));
+      return;
+    }
+    if (event.target.closest('[data-action="retry-chat"]')) {
+      sendChat(null, { retry: true });
       return;
     }
     const tab = event.target.closest('[data-tab-to]');

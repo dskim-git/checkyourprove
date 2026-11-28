@@ -172,6 +172,15 @@
 - `sessions/{id}/recordings/{녹음 id}` = { id, studentId('회차id_uid'), uid, pseudonym, sessionLabel, createdAt, durationMs, mimeType, size, path, url, transcript, by, uploadedAt }. 담당 교사·관리자만.
 - 회차를 지우거나 계정을 "탐구 기록도 지우기"로 지우면 서버가 녹음 파일과 정보도 지운다. 보관 기한이 지나도 자동으로 지우지 않는다(6절).
 
+5-1에서 확정한 것(2026-11-29, `api/ai.js`, `firestore.rules`)
+- `settings/ai` = { models: {용도: {model, fallback}}, limits: {researchPerDay, practicePerDay, teacherPerDay, maxChars, maxOutputTokens, dailyBudgetUsd, classMaxMultiplier}, updatedAt }. 서버만 쓰고 교사·관리자가 읽음.
+- `settings/prompts` = { overrides: {프롬프트 id: {version, template, editedAt, by}} }. 서버만(관리자는 서버 함수로 봄). 기본값은 `api/_lib/prompts.js`.
+- `aiHistory/{자동}` = { at, by(연구 번호), kind('model'|'limits'|'prompt'), use·from·to·source·reason 또는 id·version·template }. 서버만.
+- `aiUsage/{uid}` = { date(한국 날짜), research, practice, teacher }. 서버만 쓰고 본인이 읽음. `aiDaily/{날짜}` = { calls, costUsd, promptTokens, completionTokens }. 서버만.
+- `sessions/{id}.aiModels` = { research: {model, fallback}, fixedAt }(회차를 만들 때, 브라우저는 못 바꿈), `classes/{id}.aiLimits` = { researchPerDay, practicePerDay }(담당 교사가 서버 함수로).
+- `sessions/{id}/aiLogs/{자동}` = { uid, propositionId, at, mode, stage, model, requested, usedFallback, promptId, promptVersion, promptEdited, guardrail, input(대화), output, usage(토큰·비용), curriculumFlags, retried } 또는 { …, error }. 서버만 쓰고 담당 교사·관리자가 읽음.
+- 학생 기록의 AI 답 메시지에 { model, usedFallback, promptVersion, requestId(= aiLogs id) }.
+
 아래는 처음 초안입니다(4단계에서 위와 같이 확정).
 
 ```

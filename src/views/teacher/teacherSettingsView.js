@@ -18,6 +18,8 @@ import {
 import { sessionMembers } from '../../state/accountStore.js';
 import { getResearch, hasResearchRecord, resetResearch, sessionRecords } from '../../state/researchStore.js';
 import { isFirebase } from '../../state/appMode.js';
+import { aiSettings, setClassAiLimits } from '../../state/aiStore.js';
+import { AI_LIMIT_FIELDS, CLASS_LIMIT_KEYS } from '../../data/aiConfig.js';
 import { currentUser, findUser, getAccounts } from '../../state/accountStore.js';
 
 const THIS_YEAR = new Date().getFullYear();
@@ -227,6 +229,24 @@ function practiceForm(classId) {
   </form>`;
 }
 
+/** 학급별 AI 하루 한도(5-1, 서버 모드): 관리자 기본값 × 배수까지. 비우면 기본값 */
+function aiLimitsForm(classId) {
+  if (!isFirebase || !classId) return '';
+  const { limits } = aiSettings();
+  const own = getSessions().classes.find((c) => c.id === classId)?.aiLimits ?? {};
+  return `<form class="settings-form" data-class-ai-limits novalidate>
+    <h3 class="an-sub">AI 요청 한도 (학생 1명 하루)</h3>
+    <p class="field__help">비우면 관리자 기본값을 따릅니다. 관리자가 정한 최대치(기본값 × ${limits.classMaxMultiplier}배)까지 올릴 수 있습니다.</p>
+    ${CLASS_LIMIT_KEYS.map((k) => {
+      const f = AI_LIMIT_FIELDS.find((x) => x.id === k);
+      const max = Math.round(limits[k] * limits.classMaxMultiplier);
+      return `<div class="field"><label class="field__label" for="cal-${k}">${escapeHtml(f.label)}</label><p class="field__help" id="cal-${k}-help">기본값 ${limits[k]}${escapeHtml(f.unit)}, 최대 ${max}${escapeHtml(f.unit)}</p>
+        <span class="iv-criteria__input"><input type="number" class="field__input" id="cal-${k}" name="${k}" min="1" max="${max}" value="${own[k] ?? ''}" placeholder="${limits[k]}" aria-describedby="cal-${k}-help" inputmode="numeric"><span class="meta">${escapeHtml(f.unit)}</span></span></div>`;
+    }).join('')}
+    <div class="actions actions--start"><button type="submit" class="button button--secondary">이 학급 AI 한도 저장</button></div>
+  </form>`;
+}
+
 function gradingForm() {
   const g = getGrading();
   return `<form class="settings-form" data-grading-prefs novalidate>
@@ -257,7 +277,7 @@ export function renderTeacherSettings(root, [tabParam]) {
     let body = '';
     if (tab === 'sessions') body = sessionPanel(status);
     if (tab === 'research') body = `<section class="panel" aria-labelledby="settings-heading"><h2 id="settings-heading" class="section-title">탐구 진행</h2>${classroom.sessionId ? researchForm(classroom) : '<p>진행 중 세션이 없어요. <a href="#/teacher/settings/sessions">학급·세션</a>에서 학급과 회차를 먼저 만드세요.</p>'}</section>`;
-    if (tab === 'practice') body = `<section class="panel" aria-labelledby="practice-heading"><h2 id="practice-heading" class="section-title">증명 연습 (학급별)</h2>${practiceForm(practiceClass)}<p class="save-status" role="status" data-tab-status>${escapeHtml(status)}</p></section>`;
+    if (tab === 'practice') body = `<section class="panel" aria-labelledby="practice-heading"><h2 id="practice-heading" class="section-title">증명 연습 (학급별)</h2>${practiceForm(practiceClass)}${aiLimitsForm(practiceClass)}<p class="save-status" role="status" data-tab-status>${escapeHtml(status)}</p></section>`;
     if (tab === 'grading') body = `<section class="panel" aria-labelledby="gp-heading"><h2 id="gp-heading" class="section-title">채점·분석 보기</h2>${gradingForm()}<p class="save-status" role="status" data-tab-status>${escapeHtml(status)}</p></section>`;
     root.innerHTML = `<div class="page page--teacher page--settings">
       ${breadcrumb([{ label: '교사 업무판', href: '#/teacher' }, { label: '교사 설정' }])}
@@ -301,6 +321,20 @@ export function renderTeacherSettings(root, [tabParam]) {
       setClassTeachers(t.dataset.classTeachers, uids);
       status = '담당 교사를 바꾸었습니다.';
       return draw();
+    }
+    if (t.matches('[data-class-ai-limits]')) {
+      event.preventDefault();
+      const limits = Object.fromEntries(CLASS_LIMIT_KEYS.map((k) => [k, t.querySelector(`[name="${k}"]`).value.trim() || null]));
+      const classId = practiceClass;
+      setClassAiLimits(classId, limits).then((r) => {
+        if (!r?.error) {
+          const c = getSessions().classes.find((x) => x.id === classId);
+          if (c) c.aiLimits = r.aiLimits;
+        }
+        status = r?.error ? `저장하지 못했어요: ${r.error}` : `AI 한도를 저장했습니다 (${formatTime(new Date().toISOString())}).`;
+        if (root.isConnected) draw('#practice-heading');
+      });
+      return undefined;
     }
     if (t.matches('[data-practice-form]')) {
       event.preventDefault();

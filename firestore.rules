@@ -44,7 +44,8 @@ service cloud.firestore {
       allow write: if false;
     }
     match /settings/{name} {
-      allow read: if signedIn() && (name == 'ethics' || name == 'signup' || name == 'admin' || name == 'tools' || name == 'consent');
+      allow read: if (signedIn() && (name == 'ethics' || name == 'signup' || name == 'admin' || name == 'tools' || name == 'consent'))
+        || (isTeacher() && name == 'ai');  // AI 용도별 모델·한도(5-1): 교사·관리자가 읽고 서버만 쓴다. settings/prompts는 막음(관리자는 api/ai.js로)
       // 연구 도구(루브릭·대화 태그·채점자·AI 보조 채점자·면담 기준·녹음 보관 기한)와 연구 동의서는 관리자가 바로 쓴다(4-3)
       allow write: if isAdmin() && (name == 'tools' || name == 'consent');
     }
@@ -96,6 +97,11 @@ service cloud.firestore {
       match /recordings/{recId} {
         allow read, write: if teachesSession(sid);
       }
+      // 연구 모드 AI 대화 기록(5-1): 서버만 쓰고 담당 교사·관리자가 읽는다(위·변조 방지)
+      match /aiLogs/{logId} {
+        allow read: if teachesSession(sid);
+        allow write: if false;
+      }
 
       match /records/{uid} {
         function before() { return resource == null ? {} : resource.data.get('stages', {}); }
@@ -127,6 +133,12 @@ service cloud.firestore {
           allow write: if writer() && stageOpenForInk();
         }
       }
+    }
+
+    // ── AI 사용량(5-1): 서버만 쓴다. 본인은 오늘 쓴 횟수를 읽는다 ──
+    match /aiUsage/{uid} {
+      allow read: if isSelf(uid);
+      allow write: if false;
     }
 
     // ── 증명 연습 기록 (4-2): 본인만 읽고 쓴다. 통과·인증의 서버 확인은 5단계 ──

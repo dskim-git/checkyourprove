@@ -18,6 +18,7 @@
 import { db, deleteRecordingFiles, fieldValue, handler, HttpError } from './_lib/server.js';
 import { addClassStudentsToSession, assignWaitingStudents } from './_lib/classes.js';
 import { homeroomKey, homeroomName } from '../src/data/studentNo.js';
+import { aiModels } from '../src/data/aiConfig.js';
 
 const CODE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
 const DEFAULT_PROPOSITIONS = ['research-cube-remainder', 'research-square-odd', 'research-coprime-odd']; // data/classroom.js와 같게
@@ -252,9 +253,11 @@ async function staffAction(action, { token, body }) {
         open: true, propositionIds: last?.propositionIds ?? DEFAULT_PROPOSITIONS, stagesOpen: [1], ...config,
         code: await claimCode(sref.id), codeOpen: true, createdAt: now(),
       };
+      // 연구용 AI 모델은 회차를 만들 때 고정한다(5-1, 회차 도중 바뀌지 않게. 장애 때만 대체 모델)
+      const research = aiModels((await db().doc('settings/ai').get()).data()?.models).research;
       // 반의 첫 회차는 바로 진행 회차가 된다
       const first = !c.currentSessionId;
-      await sref.set({ ...data, isCurrent: first });
+      await sref.set({ ...data, aiModels: { research, fixedAt: now() }, isCurrent: first });
       if (first) await cref.update({ currentSessionId: sref.id });
       await addClassStudentsToSession(cref.id, sref.id);
       return { ok: true, sessionId: sref.id };

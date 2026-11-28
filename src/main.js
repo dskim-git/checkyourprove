@@ -24,7 +24,7 @@ async function start() {
     const tag = document.querySelector('.app-bar .tag--proto');
     if (tag) tag.textContent = '시범';
     const foot = document.querySelector('.app-foot p');
-    if (foot) foot.textContent = '시범 운영 중입니다. 계정과 학습·탐구 기록은 서버에 저장합니다. AI는 아직 예시 응답입니다.';
+    if (foot) foot.textContent = '시범 운영 중입니다. 계정과 학습·탐구 기록은 서버에 저장합니다. AI와 탐구하기는 서버를 거쳐 AI가 답하고, 증명 연습의 AI는 아직 예시 응답입니다.';
     try {
       const { initAccountSync } = await import('./firebase/accountSync.js');
       await initAccountSync();

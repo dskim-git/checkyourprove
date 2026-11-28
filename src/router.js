@@ -23,7 +23,7 @@
 //   #/account                            계정(시연 로그인, 처음 정보 입력, 승인 대기, 세션 코드)
 //   #/settings(/:tab)                    내 설정: 계정, 화면·입력, 개인정보, 도움말 (학생·일반인, 교사·관리자의 개인 설정)
 //   #/teacher/settings(/:tab)            교사 설정: 학급·세션, 탐구 진행, 증명 연습(학급별), 채점·분석 보기
-//   #/admin(/:tab)                       관리자 설정: 사용자·가입, 연결표·요청, 연구 윤리, 연구 도구, 연습 기본값, 공지·안내, 관리 기록
+//   #/admin(/:tab)                       관리자 설정: 사용자·가입, 연결표·요청, 연구 윤리, 연구 도구, AI, 연습 기본값, 공지·안내, 관리 기록
 //                                        (예전 주소 #/teacher/admin(/links|/ethics)도 열림)
 //   #/practice/guide                     증명법 한눈에 보기(직접·간접 증명법 설명)
 //   #/demo-data                          시연 데이터: 이 브라우저의 기록을 파일로 내보내기·불러오기(시연 모드는 demo.html)
@@ -106,7 +106,7 @@ const ROUTES = [
   { section: 'account', tab: null, title: '시연 데이터', pattern: /^\/demo-data$/, render: renderDemoData },
   { section: 'account', tab: null, title: '내 설정', pattern: /^\/settings(?:\/(account|display|privacy|help))?$/, render: renderSettings },
   { section: 'teacher', role: 'teacher', tab: null, view: 'wide', title: '교사 설정', pattern: /^\/teacher\/settings(?:\/(sessions|research|practice|grading))?$/, render: renderTeacherSettings },
-  { section: 'admin', role: 'admin', tab: null, view: 'wide', title: '관리자 설정', pattern: /^\/admin(?:\/(users|links|ethics|tools|practice|notices|data|audit))?$/, render: renderAdmin },
+  { section: 'admin', role: 'admin', tab: null, view: 'wide', title: '관리자 설정', pattern: /^\/admin(?:\/(users|links|ethics|tools|ai|practice|notices|data|audit))?$/, render: renderAdmin },
   { section: 'admin', role: 'admin', tab: null, view: 'wide', title: '관리자 설정', pattern: /^\/teacher\/admin(?:\/(links|ethics))?$/, render: (root, [tab]) => renderAdmin(root, [tab ?? 'users']) },
 ];
 
