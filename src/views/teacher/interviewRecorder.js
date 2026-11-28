@@ -61,7 +61,7 @@ export function createRecorder({ student, sessionLabel, allowed, onChange = () =
     if (!list.length) return '<p class="empty-text">이 학생의 녹음이 없습니다.</p>';
     // 녹음은 학생마다 여러 개를 따로 저장한다. 오래된 것부터 녹음 1, 2, …
     return `<ul class="rec__list">${list.map((r, i) => {
-      const url = r.blob ? URL.createObjectURL(r.blob) : '';
+      const url = r.url || (r.blob ? URL.createObjectURL(r.blob) : ''); // 서버 녹음은 내려받기 주소(4-4)
       if (url) urls.push(url);
       const n = list.length - i;
       return `<li class="rec__item" data-rec-id="${escapeHtml(r.id)}">

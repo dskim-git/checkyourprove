@@ -92,6 +92,10 @@ service cloud.firestore {
       match /interviews/{uid} {
         allow read, write: if teachesSession(sid);
       }
+      // 면담 녹음 정보(4-4, 파일은 Storage recordings/{회차}/{uid}/…): 담당 교사·관리자만
+      match /recordings/{recId} {
+        allow read, write: if teachesSession(sid);
+      }
 
       match /records/{uid} {
         function before() { return resource == null ? {} : resource.data.get('stages', {}); }

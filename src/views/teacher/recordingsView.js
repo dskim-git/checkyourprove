@@ -2,6 +2,7 @@
 // 보관 기한(연구 종료일) 정하기와 알림, 모든 면담 녹음의 목록(학생·세션·녹음 시각·길이·크기), 듣기·내려받기·지우기,
 // 모두 내려받기, 기한이 지나면 모두 지우기. 자동으로 지우지 않는다(사용자 결정 2026-11-27: 기한 알림 + 교사가 직접 삭제).
 
+import { isFirebase } from '../../state/appMode.js';
 import { retentionUntil } from '../../state/interviewStore.js';
 import { logAction } from '../../state/adminStore.js';
 import { currentUser, displayName } from '../../state/accountStore.js';
@@ -61,16 +62,16 @@ export function renderRecordings(root) {
       const first = recs[0];
       const head = `<tr class="grade-group"><th scope="rowgroup" colspan="8"><a href="#/teacher/interviews/${escapeHtml(first.studentId)}">${escapeHtml(first.pseudonym ?? first.studentId)}</a>${first.sample ? ' <span class="tag tag--proto">예시</span>' : ''}<span class="meta">${escapeHtml(first.sessionLabel ?? '')}, 녹음 ${recs.length}개, 모두 ${formatDuration(recs.reduce((s, r) => s + (r.durationMs ?? 0), 0))}</span></th></tr>`;
       return head + recs.map((r, k) => {
-      const url = r.blob ? URL.createObjectURL(r.blob) : '';
+      const url = r.url || (r.blob ? URL.createObjectURL(r.blob) : ''); // 서버 녹음은 내려받기 주소(4-4)
       if (url) urls.push(url);
       return `<tr data-rec-id="${escapeHtml(r.id)}">
-        <th scope="row">녹음 ${k + 1}</th>
+        <th scope="row">녹음 ${k + 1}${r.pending ? ' <span class="tag tag--warn">올리기 전</span>' : ''}</th>
         <td>${escapeHtml(r.sessionLabel ?? '')}</td>
         <td>${escapeHtml(formatDateTime(r.createdAt))}</td>
         <td class="num">${formatDuration(r.durationMs)}</td>
         <td class="num">${formatSize(r.size)}</td>
         <td>${url ? audioPlayerHtml({ url, label: `${r.pseudonym ?? ''} 녹음 ${k + 1} 듣기`, durationMs: r.durationMs, compact: true }) : '–'}</td>
-        <td>${r.transcript ? '있음' : '<span class="meta">서버 연결 뒤</span>'}</td>
+        <td>${r.transcript ? '있음' : `<span class="meta">${isFirebase ? '전사 전' : '서버 연결 뒤'}</span>`}</td>
         <td><span class="rec__row-actions">${url ? `<a class="button button--ghost button--small" href="${url}" download="${escapeHtml(recordingFileName(r))}">내려받기</a>` : ''}<button type="button" class="button button--ghost button--small" data-action="delete">지우기</button></span></td>
       </tr>`;
       }).join('');
@@ -81,7 +82,7 @@ export function renderRecordings(root) {
         <h1>녹음 관리</h1>
         <p class="lead">면담 녹음 파일을 연구 기간 동안 보관하고, 듣고, 내려받고, 지웁니다. 학생 음성은 민감한 개인정보이므로 보관 기한이 지나면 지워 주세요.</p>
       </header>
-      ${notice('warn', '프로토타입 상태입니다', `녹음 파일은 이 브라우저(이 기기)에만 저장됩니다. 다른 기기에서는 보이지 않고, 브라우저 데이터를 지우면 함께 사라집니다. 서버를 연결하면 교사만 볼 수 있는 저장소로 옮깁니다.${inMemory ? ' 지금 이 브라우저는 파일을 오래 저장할 수 없어 이 탭에만 두고 있습니다. 새로 고치기 전에 내려받으세요.' : ''}`)}
+      ${isFirebase ? notice('info', '녹음 파일은 서버(Firebase Storage)에 저장돼요', `그 반 담당 선생님과 관리자만 듣고 지울 수 있어요. 녹음을 마치면 이 기기에 잠시 두었다가 올리고, 인터넷이 끊겨 못 올린 녹음은 "올리기 전"으로 보이며 다음에 이 화면을 열 때 다시 올려요. 예시 학생의 녹음은 이 기기에만 있어요.`) : notice('warn', '프로토타입 상태입니다', `녹음 파일은 이 브라우저(이 기기)에만 저장됩니다. 다른 기기에서는 보이지 않고, 브라우저 데이터를 지우면 함께 사라집니다. 서버를 연결하면 교사만 볼 수 있는 저장소로 옮깁니다.${inMemory ? ' 지금 이 브라우저는 파일을 오래 저장할 수 없어 이 탭에만 두고 있습니다. 새로 고치기 전에 내려받으세요.' : ''}`)}
       <section class="panel" aria-labelledby="rec-retention">
         <h2 id="rec-retention" class="section-title">보관 기한</h2>
         <p class="rec-until">보관 기한: <strong data-rec-until>${until ? escapeHtml(until) : '정하지 않음'}</strong> <span class="meta">· <a href="#/admin/ethics">관리자 설정 &gt; 연구 윤리</a>에서 정합니다.</span></p>

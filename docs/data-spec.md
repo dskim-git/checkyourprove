@@ -165,7 +165,12 @@
 - `surveys/{id}` = 설문(문항 세트). 관리자만 쓰고 모두 읽음. 학생이 응답을 시작하면 서버가 `lockedAt`을 넣고, 잠긴 설문은 고치거나 지울 수 없음.
 - `teacherPrefs/{uid}` = 교사 보기 설정(지금 채점자, 블라인드, 순서, 포함할 세션 등). 본인만.
 
-아래는 처음 초안이며, 남은 부분(면담 녹음)은 4-4에서 확정합니다.
+4-4에서 확정한 것(2026-11-28, `storage.rules`, `src/firebase/recordingSync.js`)
+- Storage `recordings/{회차}/{학생 uid}/{녹음 id}.webm` = 면담 녹음 파일(오디오만, 200MB 아래). 그 회차 담당 교사·관리자만 올리고 듣고 지움, 폴더 목록 보기는 아무도 못 함.
+- `sessions/{id}/recordings/{녹음 id}` = { id, studentId('회차id_uid'), uid, pseudonym, sessionLabel, createdAt, durationMs, mimeType, size, path, url, transcript, by, uploadedAt }. 담당 교사·관리자만.
+- 회차를 지우거나 계정을 "탐구 기록도 지우기"로 지우면 서버가 녹음 파일과 정보도 지운다. 보관 기한이 지나도 자동으로 지우지 않는다(6절).
+
+아래는 처음 초안입니다(4단계에서 위와 같이 확정).
 
 ```
 users/{uid}                 역할, 상태, 연구 번호, 참여 세션 (본인 읽기, 관리자 쓰기, 역할은 사용자 지정 클레임)

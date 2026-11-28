@@ -139,7 +139,7 @@ async function ensureClaims(want) {
 function syncData() {
   if (!authUser || !claimRole || !selfUser) return updateDataSync(null);
   return updateDataSync({
-    db, uid: authUser.uid, role: claimRole, notify: notifyError,
+    app, db, uid: authUser.uid, role: claimRole, notify: notifyError,
     call: (path, action, payload) => call(action, payload, path),
   }, selfUser);
 }

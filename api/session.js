@@ -15,7 +15,7 @@
 //   sessions/{id}/records/{uid}    학생 연구 기록(본인 씀, 담당 교사 읽음), 필기는 records/{uid}/ink/{단계~명제~칸}
 //   sessionCodes/{코드}            { sessionId }  ← 코드가 겹치지 않게, 코드로 세션 찾기(서버만)
 
-import { db, fieldValue, handler, HttpError } from './_lib/server.js';
+import { db, deleteRecordingFiles, fieldValue, handler, HttpError } from './_lib/server.js';
 import { addClassStudentsToSession, assignWaitingStudents } from './_lib/classes.js';
 import { homeroomKey, homeroomName } from '../src/data/studentNo.js';
 
@@ -96,7 +96,8 @@ async function removeSessionDeep(ref, data) {
   if (data.code) await db().doc(`sessionCodes/${data.code}`).delete();
   const cdoc = await classes().doc(data.classId).get();
   if (cdoc.exists && cdoc.data().currentSessionId === ref.id) await cdoc.ref.update({ currentSessionId: null });
-  await db().recursiveDelete(ref);
+  await db().recursiveDelete(ref); // 녹음 정보(recordings)도 함께
+  await deleteRecordingFiles(`recordings/${ref.id}/`); // 4-4: 녹음 파일
   return members.size;
 }
 

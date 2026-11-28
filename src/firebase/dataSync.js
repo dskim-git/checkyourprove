@@ -16,6 +16,7 @@ import {
 import { applyRemoteAttempts, setAttemptBackend } from '../state/attemptStore.js';
 import { applyRemoteAdminSettings, applyRemoteRequests } from '../state/adminStore.js';
 import { startTeacherSync, stopTeacherSync, syncTeacherSessions } from './teacherSync.js';
+import { startRecordingSync, stopRecordingSync } from './recordingSync.js';
 
 let ctx = null; // { db, uid, role, call(path, action, payload), notify(message) }
 let user = null; // 내 users 문서
@@ -234,6 +235,7 @@ function syncRecordListeners(sessionIds) {
 
 function stop() {
   stopTeacherSync();
+  stopRecordingSync();
   unsubs.forEach((u) => u());
   unsubs = [];
   sessionUnsubs.forEach((u) => u());
@@ -301,6 +303,7 @@ export function updateDataSync(next, selfUser) {
   const db = ctx.db;
   // 4-3: 연구 도구·설문·동의서(모두), 보기 설정·채점·면담(교사)
   const first = [...startTeacherSync({ db, uid: ctx.uid, role: ctx.role, call: ctx.call, notify: ctx.notify, emit })];
+  if (isStaff() && ctx.app) startRecordingSync({ app: ctx.app, db, uid: ctx.uid }); // 4-4: 면담 녹음 Storage
 
   // 관리자 설정, 개인정보 요청
   first.push(new Promise((resolve) => {

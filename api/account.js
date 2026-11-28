@@ -15,7 +15,7 @@
 //   settings/admin    { practice, contact, notices }  ← 관리자 설정(로그인한 사람이 읽음). 4-2
 //   requests/{id}     { uid, researchId, type, reason, at, status, note, doneAt }  ← 개인정보 요청(본인·관리자가 읽음). 4-2
 
-import { adminAuth, db, fieldValue, handler, HttpError } from './_lib/server.js';
+import { adminAuth, db, deleteRecordingFiles, fieldValue, handler, HttpError } from './_lib/server.js';
 import { assignToClass, classKeyFromProfile } from './_lib/classes.js';
 import { parseStudentNo } from '../src/data/studentNo.js';
 
@@ -365,6 +365,12 @@ async function adminAction(action, { token, body }) {
         for (const sid of u.sessionIds ?? []) {
           await db().recursiveDelete(db().doc(`sessions/${sid}/records/${uid}`));
           await db().doc(`sessions/${sid}/members/${uid}`).delete();
+          // 4-4: 그 학생의 채점·면담·녹음도
+          await db().doc(`sessions/${sid}/grading/${uid}`).delete();
+          await db().doc(`sessions/${sid}/interviews/${uid}`).delete();
+          const recs = await db().collection(`sessions/${sid}/recordings`).where('uid', '==', uid).get();
+          for (const r of recs.docs) await r.ref.delete();
+          await deleteRecordingFiles(`recordings/${sid}/${uid}/`);
         }
         if (u.researchId) await db().doc(`researchIds/${u.researchId}`).delete();
         await users().doc(uid).delete();

@@ -11,6 +11,18 @@ async function ready() {
 }
 export const fieldValue = () => sdk.FieldValue;
 
+/** 녹음 파일 지우기(4-4): recordings/{회차}/ 또는 recordings/{회차}/{uid}/ 아래 모두. 버킷이 없거나 실패해도 다른 일은 계속한다 */
+export async function deleteRecordingFiles(prefix) {
+  try {
+    const { getStorage } = await import('firebase-admin/storage');
+    const bucket = process.env.VITE_FIREBASE_STORAGE_BUCKET;
+    if (!bucket) return;
+    await getStorage(adminApp()).bucket(bucket).deleteFiles({ prefix });
+  } catch (error) {
+    console.warn('녹음 파일을 지우지 못함', prefix, error?.message);
+  }
+}
+
 function credential() {
   const { applicationDefault, cert } = sdk;
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT;

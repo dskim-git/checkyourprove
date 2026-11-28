@@ -1,0 +1,28 @@
+// Firebase Storage 보안 규칙 (로드맵 4-4: 면담 녹음)
+// _local_archive/dev-tools/firebase/publishrules.mjs가 firestore.rules와 함께 게시한다.
+//
+// 원칙(AGENTS.md 4절, docs/data-spec.md): 학생 음성은 민감한 개인정보다. 녹음 파일은 그 회차의 담당 교사와 관리자만 올리고 듣고 지운다.
+// 담당 교사는 Firestore의 회차 문서(teacherUids)로 확인한다(교차 서비스 규칙). 여기에 적지 않은 경로는 모두 막는다.
+
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function role() { return request.auth != null ? request.auth.token.get('role', '') : ''; }
+    function teaches(sid) {
+      return role() == 'admin'
+        || (role() == 'teacher' && request.auth.uid in firestore.get(/databases/(default)/documents/sessions/$(sid)).data.teacherUids);
+    }
+
+    match /recordings/{sid}/{uid}/{file} {
+      allow get, delete: if teaches(sid);
+      // 오디오 파일만, 한 파일 200MB 아래
+      allow create, update: if teaches(sid)
+        && request.resource.size < 200 * 1024 * 1024
+        && request.resource.contentType.matches('audio/.*');
+    }
+
+    match /{all=**} {
+      allow read, write: if false;
+    }
+  }
+}
