@@ -18,7 +18,27 @@ import {
 import { sessionMembers } from '../../state/accountStore.js';
 import { getResearch, hasResearchRecord, resetResearch, sessionRecords } from '../../state/researchStore.js';
 import { isFirebase } from '../../state/appMode.js';
-import { currentUser, findUser } from '../../state/accountStore.js';
+import { currentUser, findUser, getAccounts } from '../../state/accountStore.js';
+
+const THIS_YEAR = new Date().getFullYear();
+
+/** 반(학년도·학년·반)으로 만들기: 학번이 맞는 학생이 자동으로 들어온다(서버 모드) */
+function homeroomForm() {
+  return `<form class="settings-form homeroom-form" data-homeroom-form novalidate>
+      <fieldset class="choice-group"><legend class="field__label">반 만들기</legend>
+        <p class="field__help">학년도·학년·반을 고르면 이름은 "1학년 2반"처럼 정해지고, 학번(예: 10203 = 1학년 2반 3번)과 학년도가 맞는 학생이 자동으로 들어와요.</p>
+        <div class="account-grid">
+          <div class="field"><label class="field__label" for="hr-year">학년도</label><input type="number" class="field__input" id="hr-year" name="year" value="${THIS_YEAR}" min="2020" max="2099" inputmode="numeric"></div>
+          <div class="field"><label class="field__label" for="hr-grade">학년</label><select class="field__select" id="hr-grade" name="grade">${[1, 2, 3].map((g) => `<option value="${g}">${g}학년</option>`).join('')}</select></div>
+          <div class="field"><label class="field__label" for="hr-class">반</label><input type="number" class="field__input" id="hr-class" name="classNo" min="1" max="99" inputmode="numeric" placeholder="예: 2"></div>
+        </div>
+      </fieldset>
+      <button type="submit" class="button button--secondary button--small">반 만들기</button>
+    </form>`;
+}
+
+/** 반에 자동으로 들어온 학생 수(서버 모드) */
+const classStudentCount = (classId) => getAccounts().users.filter((u) => u.classId === classId && u.role === 'student').length;
 
 /** 서버 모드: 세션의 학생 기록 요약 */
 function serverSessionProgress(s) {
@@ -71,7 +91,7 @@ function sessionPanel(status) {
       const active = s.id === activeId;
       return `<li class="session-row${active ? ' is-active' : ''}">
         <div class="session-row__main">
-          <strong class="session-row__round">${s.round}회차</strong>${active ? ' <span class="tag tag--mint">진행 중</span>' : ''}
+          <strong class="session-row__round">${s.round}회차</strong>${active ? ' <span class="tag tag--mint">진행 중</span>' : ''}${isFirebase && s.isCurrent ? ' <span class="tag">반 학생이 활동하는 회차</span>' : ''}
           <span class="session-row__meta">연구 ${s.open ? escapeHtml(stageText(s)) : '닫힘'}, 명제 ${s.propositionIds.length}개, ${isFirebase ? '' : '이 브라우저 학생: '}${escapeHtml(progress)}</span>
           <span class="session-code"><span class="meta">세션 코드</span> <strong class="session-code__value num${s.codeOpen === false ? ' is-closed' : ''}" data-session-code="${s.id}">${escapeHtml(formatCode(ensureSessionCode(s)))}</strong>${s.codeOpen === false ? ' <span class="tag tag--warn">코드 닫힘</span>' : ''} <span class="meta">들어온 사람 ${sessionMembers(s.id).length}명</span>
             <button type="button" class="button button--ghost button--small" data-session-action="code-toggle" data-session-id="${s.id}">${s.codeOpen === false ? '코드 열기' : '코드 닫기'}</button>
@@ -83,7 +103,7 @@ function sessionPanel(status) {
     }).join('');
     return `<div class="session-class">
       <div class="section-head">
-        <h3 class="session-class__name">${escapeHtml(c.name)}</h3>
+        <h3 class="session-class__name">${escapeHtml(c.name)}${c.kind === 'homeroom' ? ` <span class="meta">${escapeHtml(String(c.year))}학년도${isFirebase ? `, 학생 ${classStudentCount(c.id)}명` : ''}</span>` : ''}</h3>
         <div class="actions actions--start">
           <button type="button" class="button button--secondary button--small" data-session-action="new" data-class-id="${c.id}">새 회차 만들기</button>
           ${c.sessions.length ? '' : `<button type="button" class="button button--ghost button--small" data-session-action="remove-class" data-class-id="${c.id}">학급 지우기</button>`}
@@ -91,10 +111,10 @@ function sessionPanel(status) {
       </div>
       ${teachersBlock(c)}
       ${c.sessions.length ? `<ul class="session-list" aria-label="${escapeHtml(c.name)} 회차">${rows}</ul>` : '<p class="meta">아직 회차가 없습니다.</p>'}
-      <details class="disclosure">
+      ${c.kind === 'homeroom' ? '' : `<details class="disclosure">
         <summary>학급 이름 바꾸기</summary>
         <form class="inline-form" data-class-rename="${c.id}"><label class="visually-hidden" for="rename-${c.id}">학급 이름</label><input type="text" class="field__input" id="rename-${c.id}" value="${escapeHtml(c.name)}"><button type="submit" class="button button--secondary button--small">바꾸기</button></form>
-      </details>
+      </details>`}
     </div>`;
   }).join('');
   return `<section class="panel" aria-labelledby="session-heading" data-session-panel>
@@ -105,11 +125,13 @@ function sessionPanel(status) {
     ${isFirebase && !getSessions().classes.length ? '<p>아직 담당 학급이 없어요. 아래에서 학급을 만든 뒤 "새 회차 만들기"를 누르세요.</p>' : ''}
     <p class="save-status" data-session-status tabindex="-1" aria-live="polite">${escapeHtml(status)}</p>
     ${groups}
+    ${homeroomForm()}
     <form class="inline-form" data-class-form novalidate>
-      <label class="field__label" for="new-class">새 학급</label>
-      <input type="text" class="field__input" id="new-class" name="className" placeholder="예: 2반">
-      <button type="submit" class="button button--secondary button--small">학급 만들기</button>
+      <label class="field__label" for="new-class">기타 모임</label>
+      <input type="text" class="field__input" id="new-class" name="className" placeholder="예: 방과후 수학반">
+      <button type="submit" class="button button--secondary button--small">모임 만들기</button>
     </form>
+    <p class="field__help">기타 모임(방과후·연수 등)에는 자동 배정이 없고, 학생이 세션 코드로 들어와요.</p>
   </section>`;
 }
 
@@ -247,6 +269,13 @@ export function renderTeacherSettings(root, [tabParam]) {
 
   const onSubmit = (event) => {
     const t = event.target;
+    if (t.matches('[data-homeroom-form]')) {
+      event.preventDefault();
+      const v = (n) => t.querySelector(`[name="${n}"]`).value;
+      const klass = addClass({ kind: 'homeroom', year: v('year'), grade: v('grade'), classNo: v('classNo') });
+      status = klass ? `${v('year')}학년도 ${klass.name}을 만들었습니다.${isFirebase ? ' 학번이 맞는 학생이 자동으로 들어와요.' : ''} 회차를 만들어 연구를 시작하세요.` : '학년도·학년·반을 바르게 고르세요(같은 반이 이미 있으면 만들 수 없어요).';
+      return draw('#hr-class');
+    }
     if (t.matches('[data-class-form]')) {
       event.preventDefault();
       const klass = addClass(t.querySelector('[name="className"]').value);

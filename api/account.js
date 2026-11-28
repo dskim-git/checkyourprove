@@ -16,6 +16,8 @@
 //   requests/{id}     { uid, researchId, type, reason, at, status, note, doneAt }  ← 개인정보 요청(본인·관리자가 읽음). 4-2
 
 import { adminAuth, db, fieldValue, handler, HttpError } from './_lib/server.js';
+import { assignToClass, classKeyFromProfile } from './_lib/classes.js';
+import { parseStudentNo } from '../src/data/studentNo.js';
 
 const ROLES = ['admin', 'teacher', 'student', 'guest'];
 const ROLE_LABEL = { admin: '관리자', teacher: '교사', student: '학생', guest: '일반인' };
@@ -80,7 +82,7 @@ async function claimResearchId(uid) {
 function cleanProfile(p) {
   if (p?.kind === 'student') {
     const out = { kind: 'student', year: Number(p.year), studentNo: norm(p.studentNo), name: String(p.name ?? '').trim().slice(0, 40) };
-    if (!out.name || !out.year || !/^\d{4,6}$/.test(out.studentNo)) return null;
+    if (!out.name || !out.year || !parseStudentNo(out.studentNo)) return null; // 다섯 자리: 학년·반·번호
     return out;
   }
   const out = { kind: 'guest', name: String(p?.name ?? '').trim().slice(0, 40), affiliation: String(p?.affiliation ?? '').trim().slice(0, 80), reason: String(p?.reason ?? '').trim().slice(0, 300) };
@@ -121,6 +123,14 @@ async function bootstrap({ token }) {
     await audit('관리자 지정', user.researchId, 'ADMIN_EMAILS');
   }
   const claimsChanged = await syncClaims(uid, user);
+  // 반 자동 배정(4-2 뒤 추가): 반 열쇠가 없던 기존 학생은 가입 정보에서 만들고, 아직 반이 없으면 배정을 시도한다
+  if (user.status === 'approved' && user.role === 'student' && !user.classId) {
+    if (!user.classKey) {
+      const key = classKeyFromProfile((await links().doc(uid).get()).data()?.profile);
+      if (key) await ref.update({ classKey: key });
+    }
+    await assignToClass(uid);
+  }
   return { ok: true, claimsChanged };
 }
 
@@ -129,12 +139,12 @@ async function submitProfile({ token, body }) {
   const { uid } = token;
   const user = await getUser(uid);
   const p = cleanProfile(body.profile);
-  if (!p) throw new HttpError(400, body.profile?.kind === 'student' ? '학년도, 학번(숫자 4~6자리), 이름을 모두 입력하세요.' : '입력하지 않은 칸이 있어요.');
+  if (!p) throw new HttpError(400, body.profile?.kind === 'student' ? '학년도, 학번(다섯 자리: 학년·반·번호, 예: 10203), 이름을 모두 입력하세요.' : '입력하지 않은 칸이 있어요.');
   const rules = await signupRules();
   const staff = user.role === 'admin' || user.role === 'teacher';
   if (p.kind === 'guest' && !rules.allowGuests && !staff) throw new HttpError(400, '지금은 일반인 가입을 받지 않아요.');
   if (user.status === 'rejected') throw new HttpError(403, '가입이 승인되지 않았어요. 관리자에게 문의해 주세요.');
-  const next = { ...user, kind: p.kind, submittedAt: now() };
+  const next = { ...user, kind: p.kind, submittedAt: now(), classKey: classKeyFromProfile(p) };
   if (!staff) next.role = p.kind === 'student' ? 'student' : 'guest';
   if (next.status !== 'approved') {
     if (rules.rosterAutoApprove && await rosterMatch(p)) Object.assign(next, { status: 'approved', approvedAt: now(), approvedBy: 'roster', autoApproved: true });
@@ -143,6 +153,7 @@ async function submitProfile({ token, body }) {
   await users().doc(uid).set(next);
   await links().doc(uid).set({ email: String(token.email ?? '').toLowerCase(), profile: p }, { merge: true });
   const claimsChanged = await syncClaims(uid, next);
+  if (next.status === 'approved') await assignToClass(uid);
   return { ok: true, status: next.status, claimsChanged };
 }
 
@@ -185,6 +196,7 @@ async function approve(me, uids) {
     const next = { ...u, status: 'approved', approvedAt: now(), approvedBy: me.researchId, autoApproved: false };
     await users().doc(uid).set(next);
     await syncClaims(uid, next);
+    await assignToClass(uid);
     done.push(u.researchId);
   }
   if (done.length) await audit('가입 승인', done.join(', '), me.researchId);
@@ -205,7 +217,7 @@ async function addRoster(me, text, defaultYear) {
     const [studentNo, ...nameParts] = cells;
     const name = nameParts.join('');
     const id = rosterId(year, studentNo);
-    if (!/^\d{4,6}$/.test(studentNo ?? '') || !name || !year || seen.has(id) || (await db().doc(`roster/${id}`).get()).exists) {
+    if (!parseStudentNo(studentNo) || !name || !year || seen.has(id) || (await db().doc(`roster/${id}`).get()).exists) {
       skipped += 1;
       continue;
     }
@@ -226,6 +238,7 @@ async function addRoster(me, text, defaultYear) {
         const next = { ...d.data(), status: 'approved', approvedAt: now(), approvedBy: 'roster', autoApproved: true };
         await users().doc(d.id).set(next);
         await syncClaims(d.id, next);
+        await assignToClass(d.id);
         approved += 1;
       }
     }
@@ -269,6 +282,7 @@ async function adminAction(action, { token, body }) {
       const next = { ...u, role };
       await users().doc(uid).set(next);
       await syncClaims(uid, next);
+      if (role === 'student') await assignToClass(uid);
       await audit('역할 변경', `${u.researchId} ${ROLE_LABEL[u.role]} → ${ROLE_LABEL[role]}`, me.researchId);
       return { ok: true };
     }

@@ -10,6 +10,7 @@ import {
 import { isFirebase } from '../state/appMode.js';
 import { researchReady } from '../state/researchStore.js';
 import { googleErrorText } from './landingView.js';
+import { STUDENT_NO_HELP, studentNoLabel } from '../data/studentNo.js';
 import { findSession, findSessionByCode, formatCode, sessionLabel, setActiveSession } from '../state/sessionStore.js';
 import { breadcrumb, notice } from '../ui/components.js';
 import { getAdmin } from '../state/adminStore.js';
@@ -121,10 +122,10 @@ export function renderAccount(root) {
           ${k === 'student'
             ? `<div class="account-grid">
                 <div class="field"><label class="field__label" for="acc-year">학년도</label><input type="number" class="field__input" id="acc-year" name="year" value="${escapeHtml(p.year ?? THIS_YEAR)}" inputmode="numeric"></div>
-                <div class="field"><label class="field__label" for="acc-no">학번</label><input type="text" class="field__input" id="acc-no" name="studentNo" value="${escapeHtml(p.studentNo ?? '')}" inputmode="numeric" placeholder="예: 10203" aria-describedby="acc-no-help"></div>
+                <div class="field"><label class="field__label" for="acc-no">학번</label><input type="text" class="field__input" id="acc-no" name="studentNo" value="${escapeHtml(p.studentNo ?? '')}" inputmode="numeric" placeholder="예: 10203" maxlength="5" pattern="[0-9]*" aria-describedby="acc-no-help"><p class="meta" data-no-label aria-live="polite">${escapeHtml(studentNoLabel(p.studentNo ?? ''))}</p></div>
                 <div class="field"><label class="field__label" for="acc-name">이름</label><input type="text" class="field__input" id="acc-name" name="name" value="${escapeHtml(p.name ?? '')}" autocomplete="name"></div>
               </div>
-              <p class="field__help" id="acc-no-help">학번은 학년·반·번호를 이어 씁니다(1학년 2반 3번 → 10203). 학교 명단과 같으면 바로 쓸 수 있어요. 다르면 관리자가 확인한 뒤에 쓸 수 있어요.</p>`
+              <p class="field__help" id="acc-no-help">${escapeHtml(STUDENT_NO_HELP)} 학교 명단과 같으면 바로 쓸 수 있고, 다르면 관리자가 확인한 뒤에 쓸 수 있어요. 선생님이 만든 반에는 자동으로 들어가요.</p>`
             : `<div class="field"><label class="field__label" for="acc-name">이름</label><input type="text" class="field__input" id="acc-name" name="name" value="${escapeHtml(p.name ?? '')}" autocomplete="name"></div>
               <div class="field"><label class="field__label" for="acc-aff">소속</label><input type="text" class="field__input" id="acc-aff" name="affiliation" value="${escapeHtml(p.affiliation ?? '')}" placeholder="예: ○○고등학교 수학 교사"></div>
               <div class="field"><label class="field__label" for="acc-reason">가입 이유</label><textarea class="field__input" id="acc-reason" name="reason" rows="2" placeholder="예: 연수에서 소개받아 증명 연습을 체험해 보려고">${escapeHtml(p.reason ?? '')}</textarea></div>
@@ -174,7 +175,7 @@ export function renderAccount(root) {
   function profileList(user) {
     const p = user.profile ?? {};
     const rows = p.kind === 'student'
-      ? [['구분', '학생'], ['학년도', p.year], ['학번', p.studentNo], ['이름', p.name]]
+      ? [['구분', '학생'], ['학년도', p.year], ['학번', `${p.studentNo ?? ''}${studentNoLabel(p.studentNo) ? ` (${studentNoLabel(p.studentNo)})` : ''}`], ['이름', p.name]]
       : [['구분', '일반인'], ['이름', p.name], ['소속', p.affiliation], ['가입 이유', p.reason]];
     return `<dl class="read-list account-list">${[['이메일', user.email], ...rows].map(([k, v]) => `<div><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v ?? '')}</dd></div>`).join('')}</dl>`;
   }
@@ -192,7 +193,7 @@ export function renderAccount(root) {
     if (form.matches('[data-profile-form]')) {
       const k = form.querySelector('[name="kind"]:checked')?.value ?? 'student';
       const result = submitProfile(currentUser().uid, { kind: k, year: val('year'), studentNo: val('studentNo'), name: val('name'), affiliation: val('affiliation'), reason: val('reason') });
-      if (!result) return showError(form, k === 'student' ? '학년도, 학번(숫자 4~6자리), 이름을 모두 입력하세요.' : '이름, 소속, 가입 이유를 모두 입력하세요.');
+      if (!result) return showError(form, k === 'student' ? '학년도, 학번(다섯 자리: 학년·반·번호, 예: 10203), 이름을 모두 입력하세요.' : '이름, 소속, 가입 이유를 모두 입력하세요.');
       kind = null;
       return draw();
     }
@@ -209,6 +210,11 @@ export function renderAccount(root) {
         });
       }
     }
+  };
+  const onInput = (event) => {
+    if (event.target.name !== 'studentNo') return;
+    const out = root.querySelector('[data-no-label]');
+    if (out) out.textContent = studentNoLabel(event.target.value);
   };
   const onChange = (event) => {
     if (event.target.name !== 'kind') return;
@@ -251,9 +257,11 @@ export function renderAccount(root) {
   draw();
   root.addEventListener('submit', onSubmit);
   root.addEventListener('change', onChange);
+  root.addEventListener('input', onInput);
   root.addEventListener('click', onClick);
   return () => {
     root.removeEventListener('submit', onSubmit);
+    root.removeEventListener('input', onInput);
     root.removeEventListener('change', onChange);
     root.removeEventListener('click', onClick);
   };

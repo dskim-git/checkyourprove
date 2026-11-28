@@ -54,6 +54,8 @@ function merged(uid, u) {
     researchId: u.researchId,
     sessionIds: u.sessionIds ?? [],
     activeSessionId: u.activeSessionId ?? null,
+    classId: u.classId ?? null,
+    classKey: u.classKey ?? null,
     guardianConsent: link?.guardianConsent ?? null,
     createdAt: u.createdAt,
     submittedAt: u.submittedAt,

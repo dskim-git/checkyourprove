@@ -1,5 +1,6 @@
 // AI와 탐구하기: 홈 (탐구할 명제와 4단계 지도)
 
+import { isFirebase } from '../../state/appMode.js';
 import { getProblem } from '../../data/problems/index.js';
 import { RESEARCH_STAGES } from '../../data/research.js';
 import { getClassroom } from '../../state/classroomStore.js';
@@ -106,7 +107,7 @@ function sessionGate(root, crumbs) {
   let error = '';
   const draw = () => {
     root.innerHTML = `<div class="page">${breadcrumb(crumbs)}
-      <header class="page-intro"><h1>AI와 탐구하기</h1><p class="lead">선생님이 알려 준 세션 코드를 입력하면 시작할 수 있어요.</p></header>
+      <header class="page-intro"><h1>AI와 탐구하기</h1><p class="lead">${isFirebase ? '선생님이 우리 반 회차를 열면 자동으로 들어가요. 다른 모임에 들어갈 때는 선생님이 알려 준 세션 코드를 입력하세요.' : '선생님이 알려 준 세션 코드를 입력하면 시작할 수 있어요.'}</p></header>
       <section class="panel account-box">${sessionCodeForm({ error })}</section>
     </div>`;
     root.querySelector('#session-code')?.focus();

@@ -19,6 +19,7 @@ export const SESSION_DEFAULTS = { consentRequired: true, surveyId: DEFAULT_SURVE
 export const sessionConfig = (session) => ({ ...SESSION_DEFAULTS, ...Object.fromEntries(Object.keys(SESSION_DEFAULTS).filter((k) => session?.[k] !== undefined).map((k) => [k, session[k]])) });
 import { readJson, writeJson } from './storage.js';
 import { isFirebase } from './appMode.js';
+import { homeroomName } from '../data/studentNo.js';
 
 // ── 서버 연결 (firebase 모드, 로드맵 4-2) ──
 // 학급·세션은 Firestore(classes, sessions)에서 firebase/dataSync.js가 받아 applyRemoteSessions로 넣는다.
@@ -140,13 +141,28 @@ export const sessionLabel = (session) => (session ? `${className(session.classId
 /** 이 세션의 "이 브라우저 학생" id (첫 세션은 기존 기록과 이어지도록 'local') */
 export const localStudentId = (session) => (session.legacy ? 'local' : `local-${session.id}`);
 
-export function addClass(name) {
+/**
+ * 학급 만들기. 반: { kind: 'homeroom', year, grade, classNo } (이름은 "1학년 2반", 학번이 맞는 학생이 자동 배정),
+ * 기타: { kind: 'other', name } 또는 이름 글(예전 방식). 같은 학년도·학년·반이 이미 있으면 null.
+ */
+export function addClass(spec) {
   const data = getSessions();
-  const clean = String(name ?? '').trim();
-  if (!clean) return null;
-  const klass = { id: isFirebase ? pendingId('c') : newId('c'), name: clean };
+  const s = typeof spec === 'string' ? { kind: 'other', name: spec } : spec ?? {};
+  let klass;
+  if (s.kind === 'homeroom') {
+    const year = Number(s.year);
+    const grade = Number(s.grade);
+    const classNo = Number(s.classNo);
+    if (!year || ![1, 2, 3].includes(grade) || !(classNo >= 1)) return null;
+    if (data.classes.some((c) => c.kind === 'homeroom' && c.year === year && c.grade === grade && c.classNo === classNo)) return null;
+    klass = { id: isFirebase ? pendingId('c') : newId('c'), kind: 'homeroom', year, grade, classNo, name: homeroomName(grade, classNo) };
+  } else {
+    const clean = String(s.name ?? '').trim();
+    if (!clean) return null;
+    klass = { id: isFirebase ? pendingId('c') : newId('c'), kind: 'other', name: clean };
+  }
   data.classes.push(klass);
-  if (isFirebase) backend?.call('createClass', { name: clean });
+  if (isFirebase) backend?.call('createClass', klass.kind === 'homeroom' ? { kind: 'homeroom', year: klass.year, grade: klass.grade, classNo: klass.classNo } : { kind: 'other', name: klass.name });
   saveSessions();
   return klass;
 }
@@ -207,7 +223,15 @@ export function setActiveSession(id) {
   const data = getSessions();
   if (!data.sessions.some((s) => s.id === id)) return false;
   data.activeSessionId = id;
-  if (isFirebase) backend?.setActive(id);
+  if (isFirebase) {
+    backend?.setActive(id);
+    // 교사(담당 학급의 회차): "진행 중"은 반의 진행 회차이기도 하다 → 반 학생들이 이 회차로 탐구
+    const s = data.sessions.find((x) => x.id === id);
+    if (s && data.classes.some((c) => c.id === s.classId)) {
+      data.sessions.forEach((x) => { if (x.classId === s.classId) x.isCurrent = x.id === id; });
+      backend?.call('setCurrentSession', { sessionId: id });
+    }
+  }
   return saveSessions();
 }
 

@@ -1588,7 +1588,7 @@ button.pc-in:focus-visible { outline: 3px solid var(--color-focus); outline-offs
 /* ── 계정·관리자 (로드맵 3단계 프로토타입) ─────── */
 .account-box { padding: var(--space-md); border-radius: var(--radius-card); background: var(--grain), var(--color-card); box-shadow: inset 0 0 0 1px var(--color-rule); }
 .account-form, .code-form, .admin-roster { display: grid; gap: var(--space-sm); max-width: 36rem; }
-.account-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: var(--space-sm); }
+.account-grid { display: grid; align-items: start; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: var(--space-sm); }
 .code-form__input { max-width: 12rem; font-size: var(--text-lg); }
 .session-code { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2xs) var(--space-xs); }
 .session-code__value { font-size: var(--text-lg); letter-spacing: 0.06em; }

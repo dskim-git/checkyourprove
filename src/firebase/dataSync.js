@@ -37,6 +37,11 @@ const isStaff = () => ctx?.role === 'admin' || ctx?.role === 'teacher';
 // ── 세션 ──
 
 function activeIdFor(sessions) {
+  // 반에 배정된 학생: 교사가 정한 반의 진행 회차(isCurrent)로 탐구한다
+  if (!isStaff() && user?.classId) {
+    const current = sessions.find((s) => s.classId === user.classId && s.isCurrent);
+    if (current) return current.id;
+  }
   const want = user?.activeSessionId;
   if (want && sessions.some((s) => s.id === want)) return want;
   // 진행 중 세션이 없으면: 학생은 마지막으로 들어간 세션, 교사는 첫 담당 세션

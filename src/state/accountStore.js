@@ -22,6 +22,7 @@
 import { readJson, writeJson } from './storage.js';
 import { getAdmin, logAction as logLocal } from './adminStore.js';
 import { isFirebase } from './appMode.js';
+import { parseStudentNo } from '../data/studentNo.js';
 
 // ── 서버 연결 (firebase 모드, 로드맵 4-1) ──
 // 화면 코드는 그대로 두려고 함수 모양(동기)을 지킨다. 바꾸는 함수는 메모리 값을 먼저 바꾸고(화면이 바로 바뀜)
@@ -193,7 +194,7 @@ export function submitProfile(uid, profile) {
   const p = profile.kind === 'student'
     ? { kind: 'student', year: Number(profile.year), studentNo: norm(profile.studentNo), name: String(profile.name ?? '').trim() }
     : { kind: 'guest', name: String(profile.name ?? '').trim(), affiliation: String(profile.affiliation ?? '').trim(), reason: String(profile.reason ?? '').trim() };
-  if (!p.name || (p.kind === 'student' && (!p.year || !/^\d{4,6}$/.test(p.studentNo))) || (p.kind === 'guest' && (!p.affiliation || !p.reason))) return null;
+  if (!p.name || (p.kind === 'student' && (!p.year || !parseStudentNo(p.studentNo))) || (p.kind === 'guest' && (!p.affiliation || !p.reason))) return null;
   // 가입 규칙(관리자 설정): 일반인 가입을 받지 않으면 거절
   if (p.kind === 'guest' && !getAdmin().signup.allowGuests && u.role !== 'admin' && u.role !== 'teacher') return null;
   u.profile = p;
@@ -270,7 +271,7 @@ export function addRoster(text, defaultYear) {
     if (/^\d{4}$/.test(cells[0]) && cells.length >= 3) year = Number(cells.shift());
     const [studentNo, ...nameParts] = cells;
     const name = nameParts.join('');
-    if (!/^\d{4,6}$/.test(studentNo ?? '') || !name) {
+    if (!parseStudentNo(studentNo) || !name) {
       skipped += 1;
       return;
     }

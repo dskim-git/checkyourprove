@@ -153,6 +153,8 @@
 - `users/{uid}.activeSessionId`(본인이 바꿈), `staff/{uid}` = { name, role }(승인된 교사·관리자, 교사가 읽음, 담당 교사 고르기).
 - `settings/admin` = { practice, contact, notices }(로그인한 사람이 읽음, 서버만 씀), `requests/{id}` = 개인정보 요청(본인·관리자가 읽음, 서버만 씀).
 
+반 자동 배정(2026-11-28): `classes`에 { kind: 'homeroom'|'other', year, grade, classNo, classKey, currentSessionId }, `classKeys/{학년도-학년-반}` = { classId }(서버만), `users`에 { classKey(가입 정보에서), classId(배정된 반) }, 세션에 `isCurrent`(반의 진행 회차). 학번은 다섯 자리(학년·반·번호)만 받는다.
+
 아래는 처음 초안이며, 아직 정하지 않은 부분(채점·면담·설문·진행 제어·녹음)은 4-3·4-4에서 확정합니다.
 
 ```
