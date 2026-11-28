@@ -14,8 +14,28 @@
 
 import { DEFAULT_CONSENT, DEFAULT_SURVEY, DEFAULT_SURVEY_ID, DEFAULT_SURVEY_VERSION, SCALE_PRESETS, SURVEY_DOMAINS } from '../data/surveyDefaults.js';
 import { readJson, writeJson } from './storage.js';
+import { isFirebase } from './appMode.js';
 
 const STORAGE_KEY = 'checkyourprove.prototype.surveys.v1';
+
+// 서버 연결(firebase 모드, 로드맵 4-3): 설문은 surveys/{id}(모두 읽고 관리자가 씀, 잠긴 설문은 규칙이 막음),
+// 연구 동의서는 settings/consent. 학생이 응답을 시작할 때의 잠금은 서버 함수(lockSurvey). firebase/teacherSync.js가 넣고 쓴다.
+let backend = null;
+export function setSurveyBackend(b) {
+  backend = b;
+}
+/** 서버의 설문들(없으면 기본 설문 하나). 기본 설문 문서가 잠금 표시만 있으면 기본 문항에 합친다 */
+export function applyRemoteSurveys(list) {
+  const data = getSurveyData();
+  const byId = new Map(list.map((s) => [s.id, s]));
+  const def = byId.get(DEFAULT_SURVEY_ID);
+  if (!def) byId.set(DEFAULT_SURVEY_ID, freshDefault());
+  else if (!Array.isArray(def.questions)) byId.set(DEFAULT_SURVEY_ID, { ...freshDefault(), ...def });
+  data.surveys = [...byId.values()].sort((a, b) => String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')));
+}
+export function applyRemoteConsent(consent) {
+  getSurveyData().consent = { ...DEFAULT_CONSENT, editedAt: null, ...(consent ?? {}) };
+}
 let cache = null;
 const now = () => new Date().toISOString();
 const newId = (prefix) => `${prefix}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
@@ -24,6 +44,10 @@ const freshDefault = () => ({ ...JSON.parse(JSON.stringify(DEFAULT_SURVEY)), cre
 
 export function getSurveyData() {
   if (cache) return cache;
+  if (isFirebase) {
+    cache = { surveys: [freshDefault()], consent: { ...DEFAULT_CONSENT, editedAt: null } };
+    return cache;
+  }
   cache = readJson(STORAGE_KEY, null) ?? { surveys: [freshDefault()], consent: { ...DEFAULT_CONSENT, editedAt: null } };
   if (!Array.isArray(cache.surveys)) cache.surveys = [freshDefault()];
   cache.consent ??= { ...DEFAULT_CONSENT, editedAt: null };
@@ -37,7 +61,13 @@ export function getSurveyData() {
   return cache;
 }
 
-export const saveSurveyData = () => writeJson(STORAGE_KEY, getSurveyData());
+export const saveSurveyData = () => {
+  if (isFirebase) {
+    backend?.save(getSurveyData());
+    return true;
+  }
+  return writeJson(STORAGE_KEY, getSurveyData());
+};
 
 export const listSurveys = () => getSurveyData().surveys;
 export const findSurvey = (id) => getSurveyData().surveys.find((s) => s.id === id) ?? (id === DEFAULT_SURVEY_ID ? DEFAULT_SURVEY : null);
@@ -85,6 +115,10 @@ export function lockSurvey(id) {
   const survey = getSurveyData().surveys.find((s) => s.id === id);
   if (!survey || survey.lockedAt) return;
   survey.lockedAt = now();
+  if (isFirebase) {
+    backend?.lock(id); // 학생은 설문을 쓸 수 없으므로 서버가 잠근다
+    return;
+  }
   saveSurveyData();
 }
 

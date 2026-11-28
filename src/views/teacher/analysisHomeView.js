@@ -3,6 +3,7 @@
 // 학급 단위 분석(AI 답변 수용 정도, 학생이 찾은 부족한 점 통계, 개방형 답변 워드클라우드), 학생 목록(대시보드로 이동), CSV 내려받기.
 // TODO(구현 4): 사전·사후 설문 차이를 학급 요약에 더한다.
 
+import { validSource } from '../../services/analysis.js';
 import { analysisCsv, analyzeStudent, classSummary, scoreSources, sourceLabel } from '../../services/analysis.js';
 import { getGrading, updateGradingSettings } from '../../state/gradingStore.js';
 import { researchStudents } from '../../state/researchRoster.js';
@@ -23,8 +24,7 @@ const rText = (r) => (r == null ? '계산 불가' : r.toFixed(2));
 /** 지금 점수 출처 ("AI를 보조 채점자로"를 끄면 채점자 1과 AI 평균은 채점자 1로) */
 export const sourceOf = () => {
   const g = getGrading();
-  const s = g.analysisSource ?? 'r1';
-  return s === 'r1ai' && !g.aiAsRater ? 'r1' : s;
+  return validSource(g.analysisSource ?? g.raters?.[0]?.id ?? 'r1', g);
 };
 
 /** 분석 대상 학생: 포함한 세션, 1단계 제출, 연구 동의(설정하면 동의하지 않은·답하지 않은 학생도) */

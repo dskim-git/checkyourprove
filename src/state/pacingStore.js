@@ -11,7 +11,11 @@
 //   교사 화면에 화면별 도착 학생 수(실시간)를 보여 준다. 구현은 이 모듈의 getPacing/setPacing/subscribePacing만 바꾼다.
 
 import { readJson, writeJson } from './storage.js';
-import { storageKey } from './appMode.js';
+import { isFirebase, storageKey } from './appMode.js';
+import { findSession, updateSession } from './sessionStore.js';
+
+// 서버 연결(firebase 모드, 로드맵 4-3): 진행 제어는 회차 문서의 pacing 칸(담당 교사가 씀, 보안 규칙이 키를 허락).
+// 학생은 들어간 회차 문서를 이미 실시간으로 받으므로(dataSync), 회차가 바뀌면 'checkyourprove:data' 이벤트로 알린다.
 
 const STORAGE_KEY = 'checkyourprove.prototype.pacing.v1';
 const LOCAL_EVENT = 'checkyourprove:pacing';
@@ -21,10 +25,18 @@ const readAll = () => readJson(STORAGE_KEY, {});
 
 /** 세션의 진행 제어 상태 (매번 저장소에서 새로 읽는다: 다른 탭이 바꿨을 수 있다) */
 export function getPacing(sessionId) {
+  if (isFirebase) return { ...DEFAULT, ...(findSession(sessionId)?.pacing ?? {}) };
   return { ...DEFAULT, ...(readAll()[sessionId] ?? {}) };
 }
 
 export function setPacing(sessionId, patch) {
+  if (isFirebase) {
+    const next = { ...getPacing(sessionId), ...patch, updatedAt: new Date().toISOString() };
+    next.openUpTo = Math.max(0, Math.floor(Number(next.openUpTo) || 0));
+    updateSession(sessionId, { pacing: next });
+    window.dispatchEvent(new window.CustomEvent(LOCAL_EVENT, { detail: { sessionId } }));
+    return next;
+  }
   const all = readAll();
   const next = { ...DEFAULT, ...(all[sessionId] ?? {}), ...patch, updatedAt: new Date().toISOString() };
   next.openUpTo = Math.max(0, Math.floor(Number(next.openUpTo) || 0));
@@ -44,10 +56,14 @@ export function stepOpen(sessionId, index) {
 export function subscribePacing(sessionId, cb) {
   const onStorage = (e) => { if (e.key === null || e.key === storageKey(STORAGE_KEY)) cb(getPacing(sessionId)); };
   const onLocal = (e) => { if (e.detail?.sessionId === sessionId) cb(getPacing(sessionId)); };
+  // 서버 모드: 회차 문서(진행 제어)나 학생 기록(도착 수)이 바뀌면
+  const onData = () => cb(getPacing(sessionId));
   window.addEventListener('storage', onStorage);
   window.addEventListener(LOCAL_EVENT, onLocal);
+  if (isFirebase) window.addEventListener('checkyourprove:data', onData);
   return () => {
     window.removeEventListener('storage', onStorage);
     window.removeEventListener(LOCAL_EVENT, onLocal);
+    window.removeEventListener('checkyourprove:data', onData);
   };
 }

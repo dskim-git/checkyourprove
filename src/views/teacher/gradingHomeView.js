@@ -2,10 +2,11 @@
 // 채점자 고르기, 블라인드 채점(학생 이름과 단계를 가리고 채점자별 무작위 순서), 예시 학생 포함 여부,
 // 채점 진행, 채점 목록, 두 채점자의 일치도를 보여 준다.
 
+import { isFirebase } from '../../state/appMode.js';
 import { RUBRIC_TOTAL } from '../../data/rubric.js';
 import { raterAgreement } from '../../services/agreement.js';
 import { scoreFor } from '../../services/analysis.js';
-import {
+import { raterPairs,
   activeRubric, currentRater, getGrading, renameRater, saveGrading, scoreOf, totalOf, updateGradingSettings,
 } from '../../state/gradingStore.js';
 import { escapeHtml, formatDateTime } from '../../ui/dom.js';
@@ -38,7 +39,7 @@ export function renderGradingHome(root) {
         <h1>증명 채점</h1>
         <p class="lead">1단계 나의 증명, 2단계 AI 증명(학생이 옮겨 적은 것), 4단계 최종 증명을 같은 루브릭(${RUBRIC_TOTAL}점 만점)으로 채점해 비교합니다.</p>
       </header>
-      ${notice('warn', '프로토타입 상태입니다', '채점 기록은 이 브라우저에만 저장됩니다. "예시 학생"은 화면 확인용 가상 데이터이고, "이 브라우저 학생"은 이 브라우저에서 AI와 탐구하기를 한 기록입니다. 제출한 단계만 채점할 수 있습니다.')}
+      ${isFirebase ? notice('info', '채점 기록은 서버에 저장돼요', '같은 반 담당 선생님들과 함께 쓰고(채점자마다 따로), 학생은 볼 수 없어요. "예시 학생"은 화면 확인용 가상 데이터로 채점이 이 브라우저에만 남아요. 제출한 단계만 채점할 수 있습니다.') : notice('warn', '프로토타입 상태입니다', '채점 기록은 이 브라우저에만 저장됩니다. "예시 학생"은 화면 확인용 가상 데이터이고, "이 브라우저 학생"은 이 브라우저에서 AI와 탐구하기를 한 기록입니다. 제출한 단계만 채점할 수 있습니다.')}
 
       <section class="panel" aria-labelledby="grading-settings-heading">
         <h2 id="grading-settings-heading" class="section-title">채점 설정</h2>
@@ -172,9 +173,16 @@ export function renderGradingHome(root) {
     </div>`;
   }
 
+  /** 채점자 짝마다 일치도(2026-11-28: 채점자 자리 수를 관리자가 정함). 한 명이면 계산하지 않는다 */
   function agreementBlock(g) {
-    const [a, b] = g.raters;
-    const result = raterAgreement(activeRubric(), g.scores[a.id], g.scores[b.id]);
+    const pairs = raterPairs(g);
+    if (!pairs.length) return '<p class="empty-text">채점자가 한 명이라 채점자 간 일치도는 계산하지 않아요. 관리자 설정 > 연구 도구에서 채점자를 더할 수 있어요.</p>';
+    if (pairs.length === 1) return pairAgreement(g, pairs[0]);
+    return pairs.map((pair, i) => `<details class="disclosure"${i === 0 ? ' open' : ''}><summary>${escapeHtml(pair[0].name)} ↔ ${escapeHtml(pair[1].name)}</summary>${pairAgreement(g, pair)}</details>`).join('');
+  }
+
+  function pairAgreement(g, [a, b]) {
+    const result = raterAgreement(activeRubric(), g.scores[a.id] ?? {}, g.scores[b.id] ?? {});
     if (!result.n) {
       return `<p class="empty-text">두 채점자가 모두 채점한 증명이 아직 없습니다. ${escapeHtml(a.name)}과 ${escapeHtml(b.name)}가 같은 증명을 채점하면 기준별 일치율과 가중 카파를 보여 줍니다.</p>`;
     }

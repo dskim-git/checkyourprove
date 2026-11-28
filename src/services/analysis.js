@@ -1,5 +1,7 @@
 // 교사용 연구 분석 (구현 3-3): 학생·명제별 점수, 향상·격차, 기준별 변화, 자기 진단과 교사 채점 비교, 작성 과정, CSV
-// 점수 출처(source): 'r1' | 'r2' | 'avg'(두 채점자가 모두 채점한 것의 평균) | 'ai'(AI 채점 도우미 더미 규칙, 참고용)
+// 점수 출처(source): 채점자 자리 id('r1', 'r2', 'r3' …) | 'avg'(그 증명을 채점한 채점자들의 평균, 2명 이상) |
+//   'r1ai'(첫 채점자와 AI 평균, AI 보조 채점자를 켰을 때) | 'ai'(AI 채점 도우미 더미 규칙, 참고용)
+// 채점자 자리 수는 관리자가 정한다(2026-11-28 사용자 결정: 1명·2명·3명 이상)
 // AGENTS.md 5절 "교사 화면: 분석 지표"를 따른다. 원본 기록은 바꾸지 않고 읽기만 한다.
 
 import { CHECKLIST_NONE, REVISION_CHECKLIST, methodOptionLabel } from '../data/research.js';
@@ -22,11 +24,19 @@ export const SCORE_SOURCES = [
   { id: 'ai', label: 'AI 채점(참고)' },
 ];
 
-/** 지금 고를 수 있는 점수 출처: "AI를 보조 채점자로"를 켜야 채점자 1과 AI 평균이 나오고, AI 이름이 바뀐다 */
+/** 지금 고를 수 있는 점수 출처: 채점자 자리마다 하나, 두 명 이상이면 평균, AI 보조 채점자를 켜면 첫 채점자와 AI 평균 */
 export function scoreSources(g = getGrading()) {
-  return SCORE_SOURCES.filter((s) => !s.aiRater || g.aiAsRater).map((s) => (s.id === 'ai' && g.aiAsRater ? { ...s, label: 'AI 채점(보조 채점자)' } : s));
+  const raters = g.raters ?? [];
+  return [
+    ...raters.map((r) => ({ id: r.id, label: r.name })),
+    ...(raters.length >= 2 ? [{ id: 'avg', label: raters.length === 2 ? '두 채점자 평균' : '채점자 평균' }] : []),
+    ...(g.aiAsRater ? [{ id: 'r1ai', label: `${raters[0]?.name ?? '채점자 1'}과 AI 평균`, aiRater: true }] : []),
+    { id: 'ai', label: g.aiAsRater ? 'AI 채점(보조 채점자)' : 'AI 채점(참고)' },
+  ];
 }
-export const sourceLabel = (id) => scoreSources({ aiAsRater: true }).find((s) => s.id === id)?.label ?? id;
+export const sourceLabel = (id) => scoreSources({ ...getGrading(), aiAsRater: true }).find((s) => s.id === id)?.label ?? id;
+/** 고른 점수 출처가 지금 없으면(자리를 뺐을 때 등) 첫 채점자 */
+export const validSource = (id, g = getGrading()) => (scoreSources(g).some((s) => s.id === id) ? id : g.raters?.[0]?.id ?? 'r1');
 
 const sum = (criteria) => Object.values(criteria).reduce((s, v) => s + Number(v), 0);
 const round1 = (v) => (v == null || Number.isNaN(v) ? null : Math.round(v * 10) / 10);
@@ -76,11 +86,14 @@ export function scoreFor(student, stage, problemId, source) {
     return s ? { total: sum(s.criteria), criteria: s.criteria, completeness: s.completeness, actualMethod: s.actualMethod, raw: s } : null;
   };
   if (source === 'avg' || source === 'r1ai') {
-    const a = pick('r1');
-    const b = source === 'r1ai' ? scoreFor(student, stage, problemId, 'ai') : pick('r2');
-    if (!a || !b) return null;
-    const criteria = Object.fromEntries(DEFAULT_RUBRIC.map((c) => [c.id, ((a.criteria[c.id] ?? 0) + (b.criteria[c.id] ?? 0)) / 2]));
-    return { total: sum(criteria), criteria, completeness: a.completeness === b.completeness ? a.completeness : null, actualMethod: a.actualMethod === b.actualMethod ? a.actualMethod : null, by: source === 'r1ai' ? '채점자 1과 AI 평균' : '평균', raw: a.raw };
+    // 평균: 이 증명을 채점한 채점자들(두 명 이상) / 첫 채점자와 AI
+    const list = source === 'r1ai'
+      ? [pick(g.raters[0]?.id), scoreFor(student, stage, problemId, 'ai')]
+      : g.raters.map((r) => pick(r.id)).filter(Boolean);
+    if (list.some((x) => !x) || list.length < 2) return null;
+    const criteria = Object.fromEntries(DEFAULT_RUBRIC.map((c) => [c.id, list.reduce((s, x) => s + (x.criteria[c.id] ?? 0), 0) / list.length]));
+    const same = (f) => (list.every((x) => x[f] === list[0][f]) ? list[0][f] : null);
+    return { total: sum(criteria), criteria, completeness: same('completeness'), actualMethod: same('actualMethod'), by: source === 'r1ai' ? `${g.raters[0]?.name ?? '채점자 1'}과 AI 평균` : '평균', raw: list[0].raw };
   }
   const s = pick(source);
   return s ? { ...s, by: g.raters.find((r) => r.id === source)?.name ?? source } : null;
@@ -88,7 +101,8 @@ export function scoreFor(student, stage, problemId, source) {
 
 /** 교사(채점자 1)의 추가 확인: 2단계 옮겨 적기, 4단계 보완 여부·막힌 점 극복 */
 const teacherChecks = (student, stage, problemId, source) => {
-  const raterId = source === 'r2' ? 'r2' : 'r1';
+  const g = getGrading();
+  const raterId = g.raters.some((r) => r.id === source) ? source : g.raters[0]?.id;
   return getGrading().scores?.[raterId]?.[targetKey(student.id, stage, problemId)] ?? null;
 };
 
@@ -99,7 +113,7 @@ export function analyzeStudent(student, source) {
   const rec = student.record;
   const at = (n, id) => rec.stages?.[String(n)]?.items?.[id] ?? null;
   const tags = activeChatTags();
-  const raterId = source === 'r2' ? 'r2' : 'r1';
+  const raterId = getGrading().raters.some((r) => r.id === source) ? source : getGrading().raters[0]?.id;
   const props = (rec.propositionIds ?? []).map((problemId, propIndex) => {
     const s1 = at(1, problemId);
     const s2 = at(2, problemId);

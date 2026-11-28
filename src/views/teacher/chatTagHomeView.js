@@ -1,8 +1,9 @@
 // 교사 화면: AI 대화 태그 목록 (구현 3-2)
 // 2단계 AI 대화마다 태그 진행 상황, 태그별 빈도, 두 채점자의 태그 일치도를 보여 준다.
 
+import { isFirebase } from '../../state/appMode.js';
 import { tagAgreement } from '../../services/agreement.js';
-import { activeChatTags, chatTagRecord, currentRater, getGrading, updateGradingSettings } from '../../state/gradingStore.js';
+import { raterPairs, activeChatTags, chatTagRecord, currentRater, getGrading, updateGradingSettings } from '../../state/gradingStore.js';
 import { TAG_SCOPES } from '../../data/chatTags.js';
 import { escapeHtml } from '../../ui/dom.js';
 import { breadcrumb, notice } from '../../ui/components.js';
@@ -46,7 +47,7 @@ export function renderChatTagHome(root) {
         <h1>AI 대화 태그</h1>
         <p class="lead">2단계에서 학생이 AI와 나눈 대화를 읽고 질문마다, 그리고 대화 전체에 태그를 붙입니다. 면담 후보(대화를 잘 쓴 학생, 목적과 다르게 쓴 학생)를 고르는 근거가 됩니다.</p>
       </header>
-      ${notice('warn', '프로토타입 상태입니다', '태그 기록은 이 브라우저에만 저장됩니다. 블라인드와 예시 학생 설정은 증명 채점과 같습니다.')}
+      ${isFirebase ? notice('info', '태그 기록은 서버에 저장돼요', '같은 반 담당 선생님들과 함께 쓰고, 학생은 볼 수 없어요. "예시 학생"의 태그만 이 브라우저에 남아요. 블라인드와 예시 학생 설정은 증명 채점과 같습니다.') : notice('warn', '프로토타입 상태입니다', '태그 기록은 이 브라우저에만 저장됩니다. 블라인드와 예시 학생 설정은 증명 채점과 같습니다.')}
 
       <section class="panel" aria-labelledby="chat-settings-heading">
         <h2 id="chat-settings-heading" class="section-title">태그 설정</h2>
@@ -115,7 +116,13 @@ export function renderChatTagHome(root) {
   }
 
   function agreementTable(g, tags, convs) {
-    const [a, b] = g.raters;
+    const pairs = raterPairs(g);
+    if (!pairs.length) return '<p class="empty-text">채점자가 한 명이라 채점자 간 일치도는 계산하지 않아요.</p>';
+    if (pairs.length === 1) return pairTable(g, tags, convs, pairs[0]);
+    return pairs.map((pair, i) => `<details class="disclosure"${i === 0 ? ' open' : ''}><summary>${escapeHtml(pair[0].name)} ↔ ${escapeHtml(pair[1].name)}</summary>${pairTable(g, tags, convs, pair)}</details>`).join('');
+  }
+
+  function pairTable(g, tags, convs, [a, b]) {
     const result = tagAgreement(tags, convs, g.chatTagging?.[a.id], g.chatTagging?.[b.id]);
     if (!result.conversations) {
       return `<p class="empty-text">두 채점자가 모두 마친 대화가 아직 없습니다. ${escapeHtml(a.name)}과 ${escapeHtml(b.name)}가 같은 대화에 태그를 마치면 태그별 일치율과 카파를 보여 줍니다.</p>`;

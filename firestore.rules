@@ -1,4 +1,4 @@
-// Firestore 보안 규칙 (로드맵 4-1 계정, 4-2 학급·세션·학생 기록·연습 기록·관리자 설정)
+// Firestore 보안 규칙 (로드맵 4-1 계정, 4-2 학급·세션·학생 기록·연습 기록·관리자 설정, 4-3 채점·면담·설문·연구 도구·진행 제어)
 // Firebase 콘솔 > Firestore Database > 규칙에 이 파일 내용을 붙여 넣고 [게시]합니다.
 //
 // 원칙(AGENTS.md 4절, docs/data-spec.md)
@@ -44,8 +44,20 @@ service cloud.firestore {
       allow write: if false;
     }
     match /settings/{name} {
-      allow read: if signedIn() && (name == 'ethics' || name == 'signup' || name == 'admin');
-      allow write: if false;
+      allow read: if signedIn() && (name == 'ethics' || name == 'signup' || name == 'admin' || name == 'tools' || name == 'consent');
+      // 연구 도구(루브릭·대화 태그·채점자·AI 보조 채점자·면담 기준·녹음 보관 기한)와 연구 동의서는 관리자가 바로 쓴다(4-3)
+      allow write: if isAdmin() && (name == 'tools' || name == 'consent');
+    }
+    // 설문(문항 세트, 4-3): 모두 읽고 관리자가 쓴다. 학생이 응답을 시작해 잠긴(lockedAt) 설문은 고칠 수 없다(잠금은 서버).
+    match /surveys/{id} {
+      allow read: if signedIn();
+      allow create: if isAdmin() && request.resource.data.get('lockedAt', null) == null;
+      allow update: if isAdmin() && resource.data.get('lockedAt', null) == null && request.resource.data.get('lockedAt', null) == null;
+      allow delete: if isAdmin() && resource.data.get('lockedAt', null) == null;
+    }
+    // 교사마다 채점·분석 보기 설정(4-3)
+    match /teacherPrefs/{uid} {
+      allow read, write: if isSelf(uid) && isTeacher();
     }
     match /audit/{id} {
       allow read: if isAdmin();
@@ -66,12 +78,19 @@ service cloud.firestore {
       // 담당 교사는 진행 설정만 바꾼다(구조·코드·담당 교사는 서버)
       allow update: if teaches(resource.data.teacherUids)
         && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['open', 'propositionIds', 'stagesOpen', 'consentRequired', 'surveyId', 'surveyPreOpen', 'surveyPostOpen', 'principleOpen', 'codeOpen', 'updatedAt']);
+          .hasOnly(['open', 'propositionIds', 'stagesOpen', 'consentRequired', 'surveyId', 'surveyPreOpen', 'surveyPostOpen', 'principleOpen', 'codeOpen', 'updatedAt', 'pacing']);
       allow create, delete: if false;
 
       match /members/{uid} {
         allow read: if isSelf(uid) || teachesSession(sid);
         allow write: if false;
+      }
+      // 채점·대화 태그·AI가 읽은 글 고치기, 면담(4-3): 학생마다 한 문서, 담당 교사만. 학생은 볼 수 없다.
+      match /grading/{uid} {
+        allow read, write: if teachesSession(sid);
+      }
+      match /interviews/{uid} {
+        allow read, write: if teachesSession(sid);
       }
 
       match /records/{uid} {

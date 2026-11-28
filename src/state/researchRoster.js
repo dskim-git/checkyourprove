@@ -47,7 +47,9 @@ function serverStudents(inScope) {
     .map(([uid, record]) => ({ uid, record, user: findUser(uid) }))
     .filter(({ user }) => !user || user.role === 'student' || user.role === 'guest')
     .map(({ uid, record, user }) => ({
-      id: uid,
+      // 학생 id = '회차id_uid': 같은 학생이 여러 회차에 있어도 채점·면담·분석이 회차마다 따로(4-3)
+      id: `${session.id}_${uid}`,
+      uid,
       pseudonym: `${user?.researchId ?? '연구 번호 확인 중'} (${sessionLabel(session)})`,
       researchId: user?.researchId ?? null,
       guest: user?.role === 'guest',

@@ -15,8 +15,39 @@
 
 import { DEFAULT_INTERVIEW_THRESHOLDS, INTERVIEW_CONSENTS } from '../data/interview.js';
 import { readJson, removeKey, writeJson } from './storage.js';
+import { isFirebase } from './appMode.js';
 
 const STORAGE_KEY = 'checkyourprove.prototype.interviews.v1';
+
+// 서버 연결(firebase 모드, 로드맵 4-3, 2026-11-28 사용자 결정: 회차마다): 학생별 { selection, record }는
+// sessions/{회차}/interviews/{학생 uid}(담당 교사만), 후보 기준·녹음 보관 기한은 settings/tools(관리자). 예시 학생은 이 브라우저.
+// firebase/teacherSync.js가 applyRemote…로 넣고 save()의 바뀐 것만 쓴다.
+let backend = null;
+export function setInterviewBackend(b) {
+  backend = b;
+}
+const isSample = (studentId) => String(studentId).startsWith('sample-');
+const samplePart = (d) => ({
+  selected: Object.fromEntries(Object.entries(d.selected).filter(([k]) => isSample(k))),
+  records: Object.fromEntries(Object.entries(d.records).filter(([k]) => isSample(k))),
+});
+/** settings/tools의 면담 값 */
+export function applyRemoteInterviewTools(tools) {
+  const d = getInterviews();
+  d.thresholds = tools?.interviewThresholds ?? null;
+  d.retentionUntil = tools?.retentionUntil ?? null;
+}
+/** 한 회차의 면담 문서들: [{ studentId, data: { selection, record } }] */
+export function applyRemoteInterviews(sessionId, docs) {
+  const d = getInterviews();
+  const mine = (k) => String(k).startsWith(`${sessionId}_`);
+  Object.keys(d.selected).forEach((k) => { if (mine(k)) delete d.selected[k]; });
+  Object.keys(d.records).forEach((k) => { if (mine(k)) delete d.records[k]; });
+  docs.forEach(({ studentId, data }) => {
+    if (data?.selection) d.selected[studentId] = data.selection;
+    if (data?.record) d.records[studentId] = normalize({ records: { x: data.record } }).records.x;
+  });
+}
 
 const DEFAULTS = () => ({ thresholds: null, retentionUntil: null, selected: {}, records: {} });
 
@@ -40,11 +71,18 @@ function normalize(raw) {
 }
 
 export function getInterviews() {
-  cache ??= normalize(readJson(STORAGE_KEY, {}));
+  cache ??= normalize(isFirebase ? samplePart(normalize(readJson(STORAGE_KEY, {}))) : readJson(STORAGE_KEY, {}));
   return cache;
 }
 
-const save = () => writeJson(STORAGE_KEY, getInterviews());
+const save = () => {
+  if (isFirebase) {
+    writeJson(STORAGE_KEY, samplePart(getInterviews()));
+    backend?.save(getInterviews());
+    return true;
+  }
+  return writeJson(STORAGE_KEY, getInterviews());
+};
 
 export function resetInterviews() {
   cache = null;

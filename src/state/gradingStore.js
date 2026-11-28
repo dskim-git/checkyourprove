@@ -31,8 +31,40 @@
 import { DEFAULT_CHAT_TAGS } from '../data/chatTags.js';
 import { DEFAULT_RUBRIC } from '../data/rubric.js';
 import { readJson, removeKey, writeJson } from './storage.js';
+import { isFirebase } from './appMode.js';
 
 const STORAGE_KEY = 'checkyourprove.prototype.grading.v1';
+
+// ── 서버 연결 (firebase 모드, 로드맵 4-3, 2026-11-28 사용자 결정) ──
+// 화면은 지금처럼 getGrading()의 한 덩어리를 읽고, 바꾸는 함수는 모두 saveGrading()으로 끝난다.
+// 서버 모드에서 saveGrading()은 firebase/gradingSync.js가 바뀐 것만 골라 쓴다:
+//   채점 대상별 칸(점수·AI 채점·대화 태그·AI 태그·읽은 글 고치기) → sessions/{회차}/grading/{학생 uid}의 그 칸 하나(동시에 채점해도 덮어쓰지 않게)
+//   루브릭·대화 태그 목록·채점자 자리·AI 보조 채점자 → settings/tools(관리자), 보기 설정 → teacherPrefs/{교사 uid}
+//   예시 학생(sample-…)의 채점은 지금처럼 이 브라우저에 둔다(서버에 없는 가상 학생).
+// 서버 학생 id는 '회차id_uid'(state/researchRoster.js). 같은 학생이 여러 회차에 있어도 채점이 섞이지 않는다.
+export const TOOL_KEYS = ['raters', 'rubric', 'rubricEditedAt', 'chatTags', 'aiAsRater'];
+export const PREF_KEYS = ['currentRater', 'blind', 'includeSamples', 'sortBy', 'scopeSessionIds', 'includeNonConsent', 'analysisSource', 'seeds'];
+export const BY_RATER = ['scores', 'aiGrades', 'chatTagging', 'chatTagAi'];
+/** 채점 대상·대화 key의 학생 id가 예시 학생인가 */
+export const isSampleKey = (key) => String(key).startsWith('sample-');
+/** 서버 학생 id '회차id_uid' → { sessionId, uid } (아니면 null) */
+export function parseServerStudentId(studentId) {
+  const s = String(studentId);
+  const i = s.indexOf('_');
+  return i > 0 ? { sessionId: s.slice(0, i), uid: s.slice(i + 1) } : null;
+}
+let backend = null;
+/** firebase/gradingSync.js가 연결한다: { save(g) } */
+export function setGradingBackend(b) {
+  backend = b;
+}
+/** 예시 학생 칸만 남긴 사본(서버 모드에서 이 브라우저에 둘 것) */
+function samplePart(g) {
+  const pick = (m) => Object.fromEntries(Object.entries(m ?? {}).filter(([k]) => isSampleKey(k)));
+  const out = { inkReadingEdits: pick(g.inkReadingEdits) };
+  BY_RATER.forEach((sec) => { out[sec] = Object.fromEntries(Object.entries(g[sec] ?? {}).map(([r, m]) => [r, pick(m)])); });
+  return out;
+}
 
 const DEFAULTS = () => ({
   raters: [{ id: 'r1', name: '채점자 1' }, { id: 'r2', name: '채점자 2' }],
@@ -57,12 +89,62 @@ const DEFAULTS = () => ({
 let cache = null;
 
 export function getGrading() {
+  if (isFirebase) {
+    // 서버 모드: 연구 도구·보기 설정·학생 채점은 서버에서 들어온다. 이 브라우저에는 예시 학생 칸만.
+    cache ??= { ...DEFAULTS(), ...samplePart(readJson(STORAGE_KEY, {}) ?? {}) };
+    return cache;
+  }
   cache ??= { ...DEFAULTS(), ...readJson(STORAGE_KEY, {}) };
   return cache;
 }
 
 export function saveGrading() {
+  if (isFirebase) {
+    writeJson(STORAGE_KEY, samplePart(getGrading()));
+    backend?.save(getGrading());
+    return true;
+  }
   return writeJson(STORAGE_KEY, getGrading());
+}
+
+// ── 채점자 자리 (2026-11-28 사용자 결정: 자리 방식, 자리 수와 맡을 교사를 조정) ──
+
+/** 채점자 자리 더하기 (r1, r2, r3 …) */
+export function addRater(name) {
+  const g = getGrading();
+  const n = g.raters.reduce((m, r) => Math.max(m, Number(String(r.id).slice(1)) || 0), 0) + 1;
+  const rater = { id: `r${n}`, name: String(name ?? '').trim() || `채점자 ${n}`, uid: null };
+  g.raters.push(rater);
+  g.scores[rater.id] ??= {};
+  saveGrading();
+  return rater;
+}
+
+/** 채점자 자리 빼기(최소 한 자리). 그 자리의 점수는 지우지 않고 남긴다(다시 더하면 이어짐) */
+export function removeRater(id) {
+  const g = getGrading();
+  if (g.raters.length <= 1) return false;
+  g.raters = g.raters.filter((r) => r.id !== id);
+  if (g.currentRater === id) g.currentRater = g.raters[0].id;
+  return saveGrading();
+}
+
+/** 자리를 맡을 교사(uid, 서버 모드). 그 교사가 채점 화면을 열면 이 자리가 처음부터 골라져 있다 */
+export function setRaterTeacher(id, uid) {
+  const r = getGrading().raters.find((x) => x.id === id);
+  if (!r) return false;
+  r.uid = uid || null;
+  return saveGrading();
+}
+
+/** 이 교사가 맡은 자리(없으면 null) */
+export const raterOfTeacher = (uid) => getGrading().raters.find((r) => uid && r.uid === uid) ?? null;
+
+/** 짝지은 채점자들(일치도): 두 명 이상이면 모든 짝 */
+export function raterPairs(g = getGrading()) {
+  const pairs = [];
+  g.raters.forEach((a, i) => g.raters.slice(i + 1).forEach((b) => pairs.push([a, b])));
+  return pairs;
 }
 
 export function resetGrading() {
@@ -83,6 +165,37 @@ export const currentRater = () => {
 export function renameRater(id, name) {
   const rater = getGrading().raters.find((r) => r.id === id);
   if (rater && name.trim()) rater.name = name.trim();
+}
+
+// ── 서버 값 넣기 (firebase/gradingSync.js) ──
+
+/** settings/tools의 채점 도구 */
+export function applyRemoteTools(tools) {
+  const g = getGrading();
+  TOOL_KEYS.forEach((k) => { if (tools && k in tools) g[k] = tools[k]; });
+  if (!Array.isArray(g.raters) || !g.raters.length) g.raters = DEFAULTS().raters;
+}
+/** teacherPrefs/{uid} */
+export function applyRemotePrefs(prefs) {
+  const g = getGrading();
+  PREF_KEYS.forEach((k) => { if (prefs && k in prefs) g[k] = prefs[k]; });
+  g.seeds ??= {};
+}
+/** 한 회차의 학생별 채점 문서들로 그 회차 학생의 칸을 바꾼다. docs: [{ uid, data }] */
+export function applyRemoteGradingDocs(sessionId, docs) {
+  const g = getGrading();
+  const mine = (key) => String(key).startsWith(`${sessionId}_`);
+  const strip = (m) => Object.keys(m ?? {}).forEach((k) => { if (mine(k)) delete m[k]; });
+  BY_RATER.forEach((sec) => { g[sec] ??= {}; Object.values(g[sec]).forEach(strip); });
+  g.inkReadingEdits ??= {};
+  strip(g.inkReadingEdits);
+  docs.forEach(({ data }) => {
+    BY_RATER.forEach((sec) => Object.entries(data?.[sec] ?? {}).forEach(([r, m]) => {
+      g[sec][r] ??= {};
+      Object.assign(g[sec][r], m);
+    }));
+    Object.assign(g.inkReadingEdits, data?.inkReadingEdits ?? {});
+  });
 }
 
 // ── 루브릭 (교사가 기준 이름·설명·점수 설명을 고칠 수 있다) ──

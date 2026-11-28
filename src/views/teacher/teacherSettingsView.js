@@ -231,7 +231,8 @@ function gradingForm() {
   const g = getGrading();
   return `<form class="settings-form" data-grading-prefs novalidate>
     <fieldset class="choice-group"><legend class="field__label">채점자</legend>
-      <div class="rater-names">${g.raters.map((r) => `<div class="field"><label class="field__label" for="rn-${r.id}">${r.id === 'r1' ? '채점자 1 (주 채점)' : '채점자 2'} 이름</label><input type="text" class="field__input" id="rn-${r.id}" name="rater-${r.id}" value="${escapeHtml(r.name)}"></div>`).join('')}</div>
+      ${!isFirebase || currentUser()?.role === 'admin' ? `<div class="rater-names">${g.raters.map((r, i) => `<div class="field"><label class="field__label" for="rn-${r.id}">${i === 0 ? '채점자 1 (주 채점)' : `채점자 ${i + 1}`} 이름</label><input type="text" class="field__input" id="rn-${r.id}" name="rater-${r.id}" value="${escapeHtml(r.name)}"></div>`).join('')}</div>` : ''}
+      <p class="field__help">채점자 자리를 더하거나 빼고 맡을 선생님을 정하는 일은 관리자 설정 > 연구 도구에서 해요.</p>
       <div class="pick-group__options">${g.raters.map((r) => `<label class="pick pick--tag"><input type="radio" name="currentRater" value="${r.id}"${g.currentRater === r.id ? ' checked' : ''}><span>지금 채점: ${escapeHtml(r.name)}</span></label>`).join('')}</div>
     </fieldset>
     <label class="check"><input type="checkbox" name="blind"${g.blind ? ' checked' : ''}><span>블라인드 채점 <span class="meta">학생 이름과 단계를 가리고 채점자마다 정해진 무작위 순서로 보여 줍니다.</span></span></label>

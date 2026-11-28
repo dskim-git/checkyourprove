@@ -145,7 +145,7 @@ export function renderSettings(root, [tabParam]) {
         <dl class="read-list">
           <div><dt>이름</dt><dd>${escapeHtml(APP_INFO.name)}</dd></div>
           <div><dt>버전</dt><dd>${escapeHtml(APP_INFO.version)} (${escapeHtml(APP_INFO.stage)})</dd></div>
-          <div><dt>저장 위치</dt><dd>${escapeHtml(isDemo ? '시연 모드: 이 브라우저에만 (서버와 따로)' : isFirebase ? '서버(계정, 학급·세션, 탐구·연습 기록). 교사의 채점·면담 기록 일부는 아직 이 브라우저(서버 연결 진행 중)' : APP_INFO.storage)}</dd></div>
+          <div><dt>저장 위치</dt><dd>${escapeHtml(isDemo ? '시연 모드: 이 브라우저에만 (서버와 따로)' : isFirebase ? '서버(계정, 학급·세션, 학습·탐구 기록, 채점·면담). 면담 녹음 파일은 아직 이 기기' : APP_INFO.storage)}</dd></div>
         </dl>
         ${isBrowserOnly ? '<p class="meta"><a href="#/demo-data">시연 데이터</a>: 이 브라우저의 기록을 파일로 내보내거나 불러와요.</p>' : ''}
       </section>`;

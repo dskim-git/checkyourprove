@@ -167,6 +167,17 @@ async function joinSession({ token, body }) {
   return { ok: true };
 }
 
+/** 설문 잠금(4-3): 학생이 응답을 시작하면 그 설문의 문항을 고칠 수 없게 한다(관리자 쓰기는 규칙이 막음) */
+async function lockSurvey({ token, body }) {
+  if (!token.role) throw new HttpError(403, '승인된 뒤에 할 수 있어요.');
+  const ref = db().doc(`surveys/${String(body.id)}`);
+  await db().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (snap.exists && !snap.data().lockedAt) tx.update(ref, { lockedAt: now() });
+  });
+  return { ok: true };
+}
+
 /** 개인정보 요청(기록 삭제·탈퇴): 본인이 올리고 관리자가 처리 */
 async function addRequest({ token, body }) {
   const user = await getUser(token.uid);
@@ -405,6 +416,11 @@ async function adminAction(action, { token, body }) {
       await audit('개인정보 요청 지움', String(body.id), me.researchId);
       return { ok: true };
     }
+    case 'log': {
+      // 관리자가 브라우저에서 바로 바꾼 연구 도구(루브릭·설문·동의서 등)의 관리 기록(4-3)
+      await audit(String(body.entry ?? '').slice(0, 60) || '관리 작업', String(body.detail ?? '').slice(0, 300), me.researchId);
+      return { ok: true };
+    }
     case 'saveAdmin': {
       // 연습 기본값·문의처 (공지는 addNotice/removeNotice)
       const section = String(body.section);
@@ -476,5 +492,6 @@ export default handler(async ({ body, token }) => {
   if (action === 'profile') return submitProfile({ token, body });
   if (action === 'joinSession') return joinSession({ token, body });
   if (action === 'addRequest') return addRequest({ token, body });
+  if (action === 'lockSurvey') return lockSurvey({ token, body });
   return adminAction(action, { token, body });
 });

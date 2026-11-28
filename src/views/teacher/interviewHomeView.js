@@ -2,6 +2,7 @@
 // 보기 설정(점수 출처·예시 학생·연구 동의·포함할 세션, 연구 분석과 같은 설정), 후보 기준값, 유형별 후보·선정 수,
 // 면담 대상 목록(상태·일시·동의, CSV), 추천 후보(학생별로 묶은 근거, 교사가 골라 선정), 유형 6 직접 지정(사후 설문 서술형 참고).
 
+import { isFirebase } from '../../state/appMode.js';
 import { interviewType } from '../../data/interview.js';
 import { interviewCsv, postSurveyTexts, typeCounts } from '../../services/interviewCandidates.js';
 import { getGrading, updateGradingSettings } from '../../state/gradingStore.js';
@@ -37,7 +38,7 @@ export function renderInterviewHome(root) {
         <h1>면담 후보와 기록</h1>
         <p class="lead">학생 × 명제마다 기록을 살펴 면담 후보를 추천합니다. 추천은 참고용이고 면담 대상은 교사가 고릅니다. 고른 학생은 면담 화면에서 기록을 보며 질문 예시와 메모를 남깁니다.</p>
       </header>
-      ${notice('warn', '프로토타입 상태입니다', '이 브라우저의 기록과 예시 학생 기록으로 계산합니다. 녹음 파일은 이 브라우저에만 저장되고, 음성 전사는 서버를 연결한 뒤에 더합니다.')}
+      ${isFirebase ? notice('info', '면담 기록은 서버에 저장돼요', '회차마다 담당 선생님들과 함께 쓰고, 학생은 볼 수 없어요. 녹음 파일은 아직 이 기기에만 저장되고(다음 단계에서 서버로), 음성 전사는 그 뒤에 더합니다.') : notice('warn', '프로토타입 상태입니다', '이 브라우저의 기록과 예시 학생 기록으로 계산합니다. 녹음 파일은 이 브라우저에만 저장되고, 음성 전사는 서버를 연결한 뒤에 더합니다.')}
       <div data-retention-alert></div>
       <p><a class="button button--secondary button--small" href="#/teacher/recordings">녹음 관리</a></p>
 

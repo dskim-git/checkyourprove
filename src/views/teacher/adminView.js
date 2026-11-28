@@ -24,7 +24,7 @@ import {
 } from '../../state/adminStore.js';
 import { interviewThresholds, resetThresholds, retentionUntil, saveThresholds, setRetentionUntil } from '../../state/interviewStore.js';
 import { THRESHOLD_FIELDS } from '../../data/interview.js';
-import { activeChatTags, activeRubric, getGrading, updateGradingSettings } from '../../state/gradingStore.js';
+import { addRater, removeRater, renameRater, saveGrading, setRaterTeacher, activeChatTags, activeRubric, getGrading, updateGradingSettings } from '../../state/gradingStore.js';
 import { settingsTabs } from '../../ui/settingsTabs.js';
 import { isFirebase } from '../../state/appMode.js';
 import {
@@ -576,6 +576,18 @@ export function renderAdminTools(root) {
         </ul>
         <p class="meta">학생 연구 동의서는 "연구 윤리" 탭에 있습니다.</p>
       </section>
+      <section class="panel" aria-labelledby="tl-raters">
+        <h2 id="tl-raters" class="section-title">채점자 (${g.raters.length}명)</h2>
+        <p class="meta">채점자 자리마다 점수가 따로 쌓이고, 두 명 이상이면 짝마다 일치도를 계산합니다. 맡을 선생님을 정하면 그 선생님이 채점 화면을 열 때 이 자리가 처음부터 골라져 있어요. 혼자 채점하면 한 자리만 두거나, 시간을 두고 다른 자리로 다시 채점할 수 있어요.</p>
+        <ul class="admin-list" data-raters>${g.raters.map((r, i) => `<li class="admin-row" data-rater="${escapeHtml(r.id)}">
+          <div class="account-grid">
+            <div class="field"><label class="field__label" for="rt-n-${escapeHtml(r.id)}">채점자 ${i + 1} 이름</label><input type="text" class="field__input" id="rt-n-${escapeHtml(r.id)}" name="raterName" value="${escapeHtml(r.name)}"></div>
+            ${isFirebase ? `<div class="field"><label class="field__label" for="rt-t-${escapeHtml(r.id)}">맡을 선생님</label><select class="field__select" id="rt-t-${escapeHtml(r.id)}" name="raterTeacher"><option value="">정하지 않음</option>${staffList().map((t) => `<option value="${escapeHtml(t.uid)}"${t.uid === r.uid ? ' selected' : ''}>${escapeHtml(t.name)}</option>`).join('')}</select></div>` : ''}
+          </div>
+          ${g.raters.length > 1 ? '<div class="actions actions--start"><button type="button" class="button button--ghost button--small" data-action="rater-remove">이 자리 빼기</button></div>' : ''}
+        </li>`).join('')}</ul>
+        <div class="actions actions--start"><button type="button" class="button button--secondary button--small" data-action="rater-add">채점자 더하기</button></div>
+      </section>
       <section class="panel" aria-labelledby="tl-rater">
         <h2 id="tl-rater" class="section-title">AI 채점</h2>
         <form class="settings-form" data-tools-form novalidate>
@@ -599,6 +611,20 @@ export function renderAdminTools(root) {
   };
   const onChange = (event) => {
     const t = event.target;
+    const raterId = t.closest('[data-rater]')?.dataset.rater;
+    if (raterId && t.name === 'raterName' && t.value.trim()) {
+      renameRater(raterId, t.value);
+      saveGrading();
+      logAction('채점자 이름', `${raterId}: ${t.value.trim()}`, who());
+      status = '채점자 이름을 바꾸었습니다.';
+      return draw(`#rt-n-${raterId}`);
+    }
+    if (raterId && t.name === 'raterTeacher') {
+      setRaterTeacher(raterId, t.value);
+      logAction('채점자 맡을 교사', `${raterId}: ${staffList().find((x) => x.uid === t.value)?.name ?? '정하지 않음'}`, who());
+      status = '맡을 선생님을 정했습니다.';
+      return draw(`#rt-t-${raterId}`);
+    }
     if (t.name === 'aiAsRater') {
       updateGradingSettings({ aiAsRater: t.checked });
       logAction('AI 보조 채점자', t.checked ? '켬' : '끔', who());
@@ -614,6 +640,21 @@ export function renderAdminTools(root) {
     }
   };
   const onClick = (event) => {
+    const ra = event.target.closest('[data-action="rater-add"], [data-action="rater-remove"]');
+    if (ra) {
+      if (ra.dataset.action === 'rater-add') {
+        const r = addRater();
+        logAction('채점자 더함', r.name, who());
+        status = `${r.name} 자리를 더했습니다.`;
+      } else {
+        const id = ra.closest('[data-rater]').dataset.rater;
+        if (!window.confirm('이 채점자 자리를 뺄까요? 이 자리로 저장한 점수는 지우지 않고 남겨 둡니다(분석·일치도에서는 빠짐).')) return;
+        removeRater(id);
+        logAction('채점자 뺌', id, who());
+        status = '채점자 자리를 뺐습니다.';
+      }
+      return draw('#tl-raters');
+    }
     if (!event.target.closest('[data-action="reset-th"]')) return;
     resetThresholds();
     status = '면담 후보 기준을 기본값으로 돌렸습니다.';
@@ -780,7 +821,7 @@ export function renderAdminAudit(root) {
           <h2 id="au-heading" class="section-title">관리 기록 (${log.length})</h2>
           <button type="button" class="button button--secondary button--small" data-action="audit-csv"${log.length ? '' : ' disabled'}>CSV 내려받기</button>
         </div>
-        <p class="meta">${isFirebase ? '가입 승인·역할·명단·연결표·연구 윤리·가입 규칙 기록은 서버가 남겨 고칠 수 없습니다. 그 밖의 기록은 아직 이 브라우저에 남습니다(서버 연결 진행 중).' : '최근 500개까지 남습니다. 서버를 연결하면 서버만 쓸 수 있게 해 고칠 수 없게 합니다.'}</p>
+        <p class="meta">${isFirebase ? '관리 기록은 서버가 남겨 고칠 수 없습니다.' : '최근 500개까지 남습니다. 서버를 연결하면 서버만 쓸 수 있게 해 고칠 수 없게 합니다.'}</p>
         ${log.length ? `<div class="table-wrap" role="region" aria-labelledby="au-heading" tabindex="0"><table class="data-table grade-table" data-audit-table>
           <thead><tr><th scope="col">시각</th><th scope="col">한 사람</th><th scope="col">작업</th><th scope="col">내용</th></tr></thead>
           <tbody>${log.map((a) => `<tr><td>${escapeHtml(formatDateTime(a.at))}</td><td>${escapeHtml(a.by || '–')}</td><th scope="row">${escapeHtml(a.action)}</th><td>${escapeHtml(a.detail || '')}</td></tr>`).join('')}</tbody>

@@ -105,6 +105,7 @@ export function resetAdminCache() {
 
 /** 중요한 관리 작업을 기록한다(누가, 언제, 무엇을). by는 화면에서 넘긴 사람 이름 또는 이메일 */
 export function logAction(action, detail = '', by = '') {
+  if (isFirebase && remote) return remote('log', { entry: action, detail }); // 4-3: 서버 관리 기록으로
   const d = getAdmin();
   d.audit.unshift({ at: now(), by, action, detail });
   if (d.audit.length > 500) d.audit.length = 500;
