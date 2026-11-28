@@ -284,6 +284,8 @@ async function staffAction(action, { token, body }) {
     }
     case 'classPractice':
       return classPracticeBoard(token, body.classId);
+    case 'sessionRoster':
+      return sessionRoster(token, body.sessionId);
     default:
       throw new HttpError(400, '알 수 없는 요청이에요.');
   }
@@ -314,20 +316,39 @@ async function classPracticeBoard(token, classId) {
   const admin = token.role === 'admin';
   const students = await Promise.all(learners.map(async (d, i) => {
     const u = d.data();
-    const p = linkDocs[i]?.data()?.profile ?? null;
     const attempts = (await db().collection(`practice/${d.id}/attempts`).select(...ATTEMPT_FIELDS).get()).docs
       .map((a) => Object.fromEntries(ATTEMPT_FIELDS.map((k) => [k, a.get(k) ?? null])));
     return {
-      kind: u.kind ?? (u.role === 'guest' ? 'guest' : 'student'),
-      studentNo: p?.kind === 'student' ? String(p.studentNo ?? '') : '',
-      name: String(p?.name ?? ''),
-      unlinked: Boolean(u.unlinkedAt) || !p?.name,
+      ...nameOf(u, linkDocs[i]?.data()),
       ...(admin ? { researchId: u.researchId ?? '' } : {}),
       attempts,
     };
   }));
   students.sort((a, b) => (a.studentNo || '99999').localeCompare(b.studentNo || '99999') || a.name.localeCompare(b.name, 'ko'));
   return { ok: true, classId: ref.id, students, at: now() };
+}
+
+/** 이름·학번(links) → 화면에 보일 값 */
+const nameOf = (u, link) => {
+  const p = link?.profile ?? null;
+  return {
+    kind: u.kind ?? (u.role === 'guest' ? 'guest' : 'student'),
+    studentNo: p?.kind === 'student' ? String(p.studentNo ?? '') : '',
+    name: String(p?.name ?? ''),
+    unlinked: Boolean(u.unlinkedAt) || !p?.name,
+  };
+};
+
+// 업무판의 AI와 탐구하기 진행 현황에서 미제출 학생 보기(2026-11-28 사용자 요청): 회차에 들어온 학생·일반인의 uid와 학번·이름.
+// 담당 교사·관리자만. 연구 번호는 주지 않는다(연결표는 관리자만, 교사 화면의 uid는 이미 users·records에서 보임).
+async function sessionRoster(token, sessionId) {
+  const { ref } = await sessionFor(token, sessionId);
+  const uids = (await ref.collection('members').get()).docs.map((m) => m.id).slice(0, BOARD_LIMIT);
+  const userDocs = uids.length ? await db().getAll(...uids.map((u) => db().doc(`users/${u}`))) : [];
+  const learners = userDocs.filter((d) => d.exists && d.data().status === 'approved' && (d.data().role === 'student' || d.data().role === 'guest'));
+  const linkDocs = learners.length ? await db().getAll(...learners.map((d) => db().doc(`links/${d.id}`))) : [];
+  const students = learners.map((d, i) => ({ uid: d.id, ...nameOf(d.data(), linkDocs[i]?.data()) }));
+  return { ok: true, sessionId: ref.id, students, at: now() };
 }
 
 /** 세션 코드로 들어가기: 승인된 사용자, 코드가 열려 있을 때 */

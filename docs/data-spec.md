@@ -151,6 +151,7 @@
 - `sessions/{id}/records/{uid}` = 학생 연구 기록(7절 구조, 필기 칸은 비움). 본인만 씀(들어온 사람, 또는 미리보기하는 담당 교사), 담당 교사가 읽음. 제출한 단계는 바꿀 수 없고 교사가 연 단계만 쓸 수 있음.
 - `sessions/{id}/records/{uid}/ink/{단계~명제~칸}` = { stage, problemId, field, json(필기 기록 JSON 글) }. 그 단계를 제출한 뒤에는 바꿀 수 없음.
 - `practice/{uid}/attempts/{활동:명제}` = 연습 기록(7절). 본인만 읽고 씀(2026-11-28: 교사 직접 읽기를 막음). 교사는 업무판의 증명 연습 현황에서 `api/session.js` `classPractice`로 담당 학급 학생의 요약(levelId·problemId·method·status·score·passedAt·updatedAt)과 학번·이름만 받고, 연구 번호는 관리자만 받음. 통과·인증의 서버 확인은 5단계.
+- 업무판의 탐구 미제출 학생 보기(2026-11-28): `api/session.js` `sessionRoster`가 회차 담당 교사·관리자에게 그 회차에 들어온 학생·일반인의 uid·학번·이름을 준다(연구 번호는 주지 않음).
 - `users/{uid}.activeSessionId`(본인이 바꿈), `staff/{uid}` = { name, role }(승인된 교사·관리자, 교사가 읽음, 담당 교사 고르기).
 - `settings/admin` = { practice, contact, notices }(로그인한 사람이 읽음, 서버만 씀), `requests/{id}` = 개인정보 요청(본인·관리자가 읽음, 서버만 씀).
 

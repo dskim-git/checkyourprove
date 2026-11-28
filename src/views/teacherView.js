@@ -21,6 +21,7 @@ import { formatActive } from './research/stageView.js';
 import { PROOF_HELP_MIN } from '../services/proofHelp.js';
 import { fillRetentionAlert } from './teacher/recordingsView.js';
 import { mountPracticeBoard, practiceBoardHtml } from './teacher/practiceBoard.js';
+import { openUnsubmitted, unsubmittedUids } from './teacher/unsubmittedPopup.js';
 
 const TASKS = [
   { href: '#/teacher/grading', title: '증명 채점', desc: '1·2·4단계 증명을 루브릭으로 채점' },
@@ -130,6 +131,12 @@ export function renderTeacher(root) {
   };
 
   const onClick = (event) => {
+    const unsub = event.target.closest('[data-unsubmitted]');
+    if (unsub) {
+      const session = activeSession();
+      if (session) openUnsubmitted(session, Number(unsub.dataset.unsubmitted));
+      return;
+    }
     if (!event.target.closest('[data-action="reset-research"]')) return;
     if (!window.confirm(`진행 중 세션(${getClassroom().sessionLabel})에서 이 브라우저에 저장된 AI와 탐구하기 기록을 모두 지울까요? 시연·시험용 기능이며 되돌릴 수 없습니다.`)) return;
     resetResearch();
@@ -149,21 +156,26 @@ export function renderTeacher(root) {
   };
 }
 
-/** 서버 모드: 진행 중 세션에 들어온 학생들의 단계별 시작·제출 수 */
+/** 서버 모드: 진행 중 세션에 들어온 학생들의 단계별 시작·제출·미제출 수. 미제출 수를 누르면 학번·이름 팝업(2026-11-28 사용자 요청) */
 function serverProgress(session) {
-  const students = [...sessionRecords(session.id)].filter(([uid]) => {
+  const records = sessionRecords(session.id);
+  const students = [...records].filter(([uid]) => {
     const u = findUser(uid);
     return !u || u.role === 'student' || u.role === 'guest';
   }).map(([, record]) => record);
-  const joined = sessionMembers(session.id).filter((u) => u.role === 'student' || u.role === 'guest').length;
+  const memberUids = sessionMembers(session.id).filter((u) => u.role === 'student' || u.role === 'guest').map((u) => u.uid);
   const rows = RESEARCH_STAGES.map((stage) => {
     const started = students.filter((r) => r.stages?.[String(stage.n)]).length;
     const submitted = students.filter((r) => r.stages?.[String(stage.n)]?.submittedAt).length;
-    return `<tr><th scope="row">${stage.n}단계 ${escapeHtml(stage.short)}</th><td class="num">${started}명</td><td class="num">${submitted}명</td></tr>`;
+    const missing = unsubmittedUids(stage.n, memberUids, records).length;
+    const missingCell = missing
+      ? `<button type="button" class="link-button num" data-unsubmitted="${stage.n}" aria-haspopup="dialog" aria-label="${stage.n}단계 미제출 학생 ${missing}명 보기">${missing}명</button>`
+      : '0명';
+    return `<tr><th scope="row">${stage.n}단계 ${escapeHtml(stage.short)}</th><td class="num">${started}명</td><td class="num">${submitted}명</td><td class="num">${missingCell}</td></tr>`;
   }).join('');
-  return `<p class="meta">세션 코드로 들어온 학생 ${joined}명, 탐구 기록이 있는 학생 ${students.length}명</p>
+  return `<p class="meta">세션 코드로 들어온 학생 ${memberUids.length}명, 탐구 기록이 있는 학생 ${students.length}명. 미제출 수를 누르면 학번과 이름을 볼 수 있어요.</p>
     <div class="table-wrap" role="region" aria-label="단계별 진행" tabindex="0"><table class="data-table">
-      <thead><tr><th scope="col">단계</th><th scope="col">시작</th><th scope="col">제출</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+      <thead><tr><th scope="col">단계</th><th scope="col">시작</th><th scope="col">제출</th><th scope="col">미제출</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 function researchProgress(classroom) {

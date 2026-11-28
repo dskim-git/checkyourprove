@@ -19,8 +19,10 @@ import { escapeHtml, formatDateTime, formatTime } from '../../ui/dom.js';
 import { notice } from '../../ui/components.js';
 import { openModal } from '../../ui/modal.js';
 
-// 학급마다 마지막으로 받은 값: classId → { rows, at, kind } | { error } | { loading: true }
+// 학급마다 마지막으로 받은 값: classId → { students, at } | { error } | { loading: true }
+// 업무판은 학생 기록이 바뀔 때마다 다시 그려지므로 그때마다 서버에서 받지 않는다. 로그인한 사람이 바뀌면 비운다.
 const cache = new Map();
+let cacheOwner = null;
 let selectedId = null;
 
 /** 학급 탭 순서: 반(학년도 최근 → 학년 → 반), 그다음 기타(이름) */
@@ -138,13 +140,17 @@ function draw(host) {
   host.innerHTML = `${tabs}<div id="pb-panel" role="tabpanel" aria-labelledby="pb-tab-${escapeHtml(selectedId)}" class="practice-board__panel">${body}</div>`;
 }
 
+// 지금 화면의 칸을 찾는 함수(받는 사이에 업무판이 다시 그려지면 처음 칸은 사라지므로 받은 뒤에 다시 찾는다)
+let currentHost = () => null;
+
 async function load(host, classId, { force = false } = {}) {
   if (!force && cache.has(classId) && !cache.get(classId).error) return;
   cache.set(classId, { loading: true });
   draw(host);
   const r = await fetchClassPractice(classId);
   cache.set(classId, r?.error || !r ? { error: r?.error ?? '서버에서 답이 없어요.' } : { students: r.students ?? [], at: r.at });
-  if (host.isConnected && selectedId === classId) draw(host);
+  const now = currentHost();
+  if (now && selectedId === classId) draw(now);
 }
 
 function showResearchId(row) {
@@ -162,13 +168,19 @@ function showResearchId(row) {
 }
 
 /**
- * 업무판에 들어올 때 한 번 부른다. 탭·새로 고침·학번 팝업을 다룬다. 업무판을 다시 그릴 때마다 fill()을 부른다.
- * 들어올 때마다 서버에서 새로 받는다(다른 계정으로 바꿔 로그인해도 지난 값이 남지 않게).
+ * 업무판을 그릴 때 부른다. 탭·새로 고침·학번 팝업을 다룬다. 업무판을 다시 그릴 때마다 fill()을 부른다.
+ * 받은 값은 "새로 고침"을 누르거나 로그인한 사람이 바뀔 때까지 쓴다.
  * @returns {{ fill: () => void, cleanup: () => void }}
  */
 export function mountPracticeBoard(root) {
-  cache.clear();
+  const owner = currentUser()?.uid ?? null;
+  if (owner !== cacheOwner) {
+    cache.clear();
+    selectedId = null;
+    cacheOwner = owner;
+  }
   const fill = () => {
+    currentHost = () => (root.isConnected ? root.querySelector('[data-practice-board]') : null);
     const host = root.querySelector('[data-practice-board]');
     if (!host) return;
     draw(host);

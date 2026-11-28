@@ -49,6 +49,11 @@ export async function fetchClassPractice(classId) {
   if (!backend?.fetch) return { error: '서버에 연결되지 않았어요.' };
   return backend.fetch('classPractice', { classId });
 }
+/** 업무판의 탐구 진행 현황에서 미제출 학생 보기(서버 모드): 회차에 들어온 학생·일반인의 uid와 학번·이름. 실패하면 { error } */
+export async function fetchSessionRoster(sessionId) {
+  if (!backend?.fetch) return { error: '서버에 연결되지 않았어요.' };
+  return backend.fetch('sessionRoster', { sessionId });
+}
 /** 학급의 담당 교사 바꾸기(서버 모드). 한 명 이상 */
 export function setClassTeachers(classId, uids) {
   const c = getSessions().classes.find((x) => x.id === classId);
