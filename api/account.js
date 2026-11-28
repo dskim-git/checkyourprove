@@ -318,6 +318,93 @@ async function adminAction(action, { token, body }) {
       await audit('연구 윤리 설정', Object.keys(patch).join(', '), me.researchId);
       return { ok: true };
     }
+    case 'editUser': {
+      // 사용자 정보 고치기(2026-11-28): 이름·학년도·학번 또는 이름·소속·이유. 학번이 바뀌면 반을 다시 배정한다
+      const uid = String(body.uid);
+      const u = await getUser(uid);
+      const p = cleanProfile(body.profile);
+      if (!p) throw new HttpError(400, body.profile?.kind === 'student' ? '학년도, 학번(다섯 자리), 이름을 바르게 입력하세요.' : '이름, 소속, 가입 이유를 입력하세요.');
+      const classKey = classKeyFromProfile(p);
+      await links().doc(uid).set({ profile: p }, { merge: true });
+      const patch = { kind: p.kind, classKey };
+      if (classKey !== (u.classKey ?? null)) patch.classId = null; // 다른 반이면 다시 배정
+      await users().doc(uid).update(patch);
+      if (u.status === 'approved') await syncStaff(uid, { ...u, ...patch });
+      await assignToClass(uid);
+      await audit('사용자 정보 고침', u.researchId, me.researchId);
+      return { ok: true };
+    }
+    case 'deleteUser': {
+      // 계정 삭제(2026-11-28 사용자 결정: 골라서 지우기). 기본: 구글 로그인 계정·연결 정보·연습 기록. withResearch면 탐구 기록까지.
+      // 탐구 기록을 남기면 사용자 문서는 실명 없는 표시만 남겨(삭제됨) 교사 화면에 연구 번호로 보이게 한다.
+      const uid = String(body.uid);
+      if (uid === token.uid) throw new HttpError(400, '내 계정은 여기서 지울 수 없어요.');
+      const u = await getUser(uid);
+      if (u.role === 'admin') {
+        const admins = await users().where('role', '==', 'admin').get();
+        if (admins.docs.filter((d) => d.data().status !== 'deleted').length <= 1) throw new HttpError(400, '관리자는 한 명 이상 있어야 합니다.');
+      }
+      await adminAuth().deleteUser(uid).catch(() => {});
+      await links().doc(uid).delete();
+      await db().doc(`staff/${uid}`).delete();
+      const attempts = await db().collection(`practice/${uid}/attempts`).get();
+      for (const a of attempts.docs) await a.ref.delete();
+      const withResearch = Boolean(body.withResearch);
+      if (withResearch) {
+        for (const sid of u.sessionIds ?? []) {
+          await db().recursiveDelete(db().doc(`sessions/${sid}/records/${uid}`));
+          await db().doc(`sessions/${sid}/members/${uid}`).delete();
+        }
+        if (u.researchId) await db().doc(`researchIds/${u.researchId}`).delete();
+        await users().doc(uid).delete();
+      } else {
+        await users().doc(uid).set({ role: u.role, status: 'deleted', kind: u.kind ?? null, researchId: u.researchId, sessionIds: u.sessionIds ?? [], classId: null, classKey: null, activeSessionId: null, createdAt: u.createdAt ?? null, deletedAt: now() });
+      }
+      await audit('계정 삭제', `${u.researchId}${withResearch ? ' (탐구 기록 포함)' : ' (탐구 기록은 연구 번호로 남김)'}`, me.researchId);
+      return { ok: true };
+    }
+    case 'deletePractice': {
+      const uid = String(body.uid);
+      const u = await getUser(uid);
+      const attempts = await db().collection(`practice/${uid}/attempts`).get();
+      for (const a of attempts.docs) await a.ref.delete();
+      await audit('연습 기록 지움', `${u.researchId} (${attempts.size}개)`, me.researchId);
+      return { ok: true, count: attempts.size };
+    }
+    case 'editRoster': {
+      const oldId = rosterId(body.year, body.studentNo);
+      const year = Number(body.next?.year);
+      const studentNo = norm(body.next?.studentNo);
+      const name = String(body.next?.name ?? '').replace(/\s+/g, '');
+      if (!year || !parseStudentNo(studentNo) || !name) throw new HttpError(400, '학년도, 학번(다섯 자리), 이름을 바르게 입력하세요.');
+      const newId = rosterId(year, studentNo);
+      if (newId !== oldId && (await db().doc(`roster/${newId}`).get()).exists) throw new HttpError(400, '같은 학년도·학번이 명단에 이미 있어요.');
+      await db().doc(`roster/${oldId}`).delete();
+      await db().doc(`roster/${newId}`).set({ year, studentNo, name, addedAt: now() });
+      await audit('학생 명단 고침', `${oldId} → ${newId}`, me.researchId);
+      return { ok: true };
+    }
+    case 'editNotice': {
+      const ref = db().doc('settings/admin');
+      const n = body.notice ?? {};
+      const title = String(n.title ?? '').trim().slice(0, 100);
+      if (!title) throw new HttpError(400, '공지 제목을 입력하세요.');
+      await db().runTransaction(async (tx) => {
+        const cur = (await tx.get(ref)).data()?.notices ?? [];
+        tx.update(ref, { notices: cur.map((x) => (x.id === body.id ? {
+          ...x, title, body: String(n.body ?? '').trim().slice(0, 500),
+          audience: ['all', 'students', 'teachers'].includes(n.audience) ? n.audience : x.audience,
+          until: /^\d{4}-\d{2}-\d{2}$/.test(n.until ?? '') ? n.until : '', updatedAt: now(),
+        } : x)) });
+      });
+      await audit('공지 고침', title, me.researchId);
+      return { ok: true };
+    }
+    case 'removeRequest': {
+      await db().doc(`requests/${String(body.id)}`).delete();
+      await audit('개인정보 요청 지움', String(body.id), me.researchId);
+      return { ok: true };
+    }
     case 'saveAdmin': {
       // 연습 기본값·문의처 (공지는 addNotice/removeNotice)
       const section = String(body.section);

@@ -155,6 +155,8 @@
 
 반 자동 배정(2026-11-28): `classes`에 { kind: 'homeroom'|'other', year, grade, classNo, classKey, currentSessionId }, `classKeys/{학년도-학년-반}` = { classId }(서버만), `users`에 { classKey(가입 정보에서), classId(배정된 반) }, 세션에 `isCurrent`(반의 진행 회차). 학번은 다섯 자리(학년·반·번호)만 받는다.
 
+관리자 데이터 관리(2026-11-28): 계정 삭제는 구글 계정·`links`·연습 기록을 지우고, 탐구 기록을 남기면 `users/{uid}`를 { status: 'deleted', role, researchId, sessionIds }만 남긴다(실명 없음). "탐구 기록도 지우기"를 고르면 회차의 기록·필기·참여와 연구 번호까지 지운다. 6절의 삭제 요청은 이 기능으로 처리한다.
+
 아래는 처음 초안이며, 아직 정하지 않은 부분(채점·면담·설문·진행 제어·녹음)은 4-3·4-4에서 확정합니다.
 
 ```

@@ -85,6 +85,94 @@ const cleanName = (name) => {
   return n;
 };
 
+/** 회차 하나를 학생 기록까지 지운다(교사 removeSession과 관리자 학급 지우기가 함께 씀) */
+async function removeSessionDeep(ref, data) {
+  const members = await ref.collection('members').get();
+  for (const m of members.docs) {
+    await db().doc(`users/${m.id}`).update({ sessionIds: fieldValue().arrayRemove(ref.id) }).catch(() => {});
+  }
+  const active = await db().collection('users').where('activeSessionId', '==', ref.id).get();
+  for (const u of active.docs) await u.ref.update({ activeSessionId: null });
+  if (data.code) await db().doc(`sessionCodes/${data.code}`).delete();
+  const cdoc = await classes().doc(data.classId).get();
+  if (cdoc.exists && cdoc.data().currentSessionId === ref.id) await cdoc.ref.update({ currentSessionId: null });
+  await db().recursiveDelete(ref);
+  return members.size;
+}
+
+/** 관리자 데이터 관리(2026-11-28 사용자 요청): 학급 고치기·지우기, 회차에서 학생 빼기, 학생 탐구 기록 지우기 */
+async function adminAction(action, { token, body }) {
+  if (token.role !== 'admin') throw new HttpError(403, '관리자만 할 수 있어요.');
+  const who = (await me(token)).researchId;
+  switch (action) {
+    case 'adminEditClass': {
+      const { ref, data: c } = await classFor(token, body.classId);
+      if (c.kind === 'homeroom') {
+        const year = Number(body.year);
+        const grade = Number(body.grade);
+        const classNo = Number(body.classNo);
+        if (!(year > 2000 && year < 2100) || ![1, 2, 3].includes(grade) || !(Number.isInteger(classNo) && classNo >= 1 && classNo <= 99)) throw new HttpError(400, '학년도, 학년(1~3), 반을 바르게 고르세요.');
+        const classKey = homeroomKey(year, grade, classNo);
+        if (classKey !== c.classKey) {
+          try {
+            await db().doc(`classKeys/${classKey}`).create({ classId: ref.id, at: now() });
+          } catch {
+            throw new HttpError(400, `${year}학년도 ${homeroomName(grade, classNo)}은 이미 있어요.`);
+          }
+          if (c.classKey) await db().doc(`classKeys/${c.classKey}`).delete();
+          // 예전 반 열쇠로 배정된 학생은 풀고, 새 반 열쇠의 학생을 배정한다(이미 들어간 회차와 기록은 그대로)
+          const old = await db().collection('users').where('classId', '==', ref.id).get();
+          for (const u of old.docs) await u.ref.update({ classId: null });
+        }
+        const name = homeroomName(grade, classNo);
+        await ref.update({ year, grade, classNo, classKey, name });
+        await copyToSessions(ref.id, { className: name });
+        const assigned = classKey !== c.classKey ? await assignWaitingStudents(classKey) : 0;
+        await audit('학급 고침', `${c.name} → ${year}학년도 ${name}`, who);
+        return { ok: true, assigned };
+      }
+      const name = cleanName(body.name);
+      await ref.update({ name });
+      await copyToSessions(ref.id, { className: name });
+      await audit('학급 고침', `${c.name} → ${name}`, who);
+      return { ok: true };
+    }
+    case 'adminRemoveClass': {
+      const { ref, data: c } = await classFor(token, body.classId);
+      if (String(body.confirmName ?? '').trim() !== c.name) throw new HttpError(400, `확인을 위해 학급 이름 "${c.name}"을 그대로 입력하세요.`);
+      const list = await sessions().where('classId', '==', ref.id).get();
+      let students = 0;
+      for (const s of list.docs) students += await removeSessionDeep(s.ref, s.data());
+      if (c.classKey) await db().doc(`classKeys/${c.classKey}`).delete();
+      const assigned = await db().collection('users').where('classId', '==', ref.id).get();
+      for (const u of assigned.docs) await u.ref.update({ classId: null });
+      await ref.delete();
+      await audit('학급 지움', `${c.year ? `${c.year}학년도 ` : ''}${c.name} (회차 ${list.size}개, 참여 ${students}명의 기록 포함)`, who);
+      return { ok: true };
+    }
+    case 'removeMember': {
+      const { ref, data } = await sessionFor(token, body.sessionId);
+      const uid = String(body.uid);
+      const u = (await db().doc(`users/${uid}`).get()).data();
+      await ref.collection('members').doc(uid).delete();
+      if (u) await db().doc(`users/${uid}`).update({ sessionIds: fieldValue().arrayRemove(ref.id), ...(u.activeSessionId === ref.id ? { activeSessionId: null } : {}) });
+      if (body.withRecord) await db().recursiveDelete(ref.collection('records').doc(uid));
+      await audit('회차에서 학생 뺌', `${data.className} ${data.round}회차: ${u?.researchId ?? uid}${body.withRecord ? ' (기록 포함)' : ''}`, who);
+      return { ok: true };
+    }
+    case 'deleteRecord': {
+      const { ref, data } = await sessionFor(token, body.sessionId);
+      const uid = String(body.uid);
+      const u = (await db().doc(`users/${uid}`).get()).data();
+      await db().recursiveDelete(ref.collection('records').doc(uid));
+      await audit('학생 탐구 기록 지움', `${data.className} ${data.round}회차: ${u?.researchId ?? uid}`, who);
+      return { ok: true };
+    }
+    default:
+      return null;
+  }
+}
+
 async function staffAction(action, { token, body }) {
   if (!isStaff(token)) throw new HttpError(403, '교사만 할 수 있어요.');
   const who = (await me(token)).researchId;
@@ -189,17 +277,8 @@ async function staffAction(action, { token, body }) {
     }
     case 'removeSession': {
       const { ref, data } = await sessionFor(token, body.sessionId);
-      const members = await ref.collection('members').get();
-      for (const m of members.docs) {
-        await db().doc(`users/${m.id}`).update({ sessionIds: fieldValue().arrayRemove(ref.id) }).catch(() => {});
-      }
-      const active = await db().collection('users').where('activeSessionId', '==', ref.id).get();
-      for (const u of active.docs) await u.ref.update({ activeSessionId: null });
-      if (data.code) await db().doc(`sessionCodes/${data.code}`).delete();
-      const cdoc = await classes().doc(data.classId).get();
-      if (cdoc.exists && cdoc.data().currentSessionId === ref.id) await cdoc.ref.update({ currentSessionId: null });
-      await db().recursiveDelete(ref);
-      await audit('세션 지움', `${data.className} ${data.round}회차 (학생 ${members.size}명의 기록 포함)`, who);
+      const n = await removeSessionDeep(ref, data);
+      await audit('세션 지움', `${data.className} ${data.round}회차 (학생 ${n}명의 기록 포함)`, who);
       return { ok: true };
     }
     default:
@@ -227,5 +306,6 @@ async function joinByCode({ token, body }) {
 export default handler(async ({ body, token }) => {
   const action = String(body.action ?? '');
   if (action === 'join') return joinByCode({ token, body });
+  if (['adminEditClass', 'adminRemoveClass', 'removeMember', 'deleteRecord'].includes(action)) return adminAction(action, { token, body });
   return staffAction(action, { token, body });
 });

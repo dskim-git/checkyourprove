@@ -59,7 +59,7 @@ export const ROLES = [
   { id: 'student', label: '학생' },
   { id: 'guest', label: '일반인' },
 ];
-export const STATUS_LABELS = { profile: '정보 입력 전', pending: '승인 대기', approved: '승인됨', rejected: '거절됨' };
+export const STATUS_LABELS = { profile: '정보 입력 전', pending: '승인 대기', approved: '승인됨', rejected: '거절됨', deleted: '삭제됨' };
 export const roleLabel = (id) => ROLES.find((r) => r.id === id)?.label ?? id;
 
 export const DEFAULT_ETHICS = { irb: false, studyTitle: '', approvalNo: '', piName: '', piContact: '', irbContact: '', studyEnd: '', retentionYears: 3, deleteBy: '' };
@@ -251,6 +251,64 @@ export function setGuardianConsent(uid, date) {
   const u = findUser(uid);
   if (u) u.guardianConsent = date || null;
   remote('guardianConsent', { uid, date: date || null });
+  return save();
+}
+
+// ── 관리자의 사용자 관리 (2026-11-28 사용자 요청) ──
+
+/** 가입 정보 정리·검사 (학생: 학년도·다섯 자리 학번·이름, 일반인: 이름·소속·이유). 틀리면 null */
+export function cleanProfileInput(profile) {
+  const p = profile?.kind === 'student'
+    ? { kind: 'student', year: Number(profile.year), studentNo: norm(profile.studentNo), name: String(profile.name ?? '').trim() }
+    : { kind: 'guest', name: String(profile?.name ?? '').trim(), affiliation: String(profile?.affiliation ?? '').trim(), reason: String(profile?.reason ?? '').trim() };
+  if (!p.name || (p.kind === 'student' && (!p.year || !parseStudentNo(p.studentNo))) || (p.kind === 'guest' && (!p.affiliation || !p.reason))) return null;
+  return p;
+}
+
+/** 관리자: 사용자 정보 고치기. 학번이 바뀌면 서버가 반을 다시 배정한다 */
+export function editUser(uid, profile) {
+  const u = findUser(uid);
+  const p = cleanProfileInput(profile);
+  if (!u || !p) return false;
+  u.profile = p;
+  logAction('사용자 정보 고침', u.researchId, actor());
+  remote('editUser', { uid, profile: p });
+  return save();
+}
+
+/** 관리자: 계정 삭제. withResearch면 탐구 기록까지(서버). 내 계정과 마지막 관리자는 지울 수 없다 */
+export function deleteUser(uid, { withResearch = false } = {}) {
+  const d = getAccounts();
+  const u = findUser(uid);
+  if (!u || uid === d.currentUid) return false;
+  if (u.role === 'admin' && d.users.filter((x) => x.role === 'admin' && x.status !== 'deleted').length <= 1) return false;
+  if (isFirebase) {
+    Object.assign(u, { status: 'deleted', email: '', profile: null });
+    remote('deleteUser', { uid, withResearch });
+  } else {
+    d.users = d.users.filter((x) => x.uid !== uid);
+    logAction('계정 삭제', u.researchId, actor());
+  }
+  return save();
+}
+
+/** 관리자: 한 사용자의 연습 기록 지우기(서버 모드) */
+export function deletePracticeOf(uid) {
+  if (!isFirebase || !findUser(uid)) return false;
+  remote('deletePractice', { uid });
+  return true;
+}
+
+/** 관리자: 명단 한 줄 고치기 */
+export function editRosterEntry(year, studentNo, next) {
+  const d = getAccounts();
+  const r = d.roster.find((x) => String(x.year) === String(year) && x.studentNo === studentNo);
+  const clean = { year: Number(next.year), studentNo: norm(next.studentNo), name: String(next.name ?? '').replace(/\s+/g, '') };
+  if (!r || !clean.year || !parseStudentNo(clean.studentNo) || !clean.name) return false;
+  if ((clean.year !== r.year || clean.studentNo !== r.studentNo) && d.roster.some((x) => String(x.year) === String(clean.year) && x.studentNo === clean.studentNo)) return false;
+  Object.assign(r, clean);
+  logAction('학생 명단 고침', `${year} ${studentNo} → ${clean.year} ${clean.studentNo}`, actor());
+  remote('editRoster', { year, studentNo, next: clean });
   return save();
 }
 

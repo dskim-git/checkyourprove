@@ -106,7 +106,7 @@ const ROUTES = [
   { section: 'account', tab: null, title: '시연 데이터', pattern: /^\/demo-data$/, render: renderDemoData },
   { section: 'account', tab: null, title: '내 설정', pattern: /^\/settings(?:\/(account|display|privacy|help))?$/, render: renderSettings },
   { section: 'teacher', role: 'teacher', tab: null, view: 'wide', title: '교사 설정', pattern: /^\/teacher\/settings(?:\/(sessions|research|practice|grading))?$/, render: renderTeacherSettings },
-  { section: 'admin', role: 'admin', tab: null, view: 'wide', title: '관리자 설정', pattern: /^\/admin(?:\/(users|links|ethics|tools|practice|notices|audit))?$/, render: renderAdmin },
+  { section: 'admin', role: 'admin', tab: null, view: 'wide', title: '관리자 설정', pattern: /^\/admin(?:\/(users|links|ethics|tools|practice|notices|data|audit))?$/, render: renderAdmin },
   { section: 'admin', role: 'admin', tab: null, view: 'wide', title: '관리자 설정', pattern: /^\/teacher\/admin(?:\/(links|ethics))?$/, render: (root, [tab]) => renderAdmin(root, [tab ?? 'users']) },
 ];
 

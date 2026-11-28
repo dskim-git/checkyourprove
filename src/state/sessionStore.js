@@ -260,6 +260,57 @@ export function sessionsByClass({ includeSamples = false } = {}) {
   return classes.map((c) => ({ ...c, sessions: sessions.filter((s) => s.classId === c.id).sort((a, b) => a.round - b.round) }));
 }
 
+// ── 관리자의 학급·회차 관리 (2026-11-28 사용자 요청) ──
+
+/** 관리자: 학급 고치기. 반은 학년도·학년·반(서버가 학생을 다시 배정), 기타 모임은 이름 */
+export function adminEditClass(classId, spec) {
+  const data = getSessions();
+  const c = data.classes.find((x) => x.id === classId);
+  if (!c) return false;
+  if (c.kind === 'homeroom') {
+    const year = Number(spec.year);
+    const grade = Number(spec.grade);
+    const classNo = Number(spec.classNo);
+    if (!year || ![1, 2, 3].includes(grade) || !(classNo >= 1)) return false;
+    if (data.classes.some((x) => x.id !== classId && x.kind === 'homeroom' && x.year === year && x.grade === grade && x.classNo === classNo)) return false;
+    Object.assign(c, { year, grade, classNo, name: homeroomName(grade, classNo) });
+    if (isFirebase) backend?.call('adminEditClass', { classId, year, grade, classNo });
+  } else {
+    const name = String(spec.name ?? '').trim();
+    if (!name) return false;
+    c.name = name;
+    if (isFirebase) backend?.call('adminEditClass', { classId, name });
+  }
+  data.sessions.forEach((s) => { if (s.classId === classId) s.className = c.name; });
+  return saveSessions();
+}
+
+/** 관리자: 학급을 회차·학생 기록까지 지운다. 확인을 위해 학급 이름을 그대로 넣어야 한다 */
+export function adminRemoveClass(classId, confirmName) {
+  const data = getSessions();
+  const c = data.classes.find((x) => x.id === classId);
+  if (!c || String(confirmName ?? '').trim() !== c.name) return false;
+  data.classes = data.classes.filter((x) => x.id !== classId);
+  data.sessions = data.sessions.filter((s) => s.classId !== classId);
+  if (!data.sessions.some((s) => s.id === data.activeSessionId)) data.activeSessionId = data.sessions[0]?.id ?? null;
+  if (isFirebase) backend?.call('adminRemoveClass', { classId, confirmName: c.name });
+  return saveSessions();
+}
+
+/** 관리자(서버 모드): 회차에서 학생 빼기(withRecord면 그 회차의 탐구 기록도) */
+export function removeMember(sessionId, uid, withRecord = false) {
+  if (!isFirebase) return false;
+  backend?.call('removeMember', { sessionId, uid, withRecord });
+  return true;
+}
+
+/** 관리자(서버 모드): 한 학생의 그 회차 탐구 기록 지우기 */
+export function deleteStudentRecord(sessionId, uid) {
+  if (!isFirebase) return false;
+  backend?.call('deleteRecord', { sessionId, uid });
+  return true;
+}
+
 // ── 세션 코드 (로드맵 3단계): 학생은 교사가 알려 준 코드를 입력해 그 세션의 AI와 탐구하기에 들어온다 ──
 
 const CODE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'; // 헷갈리는 0·O·1·I 뺌

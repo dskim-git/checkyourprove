@@ -161,6 +161,21 @@ export function removeNotice(id, by) {
   if (n) logAction('공지 내림', n.title, by);
 }
 
+/** 공지 고치기 */
+export function editNotice(id, { title, body = '', audience = 'all', until = '' }, by) {
+  const n = getAdmin().notices.find((x) => x.id === id);
+  const clean = String(title ?? '').trim();
+  if (!n || !clean) return false;
+  Object.assign(n, { title: clean, body: String(body).trim(), audience, until });
+  if (remote) {
+    remote('editNotice', { id, notice: { title: clean, body: n.body, audience, until } });
+    return true;
+  }
+  save();
+  logAction('공지 고침', clean, by);
+  return true;
+}
+
 /** 지금 보여 줄 공지 (역할에 맞고 기한이 지나지 않은 것). role: 'student'|'guest'|'teacher'|'admin'|null(로그인 안 함 → 모두) */
 export function activeNotices(role) {
   const group = role === 'teacher' || role === 'admin' ? 'teachers' : role ? 'students' : null;
@@ -192,6 +207,19 @@ export function closeRequest(id, note, by) {
   }
   save();
   logAction('개인정보 요청 처리', `${r.researchId} ${REQUEST_TYPES.find((t) => t.id === r.type)?.label ?? r.type}${r.note ? `: ${r.note}` : ''}`, by);
+  return true;
+}
+
+/** 개인정보 요청 지우기(처리를 마친 뒤 정리할 때) */
+export function removeRequest(id, by) {
+  const d = getAdmin();
+  d.requests = d.requests.filter((r) => r.id !== id);
+  if (remote) {
+    remote('removeRequest', { id });
+    return true;
+  }
+  save();
+  logAction('개인정보 요청 지움', id, by);
   return true;
 }
 

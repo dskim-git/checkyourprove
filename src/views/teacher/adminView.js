@@ -6,16 +6,20 @@
 //   #/admin/practice  증명 연습 기본값(교사가 학급마다 바꿀 수 있음)
 //   #/admin/notices   공지·안내: 앱 공지(대상·기한), 문의처
 //   #/admin/audit     관리 기록(누가 언제 무엇을), CSV
+//   #/admin/data      학급·기록(2026-11-28): 모든 학급 고치기·지우기(이름 확인), 회차에 들어온 학생, 학생 빼기·탐구 기록 지우기
+//   사용자·가입 탭의 사용자 표에서 정보 고치기·계정 삭제·연습 기록 지우기, 명단·공지 고치기, 요청 지우기(같은 날 추가)
 // 프로토타입: 로그인한 사람이 관리자가 아니면 막는다. 로그인하지 않은 미리보기에서는 볼 수 있게 두고 알린다.
 // TODO(Firebase): 이 화면의 읽기·쓰기는 서버 규칙으로 관리자만 허용한다(사용자 지정 클레임 role=admin).
 
 import {
   addRoster, approveUsers, currentUser, dataDeleteDate, displayName, ethics, getAccounts, isAdmin, linkTableCsv, rejectUser, removeRosterEntry,
   ROLES, saveEthics, setGuardianConsent, setRole, STATUS_LABELS, unlinkAll, unlinkUser,
+  deletePracticeOf, deleteUser, editRosterEntry, editUser, sessionMembers,
 } from '../../state/accountStore.js';
 import { consentDoc, listSurveys, saveConsent } from '../../state/surveyStore.js';
 import {
-  addNotice, auditCsv, auditLog, closeRequest, getAdmin, logAction, NOTICE_AUDIENCES, PRACTICE_FIELDS, REQUEST_TYPES, removeNotice, saveContact,
+  addNotice, auditCsv, auditLog, closeRequest, editNotice, getAdmin, logAction, NOTICE_AUDIENCES, PRACTICE_FIELDS, REQUEST_TYPES, removeNotice,
+  removeRequest, saveContact,
   savePracticeDefaults, saveSignupRules,
 } from '../../state/adminStore.js';
 import { interviewThresholds, resetThresholds, retentionUntil, saveThresholds, setRetentionUntil } from '../../state/interviewStore.js';
@@ -23,7 +27,11 @@ import { THRESHOLD_FIELDS } from '../../data/interview.js';
 import { activeChatTags, activeRubric, getGrading, updateGradingSettings } from '../../state/gradingStore.js';
 import { settingsTabs } from '../../ui/settingsTabs.js';
 import { isFirebase } from '../../state/appMode.js';
-import { findSession, sessionLabel } from '../../state/sessionStore.js';
+import {
+  adminEditClass, adminRemoveClass, deleteStudentRecord, findSession, getSessions, removeMember, sessionLabel, staffList,
+} from '../../state/sessionStore.js';
+import { sessionRecords } from '../../state/researchStore.js';
+import { studentNoLabel } from '../../data/studentNo.js';
 import { retentionState } from '../../state/recordingStore.js';
 import { breadcrumb, notice } from '../../ui/components.js';
 import { escapeHtml, formatDateTime } from '../../ui/dom.js';
@@ -37,6 +45,7 @@ export const ADMIN_TABS = [
   { id: 'tools', label: '연구 도구', href: '#/admin/tools', lead: '모든 학급이 같은 도구로 자료를 모으도록 채점·태그·설문·면담 기준을 정합니다.' },
   { id: 'practice', label: '연습 기본값', href: '#/admin/practice', lead: '증명 연습의 앱 전체 기본값입니다. 교사는 학급마다 바꿀 수 있습니다.' },
   { id: 'notices', label: '공지·안내', href: '#/admin/notices', lead: '앱 위쪽에 보일 공지와, 도움말에 보일 문의처를 정합니다.' },
+  { id: 'data', label: '학급·기록', href: '#/admin/data', lead: '모든 학급과 회차, 회차에 들어온 학생과 탐구 기록을 고치거나 지웁니다. 지운 것은 되돌릴 수 없고 관리 기록에 남습니다.' },
   { id: 'audit', label: '관리 기록', href: '#/admin/audit', lead: '승인, 역할 변경, 연결표 내려받기·지우기 같은 중요한 일을 누가 언제 했는지 남깁니다.' },
 ];
 const who = () => {
@@ -76,6 +85,122 @@ const download = (text, name) => {
 const profileText = (u) => (u.profile?.kind === 'student'
   ? `${u.profile.year}학년도 ${u.profile.studentNo} ${u.profile.name}`
   : u.profile ? [u.profile.name, u.profile.affiliation].filter(Boolean).join(', ') : '정보 입력 전');
+
+/** 사용자 표의 관리 칸: 정보 고치기, 계정 삭제(탐구 기록 포함 여부), 연습 기록 지우기 (2026-11-28) */
+function manageCell(u, myUid) {
+  if (u.status === 'deleted') return '<span class="meta">삭제됨</span>';
+  const p = u.profile ?? {};
+  const id = escapeHtml(u.uid);
+  const kind = p.kind === 'student' ? 'student' : 'guest';
+  const fields = kind === 'student'
+    ? `<div class="field"><label class="field__label" for="eu-y-${id}">학년도</label><input type="number" class="field__input" id="eu-y-${id}" name="year" value="${escapeHtml(p.year ?? THIS_YEAR)}"></div>
+      <div class="field"><label class="field__label" for="eu-n-${id}">학번</label><input type="text" class="field__input" id="eu-n-${id}" name="studentNo" value="${escapeHtml(p.studentNo ?? '')}" maxlength="5" inputmode="numeric"><span class="meta">${escapeHtml(studentNoLabel(p.studentNo))}</span></div>
+      <div class="field"><label class="field__label" for="eu-m-${id}">이름</label><input type="text" class="field__input" id="eu-m-${id}" name="name" value="${escapeHtml(p.name ?? '')}"></div>`
+    : `<div class="field"><label class="field__label" for="eu-m-${id}">이름</label><input type="text" class="field__input" id="eu-m-${id}" name="name" value="${escapeHtml(p.name ?? '')}"></div>
+      <div class="field"><label class="field__label" for="eu-a-${id}">소속</label><input type="text" class="field__input" id="eu-a-${id}" name="affiliation" value="${escapeHtml(p.affiliation ?? '')}"></div>
+      <div class="field"><label class="field__label" for="eu-r-${id}">가입 이유</label><input type="text" class="field__input" id="eu-r-${id}" name="reason" value="${escapeHtml(p.reason ?? '')}"></div>`;
+  return `<details class="disclosure"><summary>고치기</summary><form class="settings-form" data-edit-user="${id}" data-kind="${kind}">${fields}
+      ${kind === 'student' ? '<p class="field__help">학번이나 학년도를 바꾸면 맞는 반에 다시 배정돼요.</p>' : ''}
+      <button type="submit" class="button button--secondary button--small">저장</button></form></details>
+    ${u.uid === myUid ? '' : `<details class="disclosure"><summary>삭제</summary><div class="settings-form" data-delete-user>
+      <p class="meta">구글 로그인 계정, 이름·학번·이메일, 연습 기록을 지웁니다. 탐구 기록은 기본으로 연구 번호로만 남습니다(철회 전 자료 사용 원칙).</p>
+      <label class="check"><input type="checkbox" name="withResearch"><span>탐구 기록도 지우기</span></label>
+      <button type="button" class="button button--ghost button--small" data-action="delete-user">계정 삭제</button></div></details>`}
+    ${isFirebase ? '<button type="button" class="button button--ghost button--small" data-action="delete-practice">연습 기록 지우기</button>' : ''}`;
+}
+
+// ── 학급·기록 (2026-11-28 사용자 요청): 모든 학급·회차, 회차에 들어온 학생과 탐구 기록 ─────────
+
+export function renderAdminData(root) {
+  let status = '';
+  const stagesText = (record) => {
+    const done = [1, 2, 3, 4].filter((n) => record?.stages?.[String(n)]?.submittedAt);
+    if (!record) return '기록 없음';
+    return done.length ? `${done.join('·')}단계 제출` : '진행 중';
+  };
+  const draw = (focus = null) => {
+    if (!isAdmin(currentUser()) && currentUser()) return guard(root, '관리자 설정');
+    const { classes, sessions } = getSessions();
+    const teacherName = (uid) => staffList().find((t) => t.uid === uid)?.name ?? '교사';
+    const blocks = classes.map((c) => {
+      const cs = sessions.filter((s) => s.classId === c.id).sort((a, b) => a.round - b.round);
+      const editForm = c.kind === 'homeroom'
+        ? `<form class="settings-form" data-edit-class="${escapeHtml(c.id)}"><div class="account-grid">
+            <div class="field"><label class="field__label" for="ec-y-${escapeHtml(c.id)}">학년도</label><input type="number" class="field__input" id="ec-y-${escapeHtml(c.id)}" name="year" value="${escapeHtml(c.year)}"></div>
+            <div class="field"><label class="field__label" for="ec-g-${escapeHtml(c.id)}">학년</label><select class="field__select" id="ec-g-${escapeHtml(c.id)}" name="grade">${[1, 2, 3].map((g) => `<option value="${g}"${g === c.grade ? ' selected' : ''}>${g}학년</option>`).join('')}</select></div>
+            <div class="field"><label class="field__label" for="ec-c-${escapeHtml(c.id)}">반</label><input type="number" class="field__input" id="ec-c-${escapeHtml(c.id)}" name="classNo" value="${escapeHtml(c.classNo)}" min="1" max="99"></div>
+          </div><p class="field__help">학년도·학년·반을 바꾸면 예전 반 학생의 배정이 풀리고, 새 학년도·학년·반의 학생이 배정됩니다(이미 쓴 기록은 그대로).</p>
+          <button type="submit" class="button button--secondary button--small">저장</button></form>`
+        : `<form class="inline-form" data-edit-class="${escapeHtml(c.id)}"><label class="visually-hidden" for="ec-n-${escapeHtml(c.id)}">모임 이름</label><input type="text" class="field__input" id="ec-n-${escapeHtml(c.id)}" name="name" value="${escapeHtml(c.name)}"><button type="submit" class="button button--secondary button--small">저장</button></form>`;
+      const rounds = cs.map((s) => {
+        const members = sessionMembers(s.id).filter((u) => u.role === 'student' || u.role === 'guest');
+        const records = sessionRecords(s.id);
+        const rows = members.map((u) => `<tr data-uid="${escapeHtml(u.uid)}" data-session-id="${escapeHtml(s.id)}">
+            <th scope="row" class="num">${escapeHtml(u.researchId)}</th>
+            <td>${escapeHtml(u.profile?.name || '–')}${u.profile?.studentNo ? ` <span class="meta">${escapeHtml(u.profile.studentNo)}</span>` : ''}</td>
+            <td>${escapeHtml(stagesText(records.get(u.uid)))}</td>
+            <td><button type="button" class="button button--ghost button--small" data-action="delete-record"${records.get(u.uid) ? '' : ' disabled'}>탐구 기록 지우기</button>
+              <button type="button" class="button button--ghost button--small" data-action="remove-member">회차에서 빼기</button></td>
+          </tr>`).join('');
+        return `<li class="session-row${s.isCurrent ? ' is-active' : ''}"><div class="session-row__main">
+            <strong class="session-row__round">${s.round}회차</strong>${s.isCurrent ? ' <span class="tag">반 학생이 활동하는 회차</span>' : ''}
+            <span class="session-row__meta">세션 코드 ${escapeHtml(s.code ? `${s.code.slice(0, 3)}-${s.code.slice(3)}` : '–')}, 들어온 학생 ${members.length}명, 탐구 기록 ${records.size}개</span>
+            ${isFirebase ? (members.length ? `<div class="table-wrap" role="region" aria-label="${escapeHtml(c.name)} ${s.round}회차 학생" tabindex="0"><table class="data-table grade-table">
+              <thead><tr><th scope="col">연구 번호</th><th scope="col">이름</th><th scope="col">탐구 기록</th><th scope="col">관리</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="meta">들어온 학생이 없습니다.</p>') : '<p class="meta">학생별 관리는 서버에 연결된 앱에서 할 수 있어요.</p>'}
+          </div></li>`;
+      }).join('');
+      return `<section class="panel session-class" aria-labelledby="dc-${escapeHtml(c.id)}">
+        <h2 id="dc-${escapeHtml(c.id)}" class="section-title">${escapeHtml(c.name)} <span class="meta">${c.kind === 'homeroom' ? `${escapeHtml(c.year)}학년도 반` : '기타 모임'}${isFirebase ? `, 담당 ${escapeHtml((c.teacherUids ?? []).map(teacherName).join(', ') || '–')}` : ''}</span></h2>
+        <details class="disclosure"><summary>고치기</summary>${editForm}</details>
+        <details class="disclosure"><summary>지우기</summary><form class="settings-form" data-remove-class="${escapeHtml(c.id)}">
+          <p class="meta">이 학급의 회차 ${cs.length}개와 그 회차의 모든 학생 탐구 기록이 함께 지워집니다. 되돌릴 수 없습니다.</p>
+          <div class="field"><label class="field__label" for="rc-${escapeHtml(c.id)}">확인을 위해 학급 이름 "${escapeHtml(c.name)}"을 그대로 입력하세요</label><input type="text" class="field__input" id="rc-${escapeHtml(c.id)}" name="confirmName" autocomplete="off"></div>
+          <button type="submit" class="button button--ghost button--small">학급 지우기</button></form></details>
+        ${cs.length ? `<ul class="session-list" aria-label="${escapeHtml(c.name)} 회차">${rounds}</ul>` : '<p class="meta">회차가 없습니다.</p>'}
+      </section>`;
+    }).join('');
+    root.innerHTML = `<div class="page page--teacher page--admin">
+      ${chrome('data')}
+      <p class="save-status" role="status" data-admin-status tabindex="-1">${escapeHtml(status)}</p>
+      ${classes.length ? blocks : '<p class="empty-text">아직 학급이 없습니다. 교사 설정의 학급·세션에서 만듭니다.</p>'}
+    </div>`;
+    if (focus) root.querySelector(focus)?.focus();
+  };
+  const onSubmit = (event) => {
+    const f = event.target;
+    event.preventDefault();
+    if (f.matches('[data-edit-class]')) {
+      const v = (n) => f.querySelector(`[name="${n}"]`)?.value;
+      status = adminEditClass(f.dataset.editClass, { year: v('year'), grade: v('grade'), classNo: v('classNo'), name: v('name') }) ? '학급을 고쳤습니다.' : '값을 바르게 입력하세요(같은 학년도·학년·반이 이미 있으면 안 돼요).';
+    } else if (f.matches('[data-remove-class]')) {
+      const ok = adminRemoveClass(f.dataset.removeClass, f.querySelector('[name="confirmName"]').value);
+      status = ok ? '학급을 지웠습니다.' : '학급 이름이 맞지 않아 지우지 않았습니다.';
+    } else return;
+    draw('[data-admin-status]');
+  };
+  const onClick = (event) => {
+    const b = event.target.closest('[data-action]');
+    if (!b) return;
+    const row = b.closest('[data-uid]');
+    const uid = row?.dataset.uid;
+    const sid = row?.dataset.sessionId;
+    if (b.dataset.action === 'delete-record') {
+      if (!window.confirm('이 학생의 이 회차 탐구 기록(필기 포함)을 지울까요? 되돌릴 수 없습니다.')) return;
+      status = deleteStudentRecord(sid, uid) ? '탐구 기록을 지웠습니다.' : '서버 모드에서만 할 수 있어요.';
+    } else if (b.dataset.action === 'remove-member') {
+      const withRecord = window.confirm('이 학생을 회차에서 뺍니다. 이 회차의 탐구 기록도 함께 지울까요? (취소를 누르면 기록은 남기고 빼기만 합니다)');
+      status = removeMember(sid, uid, withRecord) ? `회차에서 뺐습니다${withRecord ? '(기록 포함)' : ''}. 반 학생이면 반 배정을 바꾸지 않는 한 새 회차에는 다시 들어갑니다.` : '서버 모드에서만 할 수 있어요.';
+    } else return;
+    draw('[data-admin-status]');
+  };
+  draw();
+  root.addEventListener('submit', onSubmit);
+  root.addEventListener('click', onClick);
+  return () => {
+    root.removeEventListener('submit', onSubmit);
+    root.removeEventListener('click', onClick);
+  };
+}
 
 // ── 가입 승인·명단·사용자 ─────────────────────
 
@@ -124,7 +249,12 @@ export function renderAdminUsers(root) {
             <thead><tr><th scope="col">학년도</th><th scope="col">학번</th><th scope="col">이름</th><th scope="col">가입</th><th scope="col"><span class="visually-hidden">지우기</span></th></tr></thead>
             <tbody>${d.roster.map((r) => {
               const joined = d.users.find((u) => u.profile?.kind === 'student' && String(u.profile.year) === String(r.year) && u.profile.studentNo === r.studentNo);
-              return `<tr><td class="num">${r.year}</td><td class="num">${escapeHtml(r.studentNo)}</td><th scope="row">${escapeHtml(r.name)}</th><td>${joined ? escapeHtml(STATUS_LABELS[joined.status]) : '<span class="meta">가입 전</span>'}</td><td><button type="button" class="button button--ghost button--small" data-action="roster-remove" data-year="${r.year}" data-no="${escapeHtml(r.studentNo)}">지우기</button></td></tr>`;
+              return `<tr><td class="num">${r.year}</td><td class="num">${escapeHtml(r.studentNo)}</td><th scope="row">${escapeHtml(r.name)}</th><td>${joined ? escapeHtml(STATUS_LABELS[joined.status]) : '<span class="meta">가입 전</span>'}</td><td><button type="button" class="button button--ghost button--small" data-action="roster-remove" data-year="${r.year}" data-no="${escapeHtml(r.studentNo)}">지우기</button>
+                <details class="disclosure"><summary>고치기</summary><form class="inline-form" data-edit-roster data-year="${r.year}" data-no="${escapeHtml(r.studentNo)}">
+                  <label class="visually-hidden" for="re-y-${r.year}-${escapeHtml(r.studentNo)}">학년도</label><input type="number" class="field__input" id="re-y-${r.year}-${escapeHtml(r.studentNo)}" name="year" value="${r.year}">
+                  <label class="visually-hidden" for="re-n-${r.year}-${escapeHtml(r.studentNo)}">학번</label><input type="text" class="field__input" id="re-n-${r.year}-${escapeHtml(r.studentNo)}" name="studentNo" value="${escapeHtml(r.studentNo)}" maxlength="5" inputmode="numeric">
+                  <label class="visually-hidden" for="re-m-${r.year}-${escapeHtml(r.studentNo)}">이름</label><input type="text" class="field__input" id="re-m-${r.year}-${escapeHtml(r.studentNo)}" name="name" value="${escapeHtml(r.name)}">
+                  <button type="submit" class="button button--secondary button--small">저장</button></form></details></td></tr>`;
             }).join('')}</tbody>
           </table></div>
         </details>` : ''}
@@ -133,7 +263,7 @@ export function renderAdminUsers(root) {
         <h2 id="ad-users" class="section-title">사용자 (${others.length})</h2>
         <p class="meta">역할: 관리자(가입 승인·연결표·연구 윤리 설정과 교사 일), 교사(학급·세션·채점·분석·면담), 학생(연습과 세션 코드로 탐구), 일반인(연습, 세션 코드가 있으면 탐구. 탐구 기록은 연구 분석에서 빠짐).</p>
         ${others.length ? `<div class="table-wrap" role="region" aria-labelledby="ad-users" tabindex="0"><table class="data-table grade-table" data-users-table>
-          <thead><tr><th scope="col">이름</th><th scope="col">정보</th><th scope="col">상태</th><th scope="col">역할</th><th scope="col">연구 번호</th><th scope="col">세션</th></tr></thead>
+          <thead><tr><th scope="col">이름</th><th scope="col">정보</th><th scope="col">상태</th><th scope="col">역할</th><th scope="col">연구 번호</th><th scope="col">세션</th><th scope="col">관리</th></tr></thead>
           <tbody>${others.map((u) => `<tr data-uid="${escapeHtml(u.uid)}">
             <th scope="row">${escapeHtml(displayName(u))}${u.uid === d.currentUid ? ' <span class="tag tag--mint">나</span>' : ''}</th>
             <td>${escapeHtml(profileText(u))}<br><span class="meta">${escapeHtml(u.email)}</span></td>
@@ -141,6 +271,7 @@ export function renderAdminUsers(root) {
             <td><label class="visually-hidden" for="role-${escapeHtml(u.uid)}">${escapeHtml(displayName(u))} 역할</label><select class="field__select admin-role" id="role-${escapeHtml(u.uid)}" name="role" data-uid="${escapeHtml(u.uid)}">${ROLES.map((r) => `<option value="${r.id}"${r.id === u.role ? ' selected' : ''}>${r.label}</option>`).join('')}</select></td>
             <td class="num">${escapeHtml(u.researchId)}</td>
             <td>${escapeHtml(u.sessionIds.map(sessionLabelOf).join(', ') || '–')}</td>
+            <td class="admin-manage">${manageCell(u, d.currentUid)}</td>
           </tr>`).join('')}</tbody>
         </table></div>` : '<p class="empty-text">아직 사용자가 없습니다.</p>'}
         <p class="save-status" role="status" data-admin-status>${escapeHtml(status)}</p>
@@ -165,6 +296,14 @@ export function renderAdminUsers(root) {
       if (!window.confirm('이 가입 신청을 거절할까요?')) return;
       rejectUser(uid);
       status = '거절했습니다.';
+    } else if (a === 'delete-user') {
+      const withResearch = Boolean(b.closest('[data-delete-user]')?.querySelector('[name="withResearch"]')?.checked);
+      const u = getAccounts().users.find((x) => x.uid === uid);
+      if (!window.confirm(`${u?.researchId ?? ''} 계정을 삭제할까요? 구글 로그인 계정, 이름·학번·이메일, 연습 기록이 지워지고${withResearch ? ' 탐구 기록도 모두 지워집니다' : ' 탐구 기록은 연구 번호로만 남습니다'}. 되돌릴 수 없습니다.`)) return;
+      status = deleteUser(uid, { withResearch }) ? '계정을 삭제했습니다.' : '이 계정은 지울 수 없어요(내 계정이거나 마지막 관리자).';
+    } else if (a === 'delete-practice') {
+      if (!window.confirm('이 사용자의 증명 연습 기록을 모두 지울까요? 되돌릴 수 없습니다.')) return;
+      status = deletePracticeOf(uid) ? '연습 기록을 지웠습니다.' : '서버 모드에서만 할 수 있어요.';
     } else if (a === 'roster-remove') {
       removeRosterEntry(b.dataset.year, b.dataset.no);
       status = '명단에서 지웠습니다.';
@@ -172,6 +311,21 @@ export function renderAdminUsers(root) {
     draw('#ad-pending');
   };
   const onSubmit = (event) => {
+    const f = event.target;
+    if (f.matches('[data-edit-user]')) {
+      event.preventDefault();
+      const v = (n) => f.querySelector(`[name="${n}"]`)?.value ?? '';
+      const ok = editUser(f.dataset.editUser, { kind: f.dataset.kind, year: v('year'), studentNo: v('studentNo'), name: v('name'), affiliation: v('affiliation'), reason: v('reason') });
+      status = ok ? '사용자 정보를 고쳤습니다.' : (f.dataset.kind === 'student' ? '학년도, 학번(다섯 자리), 이름을 바르게 입력하세요.' : '이름, 소속, 가입 이유를 입력하세요.');
+      return draw('[data-admin-status]');
+    }
+    if (f.matches('[data-edit-roster]')) {
+      event.preventDefault();
+      const v = (n) => f.querySelector(`[name="${n}"]`).value;
+      const ok = editRosterEntry(f.dataset.year, f.dataset.no, { year: v('year'), studentNo: v('studentNo'), name: v('name') });
+      status = ok ? '명단을 고쳤습니다.' : '학년도, 학번(다섯 자리), 이름을 바르게 입력하세요(같은 학번이 이미 있으면 안 돼요).';
+      return draw('[data-admin-status]');
+    }
     if (!event.target.matches('[data-roster-form]')) return;
     event.preventDefault();
     rosterYear = Number(event.target.querySelector('[name="year"]').value) || THIS_YEAR;
@@ -218,7 +372,7 @@ export function renderAdminLinks(root) {
         ${reqs.length ? `<ul class="admin-list" data-requests>${reqs.map((q) => `<li class="admin-row" data-req="${escapeHtml(q.id)}">
           <div class="admin-row__main"><strong>${escapeHtml(REQUEST_TYPES.find((t) => t.id === q.type)?.label ?? q.type)}</strong> <span class="tag${q.status === 'open' ? ' tag--warn' : ' tag--mint'}">${q.status === 'open' ? '처리 전' : '처리함'}</span>
             <span class="meta">${escapeHtml(q.researchId)}, ${escapeHtml(formatDateTime(q.at))}${q.reason ? `, 이유: ${escapeHtml(q.reason)}` : ''}${q.doneAt ? `, ${escapeHtml(formatDateTime(q.doneAt))} 처리${q.note ? `: ${escapeHtml(q.note)}` : ''}` : ''}</span></div>
-          ${q.status === 'open' ? `<div class="inline-form"><label class="visually-hidden" for="rq-note-${escapeHtml(q.id)}">처리 메모</label><input type="text" class="field__input" id="rq-note-${escapeHtml(q.id)}" name="note" placeholder="처리 메모 (예: 연결 정보 지움)"><button type="button" class="button button--secondary button--small" data-action="req-done">처리함</button></div>` : ''}
+          ${q.status === 'open' ? `<div class="inline-form"><label class="visually-hidden" for="rq-note-${escapeHtml(q.id)}">처리 메모</label><input type="text" class="field__input" id="rq-note-${escapeHtml(q.id)}" name="note" placeholder="처리 메모 (예: 연결 정보 지움)"><button type="button" class="button button--secondary button--small" data-action="req-done">처리함</button></div>` : '<div class="actions actions--start"><button type="button" class="button button--ghost button--small" data-action="req-remove">지우기</button></div>'}
         </li>`).join('')}</ul>` : '<p class="empty-text">받은 요청이 없습니다.</p>'}
       </section>
       <section class="panel" aria-labelledby="lk-table">
@@ -260,6 +414,12 @@ export function renderAdminLinks(root) {
       const li = b.closest('[data-req]');
       closeRequest(li.dataset.req, li.querySelector('[name="note"]').value, who());
       status = '요청을 처리함으로 바꾸었습니다.';
+      return draw('#rq-heading');
+    }
+    if (a === 'req-remove') {
+      if (!window.confirm('이 요청을 목록에서 지울까요?')) return;
+      removeRequest(b.closest('[data-req]').dataset.req, who());
+      status = '요청을 지웠습니다.';
       return draw('#rq-heading');
     }
     if (a === 'unlink') {
@@ -540,6 +700,14 @@ export function renderAdminNotices(root) {
           <div class="admin-row__main"><strong>${escapeHtml(n.title)}</strong> <span class="tag">${escapeHtml(NOTICE_AUDIENCES.find((a) => a.id === n.audience)?.label ?? '')}</span>${n.until && n.until < today ? ' <span class="tag tag--warn">기한 지남</span>' : ''}
             ${n.body ? `<span>${escapeHtml(n.body)}</span>` : ''}<span class="meta">${escapeHtml(formatDateTime(n.createdAt))}${n.until ? `, ${escapeHtml(n.until)}까지` : ''}</span></div>
           <div class="actions actions--start"><button type="button" class="button button--ghost button--small" data-action="notice-remove">내리기</button></div>
+          <details class="disclosure"><summary>고치기</summary><form class="settings-form" data-edit-notice="${escapeHtml(n.id)}">
+            <div class="field"><label class="field__label" for="ne-t-${escapeHtml(n.id)}">제목</label><input type="text" class="field__input" id="ne-t-${escapeHtml(n.id)}" name="title" value="${escapeHtml(n.title)}"></div>
+            <div class="field"><label class="field__label" for="ne-b-${escapeHtml(n.id)}">내용</label><textarea class="field__input" id="ne-b-${escapeHtml(n.id)}" name="body" rows="2">${escapeHtml(n.body ?? '')}</textarea></div>
+            <div class="account-grid">
+              <div class="field"><label class="field__label" for="ne-a-${escapeHtml(n.id)}">보일 사람</label><select class="field__select" id="ne-a-${escapeHtml(n.id)}" name="audience">${NOTICE_AUDIENCES.map((x) => `<option value="${x.id}"${x.id === n.audience ? ' selected' : ''}>${x.label}</option>`).join('')}</select></div>
+              <div class="field"><label class="field__label" for="ne-u-${escapeHtml(n.id)}">이날까지</label><input type="date" class="field__input" id="ne-u-${escapeHtml(n.id)}" name="until" value="${escapeHtml(n.until ?? '')}"></div>
+            </div>
+            <button type="submit" class="button button--secondary button--small">저장</button></form></details>
         </li>`).join('')}</ul>` : '<p class="empty-text">올린 공지가 없습니다.</p>'}
       </section>
       <section class="panel" aria-labelledby="nt-contact">
@@ -556,6 +724,13 @@ export function renderAdminNotices(root) {
     if (focus) root.querySelector(focus)?.focus();
   };
   const onSubmit = (event) => {
+    const ef = event.target.closest('[data-edit-notice]');
+    if (ef) {
+      event.preventDefault();
+      const v = (n) => ef.querySelector(`[name="${n}"]`).value;
+      status = editNotice(ef.dataset.editNotice, { title: v('title'), body: v('body'), audience: v('audience'), until: v('until') }, who()) ? '공지를 고쳤습니다.' : '제목을 쓰세요.';
+      return draw('#nt-list');
+    }
     if (!event.target.matches('[data-notice-form]')) return;
     event.preventDefault();
     const f = event.target;
@@ -624,7 +799,7 @@ export function renderAdminAudit(root) {
 
 /** #/admin/:tab */
 export function renderAdmin(root, [tab]) {
-  const map = { users: renderAdminUsers, links: renderAdminLinks, ethics: renderEthics, tools: renderAdminTools, practice: renderAdminPractice, notices: renderAdminNotices, audit: renderAdminAudit };
+  const map = { users: renderAdminUsers, links: renderAdminLinks, ethics: renderEthics, tools: renderAdminTools, practice: renderAdminPractice, notices: renderAdminNotices, data: renderAdminData, audit: renderAdminAudit };
   if (!tab) return renderAdminBoard(root);
   return (map[tab] ?? renderAdminUsers)(root);
 }
