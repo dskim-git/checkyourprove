@@ -52,3 +52,35 @@ export function principleStats(students) {
     reflections: recs.map((x) => ({ who: x.s.pseudonym, text: x.pr.reflection })).filter((r) => r.text),
   };
 }
+
+// ── 진행 화면의 응답 현황 (2026-11-28 사용자 요청): 회차의 모든 학생(마치지 않은 학생 포함), 처음 고른 답 기준 ──
+
+/** 문항 하나: { started(활동을 시작한 학생), answered, correct, rate, seconds, options: [{ text, isAnswer, count, students: [가명] }] } */
+export function itemResponses(students, item) {
+  const recs = students.filter((s) => s.record?.principle);
+  const answered = recs.map((s) => ({ s, a: s.record.principle.answers?.[item.id] })).filter((x) => x.a);
+  const secs = answered.map((x) => x.a.ms).filter((v) => v != null);
+  return {
+    started: recs.length,
+    answered: answered.length,
+    correct: answered.filter((x) => x.a.correct).length,
+    rate: answered.length ? Math.round((answered.filter((x) => x.a.correct).length / answered.length) * 100) : null,
+    seconds: secs.length ? Math.round(secs.reduce((a, b) => a + b, 0) / secs.length / 1000) : null,
+    options: item.options.map((text, k) => {
+      const who = answered.filter((x) => x.a.choice === k).map((x) => x.s.pseudonym);
+      return { text, isAnswer: k === item.answer, count: who.length, students: who };
+    }),
+    waiting: recs.filter((s) => !s.record.principle.answers?.[item.id]).map((s) => s.pseudonym),
+  };
+}
+
+/** 설명 화면 하나를 본 학생 수 */
+export function slideViews(students, slideId) {
+  const recs = students.filter((s) => s.record?.principle);
+  return { started: recs.length, seen: recs.filter((s) => s.record.principle.slides?.[slideId]).length };
+}
+
+/** 마무리 답(쓴 학생만) */
+export function reflectionList(students) {
+  return students.filter((s) => s.record?.principle?.reflection).map((s) => ({ who: s.pseudonym, text: s.record.principle.reflection, done: Boolean(s.record.principle.finishedAt) }));
+}

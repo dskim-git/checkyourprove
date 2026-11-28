@@ -1657,3 +1657,21 @@ body[data-view='landing'] .app-main { padding-bottom: var(--space-xl); }
 .pace-step__count { flex: none; min-width: 2.6rem; text-align: right; color: var(--color-muted); font-size: var(--text-sm); }
 .pace-step.is-current .pace-step__count { color: var(--color-ink-2); }
 .pace-arrivals { list-style: none; padding: 0 0 var(--space-xs); }
+
+/* 원리 활동 진행: 보고 있는 화면의 응답 현황 (2026-11-28) */
+.pace__main { display: grid; gap: var(--space-lg); align-content: start; min-width: 0; }
+.pace-responses { display: grid; gap: var(--space-sm); }
+.resp-options { display: grid; gap: var(--space-sm); margin: 0; padding: 0; list-style: none; }
+.resp-option { display: grid; gap: var(--space-2xs); padding: var(--space-sm) var(--space-md); border-radius: var(--radius-stock); background: var(--color-paper-2); }
+.resp-option.is-answer { background: var(--color-mint-soft); }
+.resp-option__head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2xs) var(--space-xs); }
+.resp-option__no { flex: none; min-width: 1.4rem; font-weight: var(--display-weight); color: var(--color-muted); }
+.resp-option__text { flex: 1; min-width: 0; }
+.resp-option__head .tag { display: inline-flex; align-items: center; gap: var(--space-3xs); }
+.resp-option__head .tag .icon { width: 14px; height: 14px; }
+.resp-option__bar { display: flex; align-items: center; gap: var(--space-xs); min-width: 0; }
+.resp-option__fill { flex: none; height: 12px; min-width: 2px; max-width: calc(100% - 6rem); border-radius: 0 4px 4px 0; background: var(--color-chart-ai); }
+.resp-option.is-answer .resp-option__fill { background: var(--color-mint-deep); }
+.resp-option__count { font-size: var(--text-sm); color: var(--color-ink-2); }
+.resp-option__who p, .pace-responses details p { margin: var(--space-2xs) 0 0; display: flex; flex-wrap: wrap; gap: var(--space-3xs); }
+.resp-reflections { display: grid; gap: var(--space-xs); margin: 0; padding: 0; list-style: none; }

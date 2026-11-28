@@ -14,6 +14,7 @@ import { breadcrumb, notice } from '../../ui/components.js';
 import { itemCardHtml } from '../research/principleParts.js';
 import { researchStudents } from '../../state/researchRoster.js';
 import { isFirebase } from '../../state/appMode.js';
+import { itemResponses, reflectionList, slideViews } from '../../services/principleAnalysis.js';
 import { mountSlide, slideHtml } from '../research/principleSlides.js';
 
 const LAST = PRINCIPLE_STEPS.length - 1;
@@ -29,10 +30,13 @@ export function furthestStep(principle) {
   return far;
 }
 
+/** 이 회차의 학생(예시 학생 제외) */
+const sessionStudents = (sessionId) => researchStudents({ includeSamples: false, sessionIds: [sessionId] });
+
 /** 회차의 화면별 도착 수: { total(시작한 학생), finished, reached: [i번 화면까지 온 학생 수] } */
 export function arrivals(sessionId) {
-  const fars = researchStudents({ includeSamples: false, sessionIds: [sessionId] })
-    .filter((s) => !s.guest && s.record?.principle)
+  const fars = sessionStudents(sessionId)
+    .filter((s) => s.record?.principle)
     .map((s) => ({ far: furthestStep(s.record.principle), done: Boolean(s.record.principle.finishedAt) }));
   return {
     total: fars.length,
@@ -89,6 +93,35 @@ export function renderPrinciplePace(root) {
     }).join('');
   }
 
+  /** 보고 있는 화면의 응답 현황(2026-11-28): 문항은 보기마다 고른 학생, 마무리는 쓴 답, 설명은 본 학생 수. 크게 보기에는 나오지 않는다 */
+  function responsesHtml() {
+    const step = PRINCIPLE_STEPS[preview];
+    // 이 화면은 한 회차만 보므로 이름은 연구 번호만(회차 이름을 붙이지 않음)
+    const students = sessionStudents(sessionId).map((s) => ({ ...s, pseudonym: s.researchId ?? s.pseudonym }));
+    const head = (extra) => `<div class="section-head"><h2 id="resp-title" class="section-title">응답 현황 <span class="meta">${escapeHtml(stepLabel(step).split('.')[0])}</span></h2>${extra}</div>`;
+    if (step.kind === 'slide') {
+      const v = slideViews(students, step.id);
+      return `${head('')}<p class="meta">이 설명 화면을 본 학생 <strong class="num">${v.seen}</strong>명 / 활동을 시작한 학생 ${v.started}명</p>`;
+    }
+    if (step.kind === 'end') {
+      const list = reflectionList(students);
+      return `${head(`<span class="meta">${list.length}명이 씀</span>`)}
+        <p class="meta">"${escapeHtml(PRINCIPLE_REFLECTION)}"</p>
+        ${list.length ? `<ul class="resp-reflections">${list.map((r) => `<li><span class="tag">${escapeHtml(r.who)}</span> ${escapeHtml(r.text)}</li>`).join('')}</ul>` : '<p class="empty-text">아직 쓴 학생이 없어요.</p>'}`;
+    }
+    const item = PRINCIPLE_ITEMS.find((it) => it.id === step.id);
+    const r = itemResponses(students, item);
+    const top = Math.max(1, ...r.options.map((o) => o.count));
+    return `${head(`<span class="meta">답한 학생 <strong class="num">${r.answered}</strong>명 / 시작한 학생 ${r.started}명${r.rate != null ? `, 정답률 <strong class="num">${r.rate}%</strong>` : ''}${r.seconds != null ? `, 평균 ${r.seconds}초` : ''}</span>`)}
+      <ol class="resp-options">${r.options.map((o, k) => `<li class="resp-option${o.isAnswer ? ' is-answer' : ''}">
+        <div class="resp-option__head"><span class="resp-option__no num">${k + 1}</span><span class="resp-option__text">${escapeHtml(o.text)}</span>${o.isAnswer ? `<span class="tag tag--mint">${icons.check}<span>정답</span></span>` : ''}</div>
+        <div class="resp-option__bar"><span class="resp-option__fill" style="width:${Math.round((o.count / top) * 100)}%"></span><span class="resp-option__count num">${o.count}명${r.answered ? ` (${Math.round((o.count / r.answered) * 100)}%)` : ''}</span></div>
+        ${o.students.length ? `<details class="disclosure resp-option__who"><summary>고른 학생 ${o.students.length}명</summary><p>${o.students.map((n) => `<span class="tag">${escapeHtml(n)}</span>`).join(' ')}</p></details>` : ''}
+      </li>`).join('')}</ol>
+      ${r.waiting.length ? `<details class="disclosure"><summary>아직 답하지 않은 학생 ${r.waiting.length}명</summary><p>${r.waiting.map((n) => `<span class="tag">${escapeHtml(n)}</span>`).join(' ')}</p></details>` : ''}
+      <p class="meta">처음 고른 답 기준입니다(학생은 답을 바꿀 수 없어요). 학생이 답하면 바로 바뀝니다.</p>`;
+  }
+
   function statusText() {
     if (!pacing.paced) return '진행 제어가 꺼져 있어 학생이 자기 속도로 끝까지 진행합니다.';
     return `학생에게 열린 마지막 화면: ${stepLabel(PRINCIPLE_STEPS[pacing.openUpTo])}`;
@@ -132,12 +165,16 @@ export function renderPrinciplePace(root) {
         <section class="panel pace-control" aria-labelledby="pace-title" data-region="control"></section>
         <div class="pace">
           <nav class="pace__list panel" aria-label="원리 활동 화면 목록"><ol class="pace-groups" data-region="list"></ol></nav>
-          <div class="pace__stage" id="pace-stage"></div>
+          <div class="pace__main">
+            <div class="pace__stage" id="pace-stage"></div>
+            <section class="panel pace-responses" aria-labelledby="resp-title" data-region="responses"></section>
+          </div>
         </div>
       </div>`;
     }
     root.querySelector('[data-region="control"]').innerHTML = controlHtml();
     root.querySelector('[data-region="list"]').innerHTML = listHtml();
+    root.querySelector('[data-region="responses"]').innerHTML = responsesHtml();
     const stage = root.querySelector('#pace-stage');
     stage.innerHTML = stageInner();
     unmountSlide = PRINCIPLE_STEPS[preview].kind === 'slide' ? mountSlide(stage) : null;
@@ -191,11 +228,24 @@ export function renderPrinciplePace(root) {
   const onFullscreen = () => draw();
   // 학생 기록이 바뀌면(서버 모드: 학생 기기에서 진행) 목록의 도착 수만 다시 그린다
   const redrawList = () => {
+    // 진행 중 세션이 바뀌었으면(로그인 직후 서버 값이 들어옴, 다른 탭에서 바꿈) 화면 전체를 다시 그린다
+    if (getClassroom().sessionId !== sessionId) {
+      window.dispatchEvent(new Event('hashchange'));
+      return;
+    }
     const list = root.querySelector('[data-region="list"]');
     if (!list) return;
     const focused = document.activeElement?.closest?.('[data-preview]')?.dataset.preview;
     list.innerHTML = listHtml();
     if (focused != null) list.querySelector(`[data-preview="${focused}"]`)?.focus();
+    // 응답 현황: 펼친 학생 목록은 펼친 채로 둔다
+    const resp = root.querySelector('[data-region="responses"]');
+    if (resp) {
+      const open = [...resp.querySelectorAll('details')].map((d, i) => (d.open ? i : -1)).filter((i) => i >= 0);
+      resp.innerHTML = responsesHtml();
+      const ds = resp.querySelectorAll('details');
+      open.forEach((i) => { if (ds[i]) ds[i].open = true; });
+    }
   };
   window.addEventListener('checkyourprove:data', redrawList);
 
