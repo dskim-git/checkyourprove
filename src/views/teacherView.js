@@ -1,15 +1,13 @@
 // 교사 업무판 (설정 정리 작업, 2026-11-27 사용자 결정): 설정은 빼고 오늘 할 일만 둔다.
 // 공지·보관 기한 알림, 진행 중 세션(세션 코드, 탐구 열기·단계 열기 빠른 스위치), 업무 바로가기, 증명 연습·탐구 진행 현황.
+// 증명 연습 현황은 teacher/practiceBoard.js(학급마다 탭, 실제 기록, 2026-11-28).
 // 설정은 교사 설정(#/teacher/settings), 관리자 설정(#/admin), 내 설정(#/settings)으로 나뉜다.
 
 import { isFirebase } from '../state/appMode.js';
 import { sessionRecords } from '../state/researchStore.js';
 import { findUser } from '../state/accountStore.js';
-import { METHODS, getMethod } from '../data/methods.js';
-import { LEVELS, getLevel } from '../data/levels.js';
 import { getProblem } from '../data/problems/index.js';
 import { RESEARCH_STAGES } from '../data/research.js';
-import { SAMPLE_ACTIVITY } from '../data/sampleRecords.js';
 import { getClassroom, saveClassroom } from '../state/classroomStore.js';
 import { activeSession, ensureSessionCode, formatCode, getSessions, sessionLabel, setActiveSession } from '../state/sessionStore.js';
 import { sessionMembers } from '../state/accountStore.js';
@@ -22,6 +20,7 @@ import { breadcrumb, notice } from '../ui/components.js';
 import { formatActive } from './research/stageView.js';
 import { PROOF_HELP_MIN } from '../services/proofHelp.js';
 import { fillRetentionAlert } from './teacher/recordingsView.js';
+import { mountPracticeBoard, practiceBoardHtml } from './teacher/practiceBoard.js';
 
 const TASKS = [
   { href: '#/teacher/grading', title: '증명 채점', desc: '1·2·4단계 증명을 루브릭으로 채점' },
@@ -54,6 +53,7 @@ export function renderTeacher(root) {
           <h2 id="tasks-heading" class="section-title">업무</h2>
           <ul class="task-grid">${TASKS.map((t) => `<li><a class="task-tile" href="${t.href}"><span class="task-tile__title">${escapeHtml(t.title)}</span><span class="task-tile__desc">${escapeHtml(t.desc)}</span></a></li>`).join('')}</ul>
         </section>
+        ${practiceBoardHtml()}
       </div>`;
       return;
     }
@@ -64,7 +64,7 @@ export function renderTeacher(root) {
       <a class="button button--secondary" href="#/teacher/settings">교사 설정</a>
     </header>
     ${isFirebase
-      ? notice('info', '기록은 서버에 저장돼요', '학급·세션, 학생 기록, 채점·대화 태그·면담, 원리 활동 진행은 서버에 저장되고 같은 반 담당 선생님들과 함께 봅니다. 면담 녹음 파일만 아직 이 기기에 저장됩니다. 아래 증명 연습 현황은 예시 데이터입니다.')
+      ? notice('info', '기록은 서버에 저장돼요', '학급·세션, 학생 기록, 증명 연습 기록, 채점·대화 태그·면담과 녹음, 원리 활동 진행은 서버에 저장되고 같은 반 담당 선생님들과 함께 봅니다.')
       : notice('warn', '프로토타입 상태입니다', '교사 권한 확인, 실제 학생 데이터, 서버 저장은 아직 연결되지 않았습니다. 설정은 이 브라우저에만 저장되며, 아래 학생 기록은 모두 예시 데이터입니다.')}
     <div data-retention-alert></div>
 
@@ -91,14 +91,7 @@ export function renderTeacher(root) {
     </section>
 
 
-    <section class="panel" aria-labelledby="activity-heading">
-      <div class="section-head">
-        <h2 id="activity-heading" class="section-title">증명 연습 현황</h2>
-        <span class="tag tag--proto">예시 데이터</span>
-      </div>
-      <p class="meta">증명법마다 인증한 활동 단계 수(최대 ${LEVELS.length})와 최근 활동입니다.</p>
-      ${activityTable()}
-    </section>
+    ${practiceBoardHtml()}
 
     <section class="panel" aria-labelledby="research-progress-heading">
       <div class="section-head">
@@ -132,6 +125,7 @@ export function renderTeacher(root) {
     const sel = t.name === 'quickStage' ? `[name="quickStage"][value="${t.value}"]` : `[name="${t.name}"]`;
     draw();
     fillRetentionAlert(root);
+    board.fill();
     root.querySelector(sel)?.focus();
   };
 
@@ -142,35 +136,17 @@ export function renderTeacher(root) {
     root.querySelector('[data-research-progress]').innerHTML = researchProgress(getClassroom());
   };
 
+  const board = mountPracticeBoard(root);
   draw();
   fillRetentionAlert(root);
+  board.fill();
   root.addEventListener('change', onChange);
   root.addEventListener('click', onClick);
   return () => {
+    board.cleanup();
     root.removeEventListener('change', onChange);
     root.removeEventListener('click', onClick);
   };
-}
-
-function activityTable() {
-  const head = METHODS.map((m) => `<th scope="col">${escapeHtml(m.shortLabel)}</th>`).join('');
-  const rows = SAMPLE_ACTIVITY.map((row) => {
-    const recent = row.recent;
-    const cells = METHODS.map((m) => `<td>${row.certified[m.id]} / ${LEVELS.length}</td>`).join('');
-    return `<tr>
-      <th scope="row">${escapeHtml(row.pseudonym)}</th>
-      ${cells}
-      <td>${escapeHtml(getMethod(recent.method).shortLabel)}, ${escapeHtml(getLevel(recent.levelId).title)}, ${escapeHtml(getProblem(recent.problemId).title)} (${escapeHtml(recent.result)})</td>
-      <td>${escapeHtml(formatDateTime(row.lastActiveAt))}</td>
-    </tr>`;
-  }).join('');
-
-  return `<div class="table-wrap" role="region" aria-labelledby="activity-heading" tabindex="0">
-    <table class="data-table">
-      <thead><tr><th scope="col">학생(가명)</th>${head}<th scope="col">최근 활동</th><th scope="col">마지막 활동</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-  </div>`;
 }
 
 /** 서버 모드: 진행 중 세션에 들어온 학생들의 단계별 시작·제출 수 */

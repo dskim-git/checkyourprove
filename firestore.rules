@@ -129,9 +129,10 @@ service cloud.firestore {
       }
     }
 
-    // ── 증명 연습 기록 (4-2): 본인만 쓰고, 교사가 읽는다. 통과·인증의 서버 확인은 5단계 ──
+    // ── 증명 연습 기록 (4-2): 본인만 읽고 쓴다. 통과·인증의 서버 확인은 5단계 ──
+    // 교사는 업무판의 증명 연습 현황에서 담당 학급 학생의 요약만 서버 함수(api/session.js classPractice)로 받는다(2026-11-28)
     match /practice/{uid}/attempts/{id} {
-      allow read: if isSelf(uid) || isTeacher();
+      allow read: if isSelf(uid);
       allow write: if isSelf(uid);
     }
 

@@ -847,6 +847,12 @@ a.prop-tabs__item:active { translate: 0 2px; }
 .seg__item.is-locked:hover { background: transparent; }
 .button.is-waiting { color: var(--color-muted); }
 .seg__count { min-width: 22px; padding: 0 var(--space-xs); border-radius: var(--radius-pill); background: var(--color-paper-3); font-size: var(--text-xs); }
+/* 교사 업무판: 증명 연습 현황의 학급 탭(학급 수만큼, 넘치면 줄바꿈) */
+.seg--tabs { display: flex; flex-wrap: wrap; }
+.seg--tabs .seg__item { flex: 0 1 auto; padding-inline: var(--space-md); }
+.practice-board__panel { display: grid; gap: var(--space-sm); margin-top: var(--space-sm); }
+.practice-board__bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-xs) var(--space-sm); }
+.practice-board__table th[scope="row"] { white-space: nowrap; }
 .chat-pane, .record-pane { display: grid; gap: var(--space-md); }
 .chat-pane .chat__log { max-height: 55vh; min-height: 120px; padding: var(--space-sm); border-radius: var(--radius-card); background: var(--color-paper-2); }
 .chat-pane .chat__form-actions { gap: var(--space-xs); }

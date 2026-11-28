@@ -4,12 +4,12 @@ import { escapeHtml } from './dom.js';
 import { icons } from './icons.js';
 
 /**
- * @param {{ title: string, html: string, footer?: string, onMount?: (body: HTMLElement) => (() => void) | void }} options
+ * @param {{ title: string, html: string, footer?: string, size?: 'narrow', onMount?: (body: HTMLElement) => (() => void) | void }} options
  * @returns {() => void} 닫기
  */
-export function openModal({ title, html, footer = '', onMount }) {
+export function openModal({ title, html, footer = '', size = '', onMount }) {
   const dialog = document.createElement('dialog');
-  dialog.className = 'modal';
+  dialog.className = size === 'narrow' ? 'modal modal--narrow' : 'modal';
   dialog.setAttribute('aria-labelledby', 'modal-title');
   dialog.innerHTML = `<div class="modal__head">
       <h2 class="modal__title" id="modal-title">${escapeHtml(title)}</h2>

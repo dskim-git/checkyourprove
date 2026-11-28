@@ -250,6 +250,8 @@ function stop() {
 function connectBackends() {
   setSessionBackend({
     call: (action, payload) => ctx?.call('/api/session', action, payload).then((r) => { if (!r) publishSessions(); return r; }),
+    // 읽기만 하는 요청: 실패해도 학급·세션을 되돌리지 않고 화면이 오류를 보여 준다
+    fetch: (action, payload) => (ctx ? ctx.api('/api/session', action, payload).catch((error) => ({ error: error.message })) : Promise.resolve({ error: '로그인이 필요해요.' })),
     updateSession: (id, patch) => updateDoc(doc(ctx.db, 'sessions', id), patch).catch((error) => {
       publishSessions();
       fail('세션 설정')(error);
@@ -278,7 +280,7 @@ function connectBackends() {
 
 /**
  * 로그인·역할·내 사용자 문서가 바뀔 때마다 accountSync가 부른다. 처음 부를 때는 첫 값이 들어올 때까지 기다리는 약속을 돌려준다.
- * @param {{ db, uid, role, call, notify } | null} next  null이면 멈춘다(로그아웃)
+ * @param {{ db, uid, role, call, api, notify } | null} next  null이면 멈춘다(로그아웃)
  * @param {object} selfUser 내 users 문서
  */
 export function updateDataSync(next, selfUser) {

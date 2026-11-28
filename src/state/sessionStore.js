@@ -27,7 +27,7 @@ import { homeroomName } from '../data/studentNo.js';
 // 구조(만들기·지우기·이름·학급 연습 설정·코드)는 서버 함수(api/session.js), 진행 설정은 Firestore에 바로 쓴다(보안 규칙이 막음).
 // 바꾸는 함수는 메모리 값을 먼저 바꾸고 서버에 보낸다. 실패하면 dataSync가 서버 값으로 되돌리고 알린다.
 let backend = null;
-/** firebase/dataSync.js가 연결한다: { call(action, payload), updateSession(id, patch), setActive(id) } */
+/** firebase/dataSync.js가 연결한다: { call(action, payload), fetch(action, payload), updateSession(id, patch), setActive(id) } */
 export function setSessionBackend(b) {
   backend = b;
 }
@@ -41,6 +41,14 @@ export function applyStaff(list) {
   staff = list ?? [];
 }
 export const staffList = () => staff;
+/**
+ * 교사 업무판의 증명 연습 현황(서버 모드): 담당 학급 학생의 학번·이름과 연습 기록 요약(api/session.js classPractice).
+ * 연구 번호는 관리자에게만 온다. 실패하면 { error }.
+ */
+export async function fetchClassPractice(classId) {
+  if (!backend?.fetch) return { error: '서버에 연결되지 않았어요.' };
+  return backend.fetch('classPractice', { classId });
+}
 /** 학급의 담당 교사 바꾸기(서버 모드). 한 명 이상 */
 export function setClassTeachers(classId, uids) {
   const c = getSessions().classes.find((x) => x.id === classId);

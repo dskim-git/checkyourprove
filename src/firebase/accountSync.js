@@ -141,6 +141,7 @@ function syncData() {
   return updateDataSync({
     app, db, uid: authUser.uid, role: claimRole, notify: notifyError,
     call: (path, action, payload) => call(action, payload, path),
+    api: (path, action, payload) => api(action, payload, path),
   }, selfUser);
 }
 

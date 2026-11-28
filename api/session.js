@@ -282,9 +282,52 @@ async function staffAction(action, { token, body }) {
       await audit('세션 지움', `${data.className} ${data.round}회차 (학생 ${n}명의 기록 포함)`, who);
       return { ok: true };
     }
+    case 'classPractice':
+      return classPracticeBoard(token, body.classId);
     default:
       throw new HttpError(400, '알 수 없는 요청이에요.');
   }
+}
+
+// 교사 업무판의 증명 연습 현황(로드맵 6단계 메모, 2026-11-28 사용자 결정): 담당 학급 학생의 학번·이름과 연습 기록 요약.
+// 이름·학번은 관리자만 읽는 links에 있어 서버가 담당 교사에게만 골라 준다. 연구 번호(연결표)는 관리자에게만 준다.
+// 반은 배정된 학생(users.classId), 기타 학급은 회차에 들어온 학생·일반인. 연습 기록은 인증 계산에 필요한 칸만(답 내용 data는 빼고).
+const ATTEMPT_FIELDS = ['levelId', 'problemId', 'method', 'status', 'score', 'passedAt', 'updatedAt'];
+const BOARD_LIMIT = 300;
+
+async function classPracticeBoard(token, classId) {
+  const { ref, data: c } = await classFor(token, classId);
+  let userDocs;
+  if (c.kind === 'homeroom') {
+    userDocs = (await db().collection('users').where('classId', '==', ref.id).get()).docs;
+  } else {
+    const list = await sessions().where('classId', '==', ref.id).get();
+    const uids = new Set();
+    for (const s of list.docs) (await s.ref.collection('members').get()).docs.forEach((m) => uids.add(m.id));
+    const refs = [...uids].slice(0, BOARD_LIMIT).map((u) => db().doc(`users/${u}`));
+    userDocs = refs.length ? (await db().getAll(...refs)).filter((d) => d.exists) : [];
+  }
+  const learners = userDocs
+    .filter((d) => d.data().status === 'approved' && (d.data().role === 'student' || (c.kind !== 'homeroom' && d.data().role === 'guest')))
+    .slice(0, BOARD_LIMIT);
+  const linkDocs = learners.length ? await db().getAll(...learners.map((d) => db().doc(`links/${d.id}`))) : [];
+  const admin = token.role === 'admin';
+  const students = await Promise.all(learners.map(async (d, i) => {
+    const u = d.data();
+    const p = linkDocs[i]?.data()?.profile ?? null;
+    const attempts = (await db().collection(`practice/${d.id}/attempts`).select(...ATTEMPT_FIELDS).get()).docs
+      .map((a) => Object.fromEntries(ATTEMPT_FIELDS.map((k) => [k, a.get(k) ?? null])));
+    return {
+      kind: u.kind ?? (u.role === 'guest' ? 'guest' : 'student'),
+      studentNo: p?.kind === 'student' ? String(p.studentNo ?? '') : '',
+      name: String(p?.name ?? ''),
+      unlinked: Boolean(u.unlinkedAt) || !p?.name,
+      ...(admin ? { researchId: u.researchId ?? '' } : {}),
+      attempts,
+    };
+  }));
+  students.sort((a, b) => (a.studentNo || '99999').localeCompare(b.studentNo || '99999') || a.name.localeCompare(b.name, 'ko'));
+  return { ok: true, classId: ref.id, students, at: now() };
 }
 
 /** 세션 코드로 들어가기: 승인된 사용자, 코드가 열려 있을 때 */

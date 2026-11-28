@@ -84,6 +84,7 @@
 /* 팝업 창 */
 .modal { width: calc(100% - var(--space-lg)); max-width: 64rem; max-height: calc(100dvh - var(--space-xl)); padding: 0; border: 0; border-radius: var(--radius-card); background: var(--grain), var(--color-paper); color: var(--color-ink); box-shadow: var(--shadow-lift); }
 .modal[open] { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+.modal--narrow { max-width: 28rem; }
 .modal::backdrop { background: color-mix(in oklab, var(--color-ink) 45%, transparent); }
 .modal__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); padding: var(--space-sm) var(--space-sm) var(--space-sm) var(--space-lg); border-bottom: var(--rule-hair) solid var(--color-rule); }
 .modal__title { font-size: var(--text-lg); }
